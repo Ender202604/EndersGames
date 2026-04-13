@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Number Blaster!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: linear-gradient(180deg, #1a0033 0%, #330066 100%); font-family: Arial, sans-serif; color: white; height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none; }
+      #hud { display: flex; justify-content: space-between; align-items: center; padding: 14px 24px; background: rgba(0,0,0,0.5); font-size: 28px; font-weight: bold; }
+      #score-display { color: yellow; }
+      #timer-display { color: #ff6666; }
+      #next-display { color: #aaffaa; }
+      #arena { position: relative; width: 100vw; height: calc(100vh - 70px); }
+      .number-ball { position: absolute; width: 90px; height: 90px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: bold; color: white; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s; border: 4px solid rgba(255,255,255,0.4); }
+      .number-ball:active { transform: scale(0.88); }
+      .number-ball.next-target { border: 5px solid yellow; box-shadow: 0 0 20px yellow; animation: pulse 0.7s infinite alternate; }
+      @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
+      .number-ball.correct { animation: pop 0.3s forwards; pointer-events: none; }
+      @keyframes pop { 0% { transform: scale(1); opacity: 1; } 60% { transform: scale(2); opacity: 0.6; } 100% { transform: scale(0); opacity: 0; } }
+      .number-ball.wrong { animation: shake 0.3s forwards; }
+      @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 20; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+      .overlay.show { display: flex; }
+      .big-title { font-size: 52px; font-weight: bold; color: yellow; text-align: center; }
+      .big-btn { font-size: 34px; padding: 20px 48px; border-radius: 20px; border: none; background: yellow; color: #1a0033; font-weight: bold; cursor: pointer; touch-action: manipulation; text-decoration: none; display: inline-block; }
+      .big-btn:active { background: white; }
+      .home-btn { position: fixed; top: 14px; left: 14px; font-size: 22px; padding: 10px 18px; border-radius: 14px; border: none; background: rgba(0,0,0,0.5); color: white; cursor: pointer; z-index: 30; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <a class="home-btn" href="index.html">🏠 Home</a>
+    <div id="hud">
+      <span>🔢 Number Blaster!</span>
+      <span id="next-display">Tap: 1</span>
+      <span id="score-display">Score: 0</span>
+      <span id="timer-display">⏱ 60</span>
+    </div>
+    <div id="arena"></div>
+
+    <div class="overlay show" id="start-overlay">
+      <div style="font-size:90px">🔢</div>
+      <div class="big-title">Number Blaster!</div>
+      <div style="font-size:24px; text-align:center; line-height:1.6;">Numbers appear all over the screen!<br>Tap them in order: 1, 2, 3, 4...<br><span style="color:yellow">The glowing one is next!</span><br><span style="color:#aaffaa">You have 60 seconds!</span></div>
+      <button class="big-btn" onclick="startGame()">BLAST!</button>
+    </div>
+    <div class="overlay" id="end-overlay">
+      <div style="font-size:90px">🔢</div>
+      <div class="big-title">Time's Up!</div>
+      <div style="font-size:40px; color:yellow;" id="final-score"></div>
+      <button class="big-btn" onclick="startGame()">Play Again!</button>
+      <a class="big-btn" href="index.html">🏠 Home</a>
+    </div>
+
+    <script>
+      var score = 0, timeLeft = 60, nextNum = 1, maxNum = 10;
+      var timerInterval, gameRunning = false;
+      var colors = ["#e74c3c","#e67e22","#f1c40f","#2ecc71","#1abc9c","#3498db","#9b59b6","#e91e8c","#ff5722","#00bcd4"];
+
+      function startGame() {
+        score = 0; timeLeft = 60; nextNum = 1; gameRunning = true;
+        document.getElementById("score-display").innerText = "Score: 0";
+        document.getElementById("timer-display").innerText = "⏱ 60";
+        document.getElementById("next-display").innerText = "Tap: 1";
+        document.getElementById("arena").innerHTML = "";
+        document.getElementById("start-overlay").classList.remove("show");
+        document.getElementById("end-overlay").classList.remove("show");
+        placeNumbers();
+        timerInterval = setInterval(function() {
+          timeLeft--;
+          document.getElementById("timer-display").innerText = "⏱ " + timeLeft;
+          if (timeLeft <= 0) endGame();
+        }, 1000);
+      }
+
+      function placeNumbers() {
+        var arena = document.getElementById("arena");
+        arena.innerHTML = "";
+        var w = arena.offsetWidth - 100, h = arena.offsetHeight - 100;
+        var positions = [];
+        for (var n = 1; n <= maxNum; n++) {
+          var tries = 0, x, y, ok;
+          do {
+            x = 10 + Math.random() * w;
+            y = 10 + Math.random() * h;
+            ok = true;
+            for (var p = 0; p < positions.length; p++) {
+              if (Math.abs(positions[p][0]-x) < 100 && Math.abs(positions[p][1]-y) < 100) { ok = false; break; }
+            }
+            tries++;
+          } while (!ok && tries < 30);
+          positions.push([x, y]);
+          var ball = document.createElement("div");
+          ball.className = "number-ball" + (n === 1 ? " next-target" : "");
+          ball.id = "n" + n;
+          ball.dataset.num = n;
+          ball.innerText = n;
+          ball.style.left = x + "px";
+          ball.style.top = y + "px";
+          ball.style.background = colors[n-1];
+          ball.ontouchstart = function(e) { e.preventDefault(); tapNumber(parseInt(this.dataset.num)); };
+          ball.onclick = function() { tapNumber(parseInt(this.dataset.num)); };
+          arena.appendChild(ball);
+        }
+      }
+
+      function tapNumber(num) {
+        if (!gameRunning) return;
+        var ball = document.getElementById("n" + num);
+        if (!ball) return;
+        if (num === nextNum) {
+          ball.classList.remove("next-target");
+          ball.classList.add("correct");
+          setTimeout(function() { if (ball.parentNode) ball.parentNode.removeChild(ball); }, 300);
+          score++;
+          nextNum++;
+          document.getElementById("score-display").innerText = "Score: " + score;
+          if (nextNum > maxNum) {
+            nextNum = 1;
+            document.getElementById("next-display").innerText = "Tap: 1";
+            setTimeout(placeNumbers, 350);
+          } else {
+            document.getElementById("next-display").innerText = "Tap: " + nextNum;
+            var nextBall = document.getElementById("n" + nextNum);
+            if (nextBall) nextBall.classList.add("next-target");
+          }
+        } else {
+          ball.classList.add("wrong");
+          setTimeout(function() { ball.classList.remove("wrong"); }, 300);
+        }
+      }
+
+      function endGame() {
+        gameRunning = false;
+        clearInterval(timerInterval);
+        document.getElementById("final-score").innerText = "You blasted " + score + " numbers!";
+        document.getElementById("end-overlay").classList.add("show");
+      }
+    </script>
+  </body>
+</html>

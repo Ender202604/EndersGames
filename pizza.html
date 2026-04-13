@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>The Last Pizza Slice!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: #1a0000; font-family: Arial, sans-serif; text-align: center; color: white; height: 100vh; width: 100vw; overflow: hidden; user-select: none; -webkit-user-select: none; }
+      #game { display: flex; height: 100vh; width: 100vw; }
+      .player-side { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: filter 0.1s; }
+      #side1 { background: #8B0000; border-right: 5px solid white; }
+      #side2 { background: #5a0000; }
+      .player-side:active { filter: brightness(1.6); }
+      .player-label { font-size: 38px; font-weight: bold; }
+      .player-score { font-size: 100px; font-weight: bold; color: yellow; line-height: 1; }
+      .slice-count { font-size: 26px; color: #ffaaaa; }
+      .tap-hint { font-size: 28px; opacity: 0.7; }
+      #middle { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.75); border-radius: 24px; padding: 16px 24px; pointer-events: none; z-index: 5; min-width: 180px; }
+      #pizza-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; justify-items: center; }
+      .slice { font-size: 44px; transition: all 0.25s; }
+      .slice.eaten { opacity: 0; transform: scale(0); }
+      #slices-remaining { font-size: 20px; color: yellow; margin-top: 8px; }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 20; flex-direction: column; align-items: center; justify-content: center; gap: 24px; padding: 30px; }
+      .overlay.show { display: flex; }
+      .overlay-title { font-size: 52px; font-weight: bold; color: yellow; text-align: center; white-space: pre-line; }
+      .big-btn { font-size: 36px; padding: 22px 52px; border-radius: 22px; border: none; background: yellow; color: darkred; font-weight: bold; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+      .big-btn:active { background: white; }
+      .home-btn { position: fixed; top: 14px; left: 14px; font-size: 22px; padding: 10px 18px; border-radius: 14px; border: none; background: rgba(0,0,0,0.5); color: white; cursor: pointer; z-index: 30; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <a class="home-btn" href="index.html">🏠 Home</a>
+    <div id="game">
+      <div class="player-side" id="side1" ontouchstart="eatSlice(1)" onclick="eatSlice(1)">
+        <div class="player-label">Player 1</div>
+        <div class="player-score" id="score1">0</div>
+        <div class="slice-count">slices eaten</div>
+        <div class="tap-hint">TAP TO EAT! 🍕</div>
+      </div>
+      <div class="player-side" id="side2" ontouchstart="eatSlice(2)" onclick="eatSlice(2)">
+        <div class="player-label">Player 2</div>
+        <div class="player-score" id="score2">0</div>
+        <div class="slice-count">slices eaten</div>
+        <div class="tap-hint">TAP TO EAT! 🍕</div>
+      </div>
+    </div>
+    <div id="middle">
+      <div id="pizza-grid"></div>
+      <div id="slices-remaining">8 slices left</div>
+    </div>
+    <div class="overlay show" id="start-overlay">
+      <div style="font-size:90px">🍕</div>
+      <div class="overlay-title">The Last Pizza Slice!</div>
+      <div style="font-size:26px; line-height:1.6;">8 slices of pizza!<br>Tap your side to eat a slice.<br><strong style="color:yellow">Most slices wins!</strong></div>
+      <button class="big-btn" onclick="startGame()">LET'S EAT! 🍕</button>
+    </div>
+    <div class="overlay" id="end-overlay">
+      <div style="font-size:90px">🏆</div>
+      <div class="overlay-title" id="winner-text"></div>
+      <button class="big-btn" onclick="startGame()">Play Again!</button>
+      <a class="big-btn" href="index.html" style="text-decoration:none; margin-top:8px;">🏠 Home</a>
+    </div>
+    <script>
+      var totalSlices = 8, slicesLeft = 8, score1 = 0, score2 = 0, gameOver = false;
+      function buildPizza() {
+        var grid = document.getElementById("pizza-grid"); grid.innerHTML = "";
+        for (var i = 0; i < totalSlices; i++) { var s = document.createElement("div"); s.className = "slice"; s.id = "s" + i; s.innerText = "🍕"; grid.appendChild(s); }
+        document.getElementById("slices-remaining").innerText = totalSlices + " slices left"; document.getElementById("slices-remaining").style.color = "yellow";
+      }
+      function startGame() { slicesLeft = totalSlices; score1 = 0; score2 = 0; gameOver = false; document.getElementById("score1").innerText = 0; document.getElementById("score2").innerText = 0; buildPizza(); document.getElementById("start-overlay").classList.remove("show"); document.getElementById("end-overlay").classList.remove("show"); }
+      function eatSlice(player) {
+        if (gameOver || slicesLeft === 0) return;
+        for (var i = 0; i < totalSlices; i++) { var s = document.getElementById("s" + i); if (s && !s.classList.contains("eaten")) { s.classList.add("eaten"); slicesLeft--; break; } }
+        if (player === 1) { score1++; document.getElementById("score1").innerText = score1; } else { score2++; document.getElementById("score2").innerText = score2; }
+        var r = document.getElementById("slices-remaining");
+        if (slicesLeft === 0) { r.innerText = "All gone!"; setTimeout(endGame, 350); } else if (slicesLeft === 1) { r.innerText = "⚠️ 1 slice left!"; r.style.color = "red"; } else { r.innerText = slicesLeft + " slices left"; r.style.color = "yellow"; }
+      }
+      function endGame() { gameOver = true; var msg = score1 > score2 ? "Player 1 Wins!\n🍕 " + score1 + " to " + score2 + " 🍕" : score2 > score1 ? "Player 2 Wins!\n🍕 " + score2 + " to " + score1 + " 🍕" : "It's a TIE!\n🍕 " + score1 + " each! 🍕"; document.getElementById("winner-text").innerText = msg; document.getElementById("end-overlay").classList.add("show"); }
+    </script>
+  </body>
+</html>

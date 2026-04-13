@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Shooting Stars!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: linear-gradient(180deg, #000011 0%, #000033 100%); font-family: Arial, sans-serif; color: white; height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none; }
+      #hud { display: flex; justify-content: space-between; align-items: center; padding: 14px 24px; background: rgba(0,0,0,0.5); font-size: 32px; font-weight: bold; }
+      #score-display { color: yellow; }
+      #timer-display { color: #ff6666; }
+      #arena { position: relative; width: 100vw; height: calc(100vh - 70px); overflow: hidden; }
+      .star { position: absolute; font-size: 60px; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; animation: fly linear forwards; }
+      @keyframes fly { from { transform: translateX(0); } to { transform: translateX(110vw); } }
+      .star.caught { animation: burst 0.3s forwards; pointer-events: none; }
+      @keyframes burst { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(2.2); opacity: 0.8; } 100% { transform: scale(0); opacity: 0; } }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 20; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+      .overlay.show { display: flex; }
+      .big-title { font-size: 52px; font-weight: bold; color: yellow; text-align: center; }
+      .big-btn { font-size: 34px; padding: 20px 48px; border-radius: 20px; border: none; background: yellow; color: #000033; font-weight: bold; cursor: pointer; touch-action: manipulation; text-decoration: none; display: inline-block; }
+      .big-btn:active { background: white; }
+      .home-btn { position: fixed; top: 14px; left: 14px; font-size: 22px; padding: 10px 18px; border-radius: 14px; border: none; background: rgba(0,0,0,0.5); color: white; cursor: pointer; z-index: 30; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <a class="home-btn" href="index.html">🏠 Home</a>
+    <div id="hud">
+      <span>🌟 Shooting Stars!</span>
+      <span id="score-display">Score: 0</span>
+      <span id="timer-display">⏱ 30</span>
+    </div>
+    <div id="arena"></div>
+
+    <div class="overlay show" id="start-overlay">
+      <div style="font-size:90px">🌟</div>
+      <div class="big-title">Shooting Stars!</div>
+      <div style="font-size:24px; text-align:center; line-height:1.6;">Stars fly across the sky!<br>Tap them before they zoom away!<br><span style="color:yellow">30 seconds — catch as many as you can!</span></div>
+      <button class="big-btn" onclick="startGame()">START!</button>
+    </div>
+    <div class="overlay" id="end-overlay">
+      <div style="font-size:90px">🌟</div>
+      <div class="big-title">Time's Up!</div>
+      <div style="font-size:40px; color:yellow;" id="final-score"></div>
+      <button class="big-btn" onclick="startGame()">Play Again!</button>
+      <a class="big-btn" href="index.html">🏠 Home</a>
+    </div>
+
+    <script>
+      var score = 0, timeLeft = 30, timerInterval, spawnInterval, gameRunning = false;
+      var starEmojis = ["🌟","⭐","💫","✨","🌟","⭐","💛","🔆"];
+
+      function startGame() {
+        score = 0; timeLeft = 30; gameRunning = true;
+        document.getElementById("score-display").innerText = "Score: 0";
+        document.getElementById("timer-display").innerText = "⏱ 30";
+        document.getElementById("arena").innerHTML = "";
+        document.getElementById("start-overlay").classList.remove("show");
+        document.getElementById("end-overlay").classList.remove("show");
+        timerInterval = setInterval(function() {
+          timeLeft--;
+          document.getElementById("timer-display").innerText = "⏱ " + timeLeft;
+          if (timeLeft <= 0) endGame();
+        }, 1000);
+        spawnInterval = setInterval(spawnStar, 700);
+        spawnStar(); spawnStar();
+      }
+
+      function spawnStar() {
+        if (!gameRunning) return;
+        var arena = document.getElementById("arena");
+        var s = document.createElement("div");
+        s.className = "star";
+        s.innerText = starEmojis[Math.floor(Math.random() * starEmojis.length)];
+        var y = Math.random() * (arena.offsetHeight - 80);
+        var duration = 2.5 + Math.random() * 3;
+        s.style.top = y + "px";
+        s.style.left = "-80px";
+        s.style.animationDuration = duration + "s";
+        s.ontouchstart = function(e) { e.preventDefault(); catchStar(s); };
+        s.onclick = function() { catchStar(s); };
+        arena.appendChild(s);
+        setTimeout(function() { if (s.parentNode) s.parentNode.removeChild(s); }, duration * 1000);
+      }
+
+      function catchStar(s) {
+        if (!gameRunning || s.classList.contains("caught")) return;
+        s.classList.add("caught");
+        score++;
+        document.getElementById("score-display").innerText = "Score: " + score;
+        setTimeout(function() { if (s.parentNode) s.parentNode.removeChild(s); }, 300);
+      }
+
+      function endGame() {
+        gameRunning = false;
+        clearInterval(timerInterval); clearInterval(spawnInterval);
+        document.getElementById("final-score").innerText = "You caught " + score + " stars!";
+        document.getElementById("end-overlay").classList.add("show");
+      }
+    </script>
+  </body>
+</html>

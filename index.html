@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Ender's Game World!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background: #1a0000;
+        font-family: Arial, sans-serif;
+        color: white;
+        min-height: 100vh;
+        padding-bottom: 40px;
+      }
+      h1 {
+        font-size: 48px;
+        text-align: center;
+        padding: 30px 20px 10px;
+        color: yellow;
+      }
+      .subtitle {
+        text-align: center;
+        font-size: 24px;
+        color: #ffaaaa;
+        margin-bottom: 40px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 24px;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      .game-card {
+        background: darkred;
+        border-radius: 24px;
+        padding: 30px 20px;
+        text-align: center;
+        text-decoration: none;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        transition: transform 0.1s, filter 0.1s;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        cursor: pointer;
+      }
+      .game-card:active {
+        transform: scale(0.96);
+        filter: brightness(1.4);
+      }
+      .game-emoji { font-size: 72px; }
+      .game-name { font-size: 26px; font-weight: bold; }
+      .game-desc { font-size: 18px; color: #ffcccc; }
+    </style>
+  </head>
+  <body>
+    <h1>🎮 Ender's Game World!</h1>
+    <p class="subtitle">Pick a game to play!</p>
+    <div class="grid">
+      <a class="game-card" href="pizza.html">
+        <div class="game-emoji">🍕</div>
+        <div class="game-name">Last Pizza Slice</div>
+        <div class="game-desc">2 players eat pizza!</div>
+      </a>
+      <a class="game-card" href="balloons.html">
+        <div class="game-emoji">🎈</div>
+        <div class="game-name">Pop the Balloons</div>
+        <div class="game-desc">Tap balloons before they float away!</div>
+      </a>
+      <a class="game-card" href="turtles.html">
+        <div class="game-emoji">🐢</div>
+        <div class="game-name">Turtle Race</div>
+        <div class="game-desc">2 players race to the finish!</div>
+      </a>
+      <a class="game-card" href="memory.html">
+        <div class="game-emoji">🧠</div>
+        <div class="game-name">Memory Match</div>
+        <div class="game-desc">Find all the matching pairs!</div>
+      </a>
+      <a class="game-card" href="stars.html">
+        <div class="game-emoji">🌟</div>
+        <div class="game-name">Shooting Stars</div>
+        <div class="game-desc">Catch the stars flying by!</div>
+      </a>
+      <a class="game-card" href="whackamole.html">
+        <div class="game-emoji">🐹</div>
+        <div class="game-name">Whack a Mole</div>
+        <div class="game-desc">Whack the moles before they hide!</div>
+      </a>
+      <a class="game-card" href="numbers.html" style="grid-column: span 2;">
+        <div class="game-emoji">🔢</div>
+        <div class="game-name">Number Blaster</div>
+        <div class="game-desc">Tap the numbers in order 1, 2, 3...!</div>
+      </a>
+    </div>
+  </body>
+</html>

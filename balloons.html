@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Pop the Balloons!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: linear-gradient(180deg, #000033 0%, #000066 100%); font-family: Arial, sans-serif; color: white; height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none; }
+      #hud { display: flex; justify-content: space-between; align-items: center; padding: 14px 24px; background: rgba(0,0,0,0.5); font-size: 32px; font-weight: bold; }
+      #score-display { color: yellow; }
+      #timer-display { color: #ff6666; }
+      #arena { position: relative; width: 100vw; height: calc(100vh - 70px); overflow: hidden; }
+      .balloon { position: absolute; font-size: 64px; cursor: pointer; animation: floatUp linear forwards; -webkit-tap-highlight-color: transparent; touch-action: manipulation; line-height: 1; }
+      @keyframes floatUp { from { transform: translateY(0) scale(1); } to { transform: translateY(-110vh) scale(1); } }
+      .balloon.popped { animation: pop 0.3s forwards; pointer-events: none; }
+      @keyframes pop { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.8); opacity: 0.7; } 100% { transform: scale(0); opacity: 0; } }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 20; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+      .overlay.show { display: flex; }
+      .big-title { font-size: 52px; font-weight: bold; color: yellow; text-align: center; }
+      .big-btn { font-size: 34px; padding: 20px 48px; border-radius: 20px; border: none; background: yellow; color: #000033; font-weight: bold; cursor: pointer; touch-action: manipulation; text-decoration: none; display: inline-block; }
+      .big-btn:active { background: white; }
+      .home-btn { position: fixed; top: 14px; left: 14px; font-size: 22px; padding: 10px 18px; border-radius: 14px; border: none; background: rgba(0,0,0,0.5); color: white; cursor: pointer; z-index: 30; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <a class="home-btn" href="index.html">🏠 Home</a>
+    <div id="hud">
+      <span>🎈 Pop the Balloons!</span>
+      <span id="score-display">Score: 0</span>
+      <span id="timer-display">⏱ 30</span>
+    </div>
+    <div id="arena"></div>
+
+    <div class="overlay show" id="start-overlay">
+      <div style="font-size:90px">🎈</div>
+      <div class="big-title">Pop the Balloons!</div>
+      <div style="font-size:24px; text-align:center; line-height:1.6;">Balloons float up from the bottom.<br>Tap them before they escape!<br><span style="color:yellow">You have 30 seconds!</span></div>
+      <button class="big-btn" onclick="startGame()">START!</button>
+    </div>
+    <div class="overlay" id="end-overlay">
+      <div style="font-size:90px">🎈</div>
+      <div class="big-title">Time's Up!</div>
+      <div style="font-size:40px; color:yellow;" id="final-score"></div>
+      <button class="big-btn" onclick="startGame()">Play Again!</button>
+      <a class="big-btn" href="index.html">🏠 Home</a>
+    </div>
+
+    <script>
+      var score = 0, timeLeft = 30, timerInterval, spawnInterval, gameRunning = false;
+      var balloonEmojis = ["🎈","🎈","🎈","🎈","🎀","⭐","🌟","💛","❤️","💙","💚","💜"];
+
+      function startGame() {
+        score = 0; timeLeft = 30; gameRunning = true;
+        document.getElementById("score-display").innerText = "Score: 0";
+        document.getElementById("timer-display").innerText = "⏱ 30";
+        document.getElementById("arena").innerHTML = "";
+        document.getElementById("start-overlay").classList.remove("show");
+        document.getElementById("end-overlay").classList.remove("show");
+        timerInterval = setInterval(function() {
+          timeLeft--;
+          document.getElementById("timer-display").innerText = "⏱ " + timeLeft;
+          if (timeLeft <= 0) endGame();
+        }, 1000);
+        spawnInterval = setInterval(spawnBalloon, 800);
+        spawnBalloon(); spawnBalloon();
+      }
+
+      function spawnBalloon() {
+        if (!gameRunning) return;
+        var arena = document.getElementById("arena");
+        var b = document.createElement("div");
+        b.className = "balloon";
+        b.innerText = balloonEmojis[Math.floor(Math.random() * balloonEmojis.length)];
+        var x = Math.random() * (window.innerWidth - 80);
+        var duration = 4 + Math.random() * 4;
+        b.style.left = x + "px";
+        b.style.bottom = "-80px";
+        b.style.animationDuration = duration + "s";
+        b.ontouchstart = function(e) { e.preventDefault(); popBalloon(b); };
+        b.onclick = function() { popBalloon(b); };
+        arena.appendChild(b);
+        setTimeout(function() { if (b.parentNode) b.parentNode.removeChild(b); }, duration * 1000);
+      }
+
+      function popBalloon(b) {
+        if (!gameRunning || b.classList.contains("popped")) return;
+        b.classList.add("popped");
+        score++;
+        document.getElementById("score-display").innerText = "Score: " + score;
+        setTimeout(function() { if (b.parentNode) b.parentNode.removeChild(b); }, 300);
+      }
+
+      function endGame() {
+        gameRunning = false;
+        clearInterval(timerInterval); clearInterval(spawnInterval);
+        document.getElementById("final-score").innerText = "You popped " + score + " balloons!";
+        document.getElementById("end-overlay").classList.add("show");
+      }
+    </script>
+  </body>
+</html>

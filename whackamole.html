@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Whack a Mole!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: #2d5a00; font-family: Arial, sans-serif; color: white; height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none; display: flex; flex-direction: column; }
+      #hud { display: flex; justify-content: space-between; align-items: center; padding: 14px 24px; background: rgba(0,0,0,0.5); font-size: 30px; font-weight: bold; }
+      #score-display { color: yellow; }
+      #timer-display { color: #ff6666; }
+      #grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 20px; flex: 1; align-content: center; max-width: 500px; margin: 0 auto; width: 100%; }
+      .hole { background: #1a3a00; border-radius: 50%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 70px; cursor: pointer; position: relative; overflow: hidden; border: 4px solid #3d7a00; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: filter 0.1s; }
+      .hole:active { filter: brightness(1.4); }
+      .mole { transition: transform 0.15s; transform: translateY(100%); display: block; }
+      .hole.active .mole { transform: translateY(0); }
+      .hole.whacked .mole { transform: translateY(100%) rotate(30deg); }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 20; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+      .overlay.show { display: flex; }
+      .big-title { font-size: 52px; font-weight: bold; color: yellow; text-align: center; }
+      .big-btn { font-size: 34px; padding: 20px 48px; border-radius: 20px; border: none; background: yellow; color: #2d5a00; font-weight: bold; cursor: pointer; touch-action: manipulation; text-decoration: none; display: inline-block; }
+      .big-btn:active { background: white; }
+      .home-btn { position: fixed; top: 14px; left: 14px; font-size: 22px; padding: 10px 18px; border-radius: 14px; border: none; background: rgba(0,0,0,0.5); color: white; cursor: pointer; z-index: 30; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <a class="home-btn" href="index.html">🏠 Home</a>
+    <div id="hud">
+      <span>🐹 Whack a Mole!</span>
+      <span id="score-display">Score: 0</span>
+      <span id="timer-display">⏱ 30</span>
+    </div>
+    <div id="grid">
+      <div class="hole" id="h0" onclick="whack(0)" ontouchstart="whack(0)"><span class="mole">🐹</span></div>
+      <div class="hole" id="h1" onclick="whack(1)" ontouchstart="whack(1)"><span class="mole">🐹</span></div>
+      <div class="hole" id="h2" onclick="whack(2)" ontouchstart="whack(2)"><span class="mole">🐹</span></div>
+      <div class="hole" id="h3" onclick="whack(3)" ontouchstart="whack(3)"><span class="mole">🐹</span></div>
+      <div class="hole" id="h4" onclick="whack(4)" ontouchstart="whack(4)"><span class="mole">🐹</span></div>
+      <div class="hole" id="h5" onclick="whack(5)" ontouchstart="whack(5)"><span class="mole">🐹</span></div>
+      <div class="hole" id="h6" onclick="whack(6)" ontouchstart="whack(6)"><span class="mole">🐹</span></div>
+      <div class="hole" id="h7" onclick="whack(7)" ontouchstart="whack(7)"><span class="mole">🐹</span></div>
+      <div class="hole" id="h8" onclick="whack(8)" ontouchstart="whack(8)"><span class="mole">🐹</span></div>
+    </div>
+
+    <div class="overlay show" id="start-overlay">
+      <div style="font-size:90px">🐹</div>
+      <div class="big-title">Whack a Mole!</div>
+      <div style="font-size:24px; text-align:center; line-height:1.6;">Moles pop up from their holes!<br>Tap them as fast as you can!<br><span style="color:yellow">You have 30 seconds!</span></div>
+      <button class="big-btn" onclick="startGame()">WHACK!</button>
+    </div>
+    <div class="overlay" id="end-overlay">
+      <div style="font-size:90px">🐹</div>
+      <div class="big-title">Time's Up!</div>
+      <div style="font-size:40px; color:yellow;" id="final-score"></div>
+      <button class="big-btn" onclick="startGame()">Play Again!</button>
+      <a class="big-btn" href="index.html">🏠 Home</a>
+    </div>
+
+    <script>
+      var score = 0, timeLeft = 30, timerInterval, moleInterval, gameRunning = false;
+      var activeHoles = [];
+      var moleTimers = {};
+
+      function startGame() {
+        score = 0; timeLeft = 30; gameRunning = true; activeHoles = [];
+        document.getElementById("score-display").innerText = "Score: 0";
+        document.getElementById("timer-display").innerText = "⏱ 30";
+        for (var i = 0; i < 9; i++) { document.getElementById("h" + i).classList.remove("active","whacked"); }
+        document.getElementById("start-overlay").classList.remove("show");
+        document.getElementById("end-overlay").classList.remove("show");
+        timerInterval = setInterval(function() {
+          timeLeft--;
+          document.getElementById("timer-display").innerText = "⏱ " + timeLeft;
+          if (timeLeft <= 0) endGame();
+        }, 1000);
+        moleInterval = setInterval(popMole, 700);
+        popMole();
+      }
+
+      function popMole() {
+        if (!gameRunning) return;
+        var available = [];
+        for (var i = 0; i < 9; i++) { if (!document.getElementById("h"+i).classList.contains("active")) available.push(i); }
+        if (available.length === 0) return;
+        var idx = available[Math.floor(Math.random() * available.length)];
+        var hole = document.getElementById("h" + idx);
+        hole.classList.add("active");
+        moleTimers[idx] = setTimeout(function() {
+          hole.classList.remove("active");
+        }, 1200);
+      }
+
+      function whack(idx) {
+        if (!gameRunning) return;
+        var hole = document.getElementById("h" + idx);
+        if (!hole.classList.contains("active")) return;
+        clearTimeout(moleTimers[idx]);
+        hole.classList.remove("active");
+        hole.classList.add("whacked");
+        setTimeout(function() { hole.classList.remove("whacked"); }, 300);
+        score++;
+        document.getElementById("score-display").innerText = "Score: " + score;
+      }
+
+      function endGame() {
+        gameRunning = false;
+        clearInterval(timerInterval); clearInterval(moleInterval);
+        for (var idx in moleTimers) clearTimeout(moleTimers[idx]);
+        for (var i = 0; i < 9; i++) document.getElementById("h"+i).classList.remove("active","whacked");
+        document.getElementById("final-score").innerText = "You whacked " + score + " moles!";
+        document.getElementById("end-overlay").classList.add("show");
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Turtle Race!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: #1a4a00; font-family: Arial, sans-serif; color: white; height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none; display: flex; flex-direction: column; }
+      h1 { text-align: center; font-size: 38px; padding: 14px; background: #0d2a00; }
+      #track-area { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 30px; padding: 20px 20px; }
+      .track { background: #2d6a00; border-radius: 20px; padding: 16px; position: relative; height: 110px; display: flex; align-items: center; border: 3px solid #5aaa00; }
+      .finish-line { position: absolute; right: 16px; top: 0; bottom: 0; width: 4px; background: repeating-linear-gradient(180deg, white 0px, white 10px, black 10px, black 20px); border-radius: 2px; }
+      .turtle { position: absolute; font-size: 60px; transition: left 0.15s; left: 10px; }
+      .track-label { position: absolute; top: 6px; left: 16px; font-size: 20px; font-weight: bold; color: yellow; }
+      #buttons { display: flex; height: 180px; }
+      .tap-btn { flex: 1; font-size: 34px; font-weight: bold; color: white; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: filter 0.1s; }
+      #btn1 { background: #8B0000; border-right: 4px solid white; }
+      #btn2 { background: #00008B; }
+      .tap-btn:active { filter: brightness(1.5); }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 20; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+      .overlay.show { display: flex; }
+      .big-title { font-size: 52px; font-weight: bold; color: yellow; text-align: center; }
+      .big-btn { font-size: 34px; padding: 20px 48px; border-radius: 20px; border: none; background: yellow; color: #1a4a00; font-weight: bold; cursor: pointer; touch-action: manipulation; text-decoration: none; display: inline-block; }
+      .big-btn:active { background: white; }
+      .home-btn { position: fixed; top: 14px; left: 14px; font-size: 22px; padding: 10px 18px; border-radius: 14px; border: none; background: rgba(0,0,0,0.5); color: white; cursor: pointer; z-index: 30; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <a class="home-btn" href="index.html">🏠 Home</a>
+    <h1>🐢 Turtle Race! 🐢</h1>
+    <div id="track-area">
+      <div class="track" id="track1">
+        <div class="track-label">Player 1</div>
+        <div class="turtle" id="turtle1">🐢</div>
+        <div class="finish-line"></div>
+      </div>
+      <div class="track" id="track2">
+        <div class="track-label">Player 2</div>
+        <div class="turtle" id="turtle2">🐢</div>
+        <div class="finish-line"></div>
+      </div>
+    </div>
+    <div id="buttons">
+      <button class="tap-btn" id="btn1" ontouchstart="moveTurtle(1)" onclick="moveTurtle(1)">
+        <span style="font-size:48px">🐢</span>
+        <span>Player 1 — TAP!</span>
+      </button>
+      <button class="tap-btn" id="btn2" ontouchstart="moveTurtle(2)" onclick="moveTurtle(2)">
+        <span style="font-size:48px">🐢</span>
+        <span>Player 2 — TAP!</span>
+      </button>
+    </div>
+
+    <div class="overlay show" id="start-overlay">
+      <div style="font-size:90px">🐢</div>
+      <div class="big-title">Turtle Race!</div>
+      <div style="font-size:24px; text-align:center; line-height:1.6;">Tap your button as fast as you can!<br><span style="color:yellow">First turtle to the finish wins!</span></div>
+      <button class="big-btn" onclick="startGame()">RACE!</button>
+    </div>
+    <div class="overlay" id="end-overlay">
+      <div style="font-size:90px">🏆</div>
+      <div class="big-title" id="winner-text"></div>
+      <button class="big-btn" onclick="startGame()">Race Again!</button>
+      <a class="big-btn" href="index.html">🏠 Home</a>
+    </div>
+
+    <script>
+      var pos1 = 0, pos2 = 0, gameRunning = false, trackWidth = 0;
+
+      function getMaxPos() { return document.getElementById("track1").offsetWidth - 90; }
+
+      function startGame() {
+        pos1 = 0; pos2 = 0; gameRunning = true;
+        document.getElementById("turtle1").style.left = "10px";
+        document.getElementById("turtle2").style.left = "10px";
+        document.getElementById("start-overlay").classList.remove("show");
+        document.getElementById("end-overlay").classList.remove("show");
+      }
+
+      function moveTurtle(player) {
+        if (!gameRunning) return;
+        var step = 18 + Math.random() * 14;
+        var max = getMaxPos();
+        if (player === 1) {
+          pos1 = Math.min(pos1 + step, max);
+          document.getElementById("turtle1").style.left = pos1 + "px";
+          if (pos1 >= max) { gameRunning = false; setTimeout(function(){ showWinner("Player 1 🐢 Wins!"); }, 200); }
+        } else {
+          pos2 = Math.min(pos2 + step, max);
+          document.getElementById("turtle2").style.left = pos2 + "px";
+          if (pos2 >= max) { gameRunning = false; setTimeout(function(){ showWinner("Player 2 🐢 Wins!"); }, 200); }
+        }
+      }
+
+      function showWinner(msg) {
+        document.getElementById("winner-text").innerText = msg;
+        document.getElementById("end-overlay").classList.add("show");
+      }
+    </script>
+  </body>
+</html>
