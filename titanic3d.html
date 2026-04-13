@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Titanic 3D</title>
+  <meta charset="utf-8">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+    canvas { display:block; }
+    #crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,0.8); font-size:22px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+    #hud { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.65); padding:10px 22px; border-radius:12px; color:white; font-size:17px; text-align:center; pointer-events:none; z-index:5; transition:color 0.5s; }
+    #clock { position:fixed; top:16px; right:18px; background:rgba(0,0,0,0.65); padding:8px 16px; border-radius:10px; color:#aaddff; font-size:22px; pointer-events:none; z-index:5; }
+    #location { position:fixed; top:16px; left:18px; background:rgba(0,0,0,0.65); padding:8px 16px; border-radius:10px; color:#ccffcc; font-size:18px; pointer-events:none; z-index:5; }
+    #interact { position:fixed; top:58%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.78); padding:10px 22px; border-radius:12px; color:yellow; font-size:19px; pointer-events:none; z-index:5; display:none; }
+    #dialog { display:none; position:fixed; bottom:90px; left:50%; transform:translateX(-50%); width:min(620px,92vw); background:rgba(0,0,25,0.94); border:2px solid rgba(100,160,255,0.35); border-radius:18px; padding:20px 24px; z-index:25; }
+    #dlg-name { font-size:19px; color:#88ccff; margin-bottom:6px; }
+    #dlg-text { font-size:18px; color:#eee; line-height:1.55; margin-bottom:14px; }
+    #dlg-choices { display:flex; flex-direction:column; gap:8px; }
+    .dbtn { font-size:17px; padding:11px 14px; background:rgba(0,30,90,0.9); border:1px solid rgba(255,255,255,0.25); border-radius:10px; color:white; cursor:pointer; text-align:left; }
+    .dbtn:hover { background:rgba(0,70,180,0.9); }
+    .screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.93); z-index:20; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:30px; text-align:center; color:white; }
+    .screen.show { display:flex; }
+    .se { font-size:80px; }
+    .st { font-size:44px; font-weight:bold; }
+    .sb { font-size:21px; line-height:1.6; max-width:500px; }
+    .sbtn { font-size:26px; padding:14px 38px; border-radius:16px; border:none; background:yellow; color:#000033; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; }
+    .sbtn:hover { background:white; }
+    #lock-screen { position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:15; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:white; cursor:pointer; }
+    #lock-screen p { font-size:28px; }
+    #lock-screen small { font-size:17px; color:#aaa; }
+    .home-btn { position:fixed; top:12px; left:50%; transform:translateX(-50%); font-size:18px; padding:7px 16px; border-radius:10px; border:none; background:rgba(0,0,0,0.55); color:white; cursor:pointer; z-index:30; text-decoration:none; display:none; }
+  </style>
+</head>
+<body>
+
+<div id="crosshair">+</div>
+<div id="clock">🕐 11:30 PM</div>
+<div id="location">📍 Your Cabin</div>
+<div id="hud">W A S D to move &nbsp;|&nbsp; Mouse to look &nbsp;|&nbsp; Shift to run &nbsp;|&nbsp; E to talk</div>
+<div id="interact"></div>
+<div id="dialog"><div id="dlg-name"></div><div id="dlg-text"></div><div id="dlg-choices"></div></div>
+<a class="home-btn" id="home-btn" href="index.html">🏠 Home</a>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🚢</div>
+  <div class="st" style="color:#88ccff">RMS Titanic — 3D</div>
+  <div class="sb">April 14, 1912. You have just boarded the most magnificent ship ever built — for her first and only voyage.<br><br>Explore the ship. Talk to the passengers. But something is coming tonight...<br><br><span style="color:yellow">Will YOU survive? 🛟</span></div>
+  <button class="sbtn" onclick="beginGame()">⚓ BOARD THE SHIP</button>
+  <small style="color:#888">WASD to walk • Mouse to look around • E to talk to people</small>
+</div>
+
+<div class="screen" id="scr-win">
+  <div class="se">🛟</div>
+  <div class="st" style="color:#00ff88">YOU SURVIVED!</div>
+  <div class="sb" id="win-body"></div>
+  <button class="sbtn" onclick="location.reload()">Play Again</button>
+  <a class="sbtn" href="index.html">🏠 Home</a>
+</div>
+
+<div class="screen" id="scr-lose">
+  <div class="se">🌊</div>
+  <div class="st" style="color:#ff5555">The Ship Went Down...</div>
+  <div class="sb" id="lose-body"></div>
+  <button class="sbtn" onclick="location.reload()">Try Again</button>
+  <a class="sbtn" href="index.html">🏠 Home</a>
+</div>
+
+<div id="lock-screen" onclick="lockPointer()">
+  <p>🖱️ Click to look around</p>
+  <small>Move mouse to look • WASD to walk • Shift to run • E to talk</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ── renderer ──────────────────────────────────────────────
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// ── scene / camera ────────────────────────────────────────
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000011);
+scene.fog = new THREE.Fog(0x000011, 12, 55);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+// ── state ─────────────────────────────────────────────────
+var yaw = Math.PI, pitch = 0;
+var locked = false, gameOn = false, dlgOpen = false;
+var phase = "explore"; // explore → sinking → ended
+var elapsed = 0, score = 0;
+var shipRoll = 0, rollTarget = 0;
+var nearNPC = null;
+var keys = {};
+var triggered = {};
+
+document.addEventListener('keydown', function(e){
+  keys[e.code] = true;
+  if(e.code==='KeyE') interact();
+});
+document.addEventListener('keyup', function(e){ keys[e.code]=false; });
+
+// ── pointer lock ──────────────────────────────────────────
+function lockPointer(){ renderer.domElement.requestPointerLock(); }
+document.addEventListener('pointerlockchange', function(){
+  locked = document.pointerLockElement === renderer.domElement;
+  document.getElementById('lock-screen').style.display = (locked || dlgOpen) ? 'none' : 'flex';
+});
+document.addEventListener('mousemove', function(e){
+  if(!locked || !gameOn) return;
+  yaw   -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-1.1, Math.min(1.1, pitch));
+});
+
+// ── materials ─────────────────────────────────────────────
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+var M = {
+  wood:    lm(0x6B3A2A), richwood: lm(0x8B4513), cream: lm(0xFFF8E7),
+  carpet:  lm(0x8B0000), white:    lm(0xF0EDE0), brass: lm(0xB8860B),
+  metal:   lm(0x607080), deck:     lm(0x5C4030), ocean: lm(0x001133),
+  hull:    lm(0x1A1A1A), lifeboat: lm(0xE8D5A0), red:   lm(0xCC2200),
+  skin:    lm(0xE8C49A), darksuit: lm(0x1C2A5E), redsuit:lm(0xAA2222),
+  blacksuit:lm(0x111111),navysuit: lm(0x1C3A6E), greensuit:lm(0x1A5A2A),
+  sky: new THREE.MeshLambertMaterial({color:0x000008, side:THREE.BackSide}),
+  porthole: new THREE.MeshLambertMaterial({color:0x2255AA, transparent:true, opacity:0.6})
+};
+
+// ── geometry helpers ──────────────────────────────────────
+function addBox(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function addCyl(rt,rb,h,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,12),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function addSphere(r,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function addLight(x,y,z,col,i,d){
+  var l=new THREE.PointLight(col,i,d||18); l.position.set(x,y,z); scene.add(l); return l;
+}
+
+// ── label sprites ─────────────────────────────────────────
+function makeLabel(text){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(0,0,30,0.88)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(100,160,255,0.5)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle='white'; ctx.font='bold 21px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(2.4,0.6,1); return sp;
+}
+
+// ── walkable zones ────────────────────────────────────────
+var zones = [
+  {x1:-2.5, x2:2.5,  z1:-2.5, z2:6.0,  name:"Your Cabin"},
+  {x1:-2.2, x2:2.2,  z1:4.0,  z2:30.0, name:"First Class Corridor"},
+  {x1:1.5,  x2:6.5,  z1:11.0, z2:21.0, name:"First Class Corridor"},
+  {x1:3.5,  x2:18.0, z1:7.5,  z2:23.0, name:"First Class Dining Room"},
+  {x1:-11,  x2:11,   z1:27.0, z2:53.0, name:"Boat Deck"},
+];
+
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.1&&x<a.x2-0.1&&z>a.z1+0.1&&z<a.z2-0.1) return a;
+  }
+  return null;
+}
+
+// ── build ship ────────────────────────────────────────────
+function buildShip(){
+  scene.add(new THREE.AmbientLight(0x223355, 0.7));
+
+  // Ocean
+  addBox(300,0.4,300, M.ocean, 0,-2,25);
+
+  // ── CABIN ────────────────────────────────────────────────
+  addBox(5,0.15,5, M.wood,     0,-0.08,0);    // floor
+  addBox(5,0.12,5, M.cream,    0,3.08, 0);    // ceiling
+  addBox(5,3.2,0.15, M.richwood,0,1.5,-2.6);  // back wall
+  addBox(0.15,3.2,5, M.richwood,-2.6,1.5,0);  // left wall
+  addBox(0.15,3.2,5, M.richwood, 2.6,1.5,0);  // right wall
+  // Front wall with door gap
+  addBox(1.8,3.2,0.15, M.richwood,-1.7,1.5,2.6);
+  addBox(1.8,3.2,0.15, M.richwood, 1.7,1.5,2.6);
+  addBox(1.6,0.9,0.15, M.richwood, 0,2.75,2.6); // lintel
+  // Bed
+  addBox(1.2,0.45,2.2, M.white, 1.8,0.25,-1.5);
+  addBox(1.2,0.2,0.5,  M.cream, 1.8,0.55,-2.5); // pillow
+  // Small desk + chair
+  addBox(0.8,0.06,0.6, M.richwood,-1.8,0.78,-1.4);
+  addCyl(0.04,0.04,0.78,M.richwood,-1.8,0.39,-1.4);
+  addBox(0.4,0.05,0.4, M.darksuit,-1.8,0.52,-0.9);
+  addBox(0.4,0.45,0.08,M.darksuit,-1.8,0.78,-1.15);
+  // Porthole
+  addCyl(0.35,0.35,0.1, M.brass,-0.6,1.9,-2.55);
+  var ph=new THREE.Mesh(new THREE.CircleGeometry(0.27,16), M.porthole);
+  ph.position.set(-0.6,1.9,-2.5); ph.rotation.y=0; scene.add(ph);
+  // Light
+  addLight(0,2.8,0, 0xFFDDAA,1.5,14);
+
+  // ── CORRIDOR ─────────────────────────────────────────────
+  addBox(4.2,0.15,25,  M.wood,   0,-0.08,16.5);
+  addBox(1.6,0.06,25,  M.carpet, 0, 0.02,16.5); // runner
+  addBox(4.2,0.12,25,  M.cream,  0, 3.08,16.5); // ceiling
+  addBox(0.15,3.2,25,  M.richwood,-2.2,1.5,16.5); // left wall
+  // Right wall with dining opening z=12-19
+  addBox(0.15,3.2,9.5, M.richwood, 2.2,1.5, 7.25);
+  addBox(0.15,3.2,9.5, M.richwood, 2.2,1.5,24.25);
+  // Sconces
+  for(var sz=7;sz<=26;sz+=5){
+    addBox(0.12,0.28,0.12, M.brass,-2.12,2.1,sz);
+    addBox(0.12,0.28,0.12, M.brass, 2.12,2.1,sz);
+    addLight(0,2.75,sz, 0xFFDDAA,0.9,10);
+  }
+  // End wall before deck
+  addBox(1.5,3.2,0.15, M.richwood,-1.35,1.5,29.1);
+  addBox(1.5,3.2,0.15, M.richwood, 1.35,1.5,29.1);
+  addBox(3,0.9,0.15,   M.richwood, 0,2.75,29.1);
+
+  // ── DINING ROOM ───────────────────────────────────────────
+  addBox(14,0.15,15, M.richwood,  10.5,-0.08,15);
+  addBox(14,0.06,15, lm(0x7A5A10),10.5, 0.02,15); // fancy carpet
+  addBox(14,0.12,15, M.cream,     10.5, 3.08,15);  // ceiling
+  addBox(14,3.2,0.15, M.richwood, 10.5,1.5,7.5);   // back wall
+  addBox(14,3.2,0.15, M.richwood, 10.5,1.5,22.5);  // front wall
+  addBox(0.15,3.2,15, M.richwood, 17.6,1.5,15);    // right wall
+  // Left wall with opening
+  addBox(0.15,3.2,5.5, M.richwood, 3.6,1.5,10.25);
+  addBox(0.15,3.2,3.5, M.richwood, 3.6,1.5,20.75);
+  addBox(3.2,0.9,0.15, M.richwood, 5.2,2.75,13.5); // door lintel top
+  // Tables
+  var tpos=[[7,11],[12,11],[7,17],[12,17],[16,14]];
+  tpos.forEach(function(p){
+    addBox(1.5,0.07,1.0, M.white,   p[0],0.78,p[1]);
+    addCyl(0.05,0.05,0.78,M.brass,  p[0],0.39,p[1]);
+    addBox(0.06,0.35,0.06,M.brass,  p[0]-0.5,0.17,p[1]-0.3);
+    addBox(0.06,0.35,0.06,M.brass,  p[0]+0.5,0.17,p[1]-0.3);
+    addBox(0.06,0.35,0.06,M.brass,  p[0]-0.5,0.17,p[1]+0.3);
+    addBox(0.06,0.35,0.06,M.brass,  p[0]+0.5,0.17,p[1]+0.3);
+    addBox(1.6,0.04,1.1, M.brass, p[0],0.35,p[1]);
+  });
+  // Chandeliers
+  addCyl(0.5,0.5,0.1, M.brass,  8,2.9,11);
+  addCyl(0.5,0.5,0.1, M.brass,  13,2.9,11);
+  addCyl(0.5,0.5,0.1, M.brass,  10.5,2.9,17);
+  addLight(8,2.8,11,   0xFFEEBB,2.2,16);
+  addLight(13,2.8,11,  0xFFEEBB,2.2,16);
+  addLight(10.5,2.8,17,0xFFEEBB,2.2,16);
+
+  // ── TOP DECK ──────────────────────────────────────────────
+  addBox(22,0.15,24, M.deck, 0,-0.08,40);
+  // Railings
+  for(var rx=-10;rx<=10;rx+=2){
+    addBox(0.09,1.1,0.09,M.white, rx,0.72,29.2);
+    addBox(0.09,1.1,0.09,M.white, rx,0.72,51.8);
+  }
+  for(var rz=30;rz<=51;rz+=2){
+    addBox(0.09,1.1,0.09,M.white,-11,0.72,rz);
+    addBox(0.09,1.1,0.09,M.white, 11,0.72,rz);
+  }
+  addBox(20,0.09,0.09,M.white, 0,1.28,29.2);
+  addBox(20,0.09,0.09,M.white, 0,1.28,51.8);
+  addBox(0.09,0.09,22,M.white,-11,1.28,40.5);
+  addBox(0.09,0.09,22,M.white, 11,1.28,40.5);
+  // Lifeboats
+  [-7.5,-4.5,-1.5,1.5,4.5,7.5].forEach(function(bx,i){
+    addBox(3,0.7,1, M.lifeboat, bx>0?12:-12, 2.1, 33+Math.abs(bx)*1.5);
+  });
+  // Funnels
+  [-3,3].forEach(function(fx){
+    addCyl(0.9,1.1,6, M.hull,   fx,5.5,38);
+    addCyl(0.85,0.85,0.3,M.red, fx,8.4,38);
+  });
+  // Deck lights
+  for(var dl=32;dl<=50;dl+=6) addLight(0,3.5,dl, 0x334466,0.6,15);
+  // Sky dome
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(100,16,16), M.sky));
+  // Moon
+  addSphere(4, lm(0xEEEECC), 35,50,-65);
+  var moonLight = new THREE.PointLight(0x334477,0.3,200);
+  moonLight.position.set(35,50,-65); scene.add(moonLight);
+  // Stars
+  var sv=[];
+  for(var s=0;s<1000;s++){
+    var ph2=Math.random()*Math.PI, th=Math.random()*Math.PI*2, rs=88;
+    sv.push(rs*Math.sin(ph2)*Math.cos(th), rs*Math.cos(ph2), rs*Math.sin(ph2)*Math.sin(th));
+  }
+  var sg=new THREE.BufferGeometry();
+  sg.setAttribute('position',new THREE.Float32BufferAttribute(sv,3));
+  scene.add(new THREE.Points(sg, new THREE.PointsMaterial({color:0xffffff,size:0.35})));
+  // Hull sides
+  addBox(0.3,6,60, M.hull,-11.3,1,31);
+  addBox(0.3,6,60, M.hull, 11.3,1,31);
+}
+
+// ── NPCs ──────────────────────────────────────────────────
+var npcs = [];
+function buildNPC(x,z, bodyM, name, lines){
+  var g = new THREE.Group();
+  // legs
+  [-0.13,0.13].forEach(function(lx){
+    addBox2(g, 0.22,0.7,0.24, bodyM, lx,-0.35,0);
+  });
+  // body
+  addBox2(g, 0.52,0.88,0.3, bodyM, 0,0.44,0);
+  // head
+  addBox2(g, 0.4,0.4,0.38, M.skin, 0,1.1,0);
+  // label
+  var lbl=makeLabel(name); lbl.position.set(0,1.78,0); g.add(lbl);
+  g.position.set(x,0,z);
+  scene.add(g);
+  npcs.push({g:g, pos:new THREE.Vector3(x,0,z), name:name, lines:lines});
+}
+function addBox2(parent,w,h,d,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); parent.add(m);
+}
+
+function buildNPCs(){
+  buildNPC(1.2,1.2, M.darksuit, "James (Steward)", {
+    explore:"Good evening! Welcome aboard the RMS Titanic — the finest ship ever built! Dinner is in the dining room down the corridor. The top deck has wonderful views tonight. Enjoy your voyage!",
+    sinking:"SIR — PLEASE go to the boat deck NOW! We've struck an iceberg! Grab a life belt and GO! There's no time!"
+  });
+  buildNPC(0.3,10, M.redsuit, "Lady Margaret", {
+    explore:"Isn't this ship magnificent? I've never seen anything like it. They say she simply cannot sink — sixteen watertight compartments! I do hope the crossing stays this smooth...",
+    sinking:"Oh heavens! Did you feel that dreadful scraping? My husband says to stay calm but the floor is TILTING! Please — the lifeboats!"
+  });
+  buildNPC(5,14, M.blacksuit, "Henri (Waiter)", {
+    explore:"Bonsoir! Welcome to the First Class Dining Saloon. Tonight we have oysters, lobster thermidor, and roast duckling. Seven courses! Can I show you to a table? C'est magnifique!",
+    sinking:"Mon Dieu — everyone LEAVE! The ship is going down! Do not wait — ALLEZ! To the boat deck! VITE!"
+  });
+  buildNPC(13,13, M.navysuit, "Mr. Charles", {
+    explore:"Capital ship, what? Absolutely unsinkable, they say. I'm not worried in the slightest. Have you tried the first class smoking room? Finest cigars at sea, I tell you!",
+    sinking:"Good God... the engines have stopped. And the list — you can FEEL it now, can't you. To the lifeboats! WOMEN AND CHILDREN FIRST!"
+  });
+  buildNPC(3,40, M.hull, "Captain Smith", {
+    explore:"Good evening. Beautiful night — clear skies, calm sea. We've had some ice warnings today but I've adjusted our course. Nothing to worry about. This ship is the safest afloat.",
+    sinking:"We have struck ice. The damage is fatal — she cannot survive. All passengers to lifeboat stations at once. Women and children first. God save us all."
+  });
+  buildNPC(-5,35, M.greensuit, "Frederick (Lookout)", {
+    explore:"Evening. Bitterly cold tonight. Very clear though. I'm watching for ice — we've had warnings. Between you and me... we don't have binoculars up in the crow's nest tonight. Keep your eyes peeled.",
+    sinking:"ICEBERG RIGHT AHEAD — I rang the bell three times but we couldn't turn in time... Please — get a life jacket and go to the boats. RUN!"
+  });
+}
+
+// ── story events ──────────────────────────────────────────
+var events = [
+  {t:75,  fn: icebergStrike},
+  {t:105, fn: function(){ showHUD("🔔 'All passengers — life belts on — report to the boat deck!'", "#ffaa00"); }},
+  {t:145, fn: finalChoice}
+];
+
+function icebergStrike(){
+  document.getElementById('clock').innerText = "🕐 11:40 PM ❄️";
+  document.getElementById('clock').style.color = "#ff6666";
+  showHUD("💥 A terrible grinding sound tears through the ship...", "red");
+  shakeAmount = 0.18;
+  setTimeout(function(){ showHUD("❄️ THE TITANIC HAS STRUCK AN ICEBERG!", "red"); phase="sinking"; }, 2800);
+  setTimeout(function(){ rollTarget = 0.05; }, 12000);
+  setTimeout(function(){ rollTarget = 0.10; }, 35000);
+}
+
+function finalChoice(){
+  rollTarget = 0.18;
+  dlgOpen = true;
+  document.exitPointerLock();
+  document.getElementById('dlg-name').innerText = "⚠️  THE SHIP IS SINKING — MAKE YOUR CHOICE!";
+  document.getElementById('dlg-text').innerText = "The Titanic is going down fast. You are on the boat deck next to a lifeboat being lowered. There are people everywhere. What do you do?";
+  var choices = [
+    {t:"🚣  Climb into the lifeboat RIGHT NOW!", res:"good", pts:2},
+    {t:"👵  Help the elderly woman beside you get in first, then jump in", res:"hero", pts:3},
+    {t:"🎒  Run back to your cabin to get your valuables", res:"bad",  pts:-3},
+    {t:"🪵  Grab a deck chair and throw yourself into the sea", res:"close",pts:0}
+  ];
+  var box = document.getElementById('dlg-choices'); box.innerHTML='';
+  choices.forEach(function(ch){
+    var b=document.createElement('button'); b.className='dbtn'; b.innerText=ch.t;
+    b.onclick=function(){ score+=ch.pts; closeDialog(); setTimeout(function(){endGame(ch.res);},2500); };
+    box.appendChild(b);
+  });
+  document.getElementById('dialog').style.display='block';
+}
+
+// ── endings ───────────────────────────────────────────────
+function endGame(type){
+  phase = "ended"; rollTarget = 0.45;
+  setTimeout(function(){
+    if(type==="bad"){
+      document.getElementById('lose-body').innerHTML = "You ran back for your bag and lost precious minutes. By the time you returned to the deck, the last lifeboat was already in the water...<br><br><strong>Next time: leave everything and head straight to the lifeboats!</strong>";
+      document.getElementById('scr-lose').classList.add('show');
+    } else if(type==="hero"){
+      document.getElementById('win-body').innerHTML = "You helped the elderly woman into the lifeboat, then squeezed in yourself. You rowed hard as the great ship went under behind you...<br><br>At dawn, the rescue ship <em>Carpathia</em> found you. <strong>You survived — and you're a HERO! 🌟</strong>";
+      document.getElementById('scr-win').classList.add('show');
+    } else if(type==="close"){
+      document.getElementById('win-body').innerHTML = "You floated on a deck chair in the freezing Atlantic for two hours. Just when you were about to give up, a lifeboat rowed over...<br><br>The <em>Carpathia</em> rescued you at dawn. <strong>You barely survived! 🛟</strong>";
+      document.getElementById('scr-win').classList.add('show');
+    } else {
+      document.getElementById('win-body').innerHTML = "You got into a lifeboat just in time! You watched the enormous ship tilt and slide under the dark ocean...<br><br>The rescue ship <em>Carpathia</em> arrived at dawn. You were given hot soup and blankets. <strong>You survived! 🎉</strong>";
+      document.getElementById('scr-win').classList.add('show');
+    }
+    document.getElementById('home-btn').style.display='block';
+  }, 3500);
+}
+
+// ── dialog / HUD helpers ──────────────────────────────────
+var hudTimer;
+function showHUD(msg, col){
+  var h=document.getElementById('hud');
+  h.style.color = col||'white'; h.innerHTML=msg;
+  clearTimeout(hudTimer);
+  hudTimer=setTimeout(function(){ h.style.color='white'; h.innerHTML='W A S D move &nbsp;|&nbsp; Mouse look &nbsp;|&nbsp; Shift run &nbsp;|&nbsp; E talk'; },6000);
+}
+function closeDialog(){
+  dlgOpen=false;
+  document.getElementById('dialog').style.display='none';
+  lockPointer();
+}
+function interact(){
+  if(!gameOn||phase==='ended') return;
+  if(dlgOpen){ closeDialog(); return; }
+  if(!nearNPC) return;
+  var line = phase==='explore' ? nearNPC.lines.explore : nearNPC.lines.sinking;
+  dlgOpen=true; document.exitPointerLock();
+  document.getElementById('dlg-name').innerText='💬 '+nearNPC.name;
+  document.getElementById('dlg-text').innerText=line;
+  var box=document.getElementById('dlg-choices'); box.innerHTML='';
+  var b=document.createElement('button'); b.className='dbtn'; b.innerText='[Walk Away]';
+  b.onclick=closeDialog; box.appendChild(b);
+  document.getElementById('dialog').style.display='block';
+}
+
+// ── camera shake ──────────────────────────────────────────
+var shakeAmount=0;
+
+// ── begin game ────────────────────────────────────────────
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  gameOn=true;
+  camera.position.set(0,1.7,0); yaw=Math.PI; pitch=0;
+  lockPointer();
+  showHUD("Welcome aboard! Explore and talk to people (E). Something is coming tonight...","#aaddff");
+}
+
+// ── main loop ─────────────────────────────────────────────
+var clock2 = new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  var dt = Math.min(clock2.getDelta(), 0.1);
+
+  if(!gameOn){ renderer.render(scene,camera); return; }
+
+  elapsed += dt;
+
+  // story events
+  events.forEach(function(ev){
+    if(!triggered[ev.t] && elapsed>=ev.t){ triggered[ev.t]=true; ev.fn(); }
+  });
+
+  // clock display
+  if(phase!=='ended'){
+    var gameMin = Math.floor(elapsed/2);
+    var hh=11, mm=30+gameMin;
+    if(mm>=60){ hh=0; mm-=60; }
+    if(phase==='explore') document.getElementById('clock').innerText = "🕐 "+(hh===0?12:hh)+":"+(mm<10?"0":"")+mm+" "+(hh===0?"AM":"PM");
+  }
+
+  // ship roll
+  shipRoll += (rollTarget - shipRoll)*0.004;
+  camera.rotation.z = -shipRoll;
+
+  // shake decay
+  shakeAmount *= 0.92;
+
+  // movement
+  if(!dlgOpen){
+    var spd = (keys['ShiftLeft']||keys['ShiftRight']) ? 7 : 3.5;
+    var mx=0, mz=0;
+    if(keys['KeyW']) mz=-1;
+    if(keys['KeyS']) mz= 1;
+    if(keys['KeyA']) mx=-1;
+    if(keys['KeyD']) mx= 1;
+    if(mx||mz){
+      var len=Math.sqrt(mx*mx+mz*mz);
+      mx/=len; mz/=len;
+      var cos=Math.cos(yaw), sin=Math.sin(yaw);
+      var dx=(mx*cos-mz*sin)*spd*dt;
+      var dz=(mx*sin+mz*cos)*spd*dt;
+      var nx=camera.position.x+dx, nz=camera.position.z+dz;
+      if(getZone(nx, camera.position.z)) camera.position.x=nx;
+      if(getZone(camera.position.x, nz)) camera.position.z=nz;
+    }
+    camera.position.y = 1.7 + shipRoll*0.4;
+  }
+
+  // camera rotation
+  var sx=(Math.random()-0.5)*shakeAmount, sy=(Math.random()-0.5)*shakeAmount;
+  camera.rotation.order='YXZ';
+  camera.rotation.y = yaw+sx;
+  camera.rotation.x = pitch+sy;
+
+  // location display
+  var z = getZone(camera.position.x, camera.position.z);
+  if(z) document.getElementById('location').innerText = "📍 "+z.name;
+
+  // NPC face player + check proximity
+  nearNPC=null;
+  var closest=99;
+  npcs.forEach(function(npc){
+    var dx=camera.position.x-npc.pos.x, dz=camera.position.z-npc.pos.z;
+    npc.g.rotation.y = Math.atan2(dx,dz);
+    var dist=Math.sqrt(dx*dx+dz*dz);
+    if(dist<3.5&&dist<closest){ closest=dist; nearNPC=npc; }
+  });
+  var hint=document.getElementById('interact');
+  hint.style.display=(nearNPC&&!dlgOpen)?'block':'none';
+  if(nearNPC) hint.innerHTML='Press <strong>E</strong> to talk to '+nearNPC.name;
+
+  renderer.render(scene,camera);
+}
+
+// ── resize ────────────────────────────────────────────────
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// ── go ────────────────────────────────────────────────────
+buildShip();
+buildNPCs();
+animate();
+</script>
+</body>
+</html>

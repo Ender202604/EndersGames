@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Titanic: Would YOU Survive?</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: Georgia, serif;
+        color: white;
+        height: 100vh;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      /* ── Backgrounds ── */
+      #bg {
+        position: fixed; inset: 0; z-index: 0;
+        transition: background 3s;
+        background: linear-gradient(180deg, #000011 0%, #000033 60%, #001a55 100%);
+      }
+      #bg.sinking {
+        background: linear-gradient(180deg, #000011 0%, #111122 40%, #001133 70%, #0044aa 100%);
+      }
+
+      /* ── Stars ── */
+      #stars { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+      .star {
+        position: absolute; background: white; border-radius: 50%;
+        animation: twinkle 2s infinite alternate;
+      }
+      @keyframes twinkle { from { opacity: 0.2; } to { opacity: 1; } }
+
+      /* ── Moon ── */
+      #moon {
+        position: fixed; top: 40px; right: 60px; font-size: 60px;
+        z-index: 2; pointer-events: none;
+      }
+
+      /* ── Iceberg ── */
+      #iceberg {
+        position: fixed; right: -200px; bottom: 70px; font-size: 90px;
+        z-index: 4; pointer-events: none;
+        transition: right 3s cubic-bezier(.2,.8,.4,1);
+      }
+      #iceberg.show { right: 28%; }
+
+      /* ── Ship ── */
+      #ship {
+        position: fixed; bottom: 78px; left: 50%;
+        transform: translateX(-50%);
+        font-size: 110px; z-index: 5; pointer-events: none;
+        animation: rock 5s ease-in-out infinite;
+        transform-origin: bottom center;
+        transition: bottom 6s;
+      }
+      @keyframes rock {
+        0%,100% { transform: translateX(-50%) rotate(-2deg); }
+        50%      { transform: translateX(-50%) rotate(2deg); }
+      }
+      #ship.sinking {
+        animation: sink 9s ease-in forwards;
+      }
+      @keyframes sink {
+        0%   { transform: translateX(-50%) rotate(0deg);   bottom: 78px; }
+        25%  { transform: translateX(-50%) rotate(-8deg);  }
+        55%  { transform: translateX(-50%) rotate(-22deg); bottom: 40px; }
+        100% { transform: translateX(-50%) rotate(-50deg); bottom: -280px; }
+      }
+
+      /* ── Ocean ── */
+      #ocean {
+        position: fixed; bottom: 0; left: 0; right: 0;
+        height: 95px; z-index: 3; pointer-events: none;
+        background: linear-gradient(180deg, #0055cc 0%, #002266 100%);
+        animation: waves 3.5s ease-in-out infinite;
+      }
+      @keyframes waves { 0%,100% { height: 88px; } 50% { height: 106px; } }
+      #ocean.rising { animation: rise 9s ease-in forwards; }
+      @keyframes rise { 0% { height: 88px; } 100% { height: 65vh; } }
+
+      /* ── Story panel ── */
+      #panel {
+        position: fixed; top: 0; left: 0; right: 0;
+        z-index: 10;
+        background: rgba(0, 0, 20, 0.82);
+        backdrop-filter: blur(6px);
+        padding: 18px 22px 18px;
+        max-height: 72vh;
+        overflow-y: auto;
+      }
+      #scene-title {
+        font-size: 22px; color: #88ccff;
+        font-style: italic; margin-bottom: 8px;
+      }
+      #scene-text {
+        font-size: 20px; line-height: 1.55;
+        margin-bottom: 14px;
+      }
+      #choices { display: flex; flex-direction: column; gap: 9px; }
+      .choice-btn {
+        font-size: 19px; padding: 13px 16px;
+        border-radius: 13px;
+        border: 2px solid rgba(255,255,255,0.25);
+        background: rgba(0, 0, 80, 0.75);
+        color: white; cursor: pointer;
+        text-align: left;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        transition: background 0.15s;
+      }
+      .choice-btn:active { background: rgba(0, 80, 180, 0.85); }
+
+      /* ── Screen shake ── */
+      @keyframes quake {
+        0%,100% { transform: translate(0,0) rotate(0); }
+        20%  { transform: translate(-12px, 4px) rotate(-1deg); }
+        40%  { transform: translate(12px, -4px) rotate(1deg); }
+        60%  { transform: translate(-8px, 2px); }
+        80%  { transform: translate(8px, -2px); }
+      }
+      .quaking { animation: quake 0.55s forwards; }
+
+      /* ── Overlays ── */
+      .overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.92); z-index: 30;
+        flex-direction: column; align-items: center;
+        justify-content: center; gap: 18px;
+        padding: 28px; text-align: center;
+      }
+      .overlay.show { display: flex; }
+      .ov-emoji  { font-size: 86px; }
+      .ov-title  { font-size: 46px; font-weight: bold; }
+      .ov-body   { font-size: 22px; line-height: 1.55; max-width: 480px; }
+      .big-btn {
+        font-size: 28px; padding: 16px 40px; border-radius: 18px;
+        border: none; background: yellow; color: #000033;
+        font-weight: bold; cursor: pointer;
+        touch-action: manipulation;
+        text-decoration: none; display: inline-block;
+        margin-top: 6px;
+      }
+      .big-btn:active { background: white; }
+      .home-btn {
+        position: fixed; top: 12px; right: 12px;
+        font-size: 20px; padding: 8px 16px; border-radius: 12px;
+        border: none; background: rgba(0,0,0,0.55);
+        color: white; cursor: pointer; z-index: 40;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+
+    <a class="home-btn" href="index.html">🏠 Home</a>
+    <div id="bg"></div>
+    <div id="stars"></div>
+    <div id="moon">🌙</div>
+    <div id="iceberg">🧊</div>
+    <div id="ship">🚢</div>
+    <div id="ocean"></div>
+
+    <div id="panel">
+      <div id="scene-title"></div>
+      <div id="scene-text"></div>
+      <div id="choices"></div>
+    </div>
+
+    <!-- START -->
+    <div class="overlay show" id="ov-start">
+      <div class="ov-emoji">🚢</div>
+      <div class="ov-title" style="color:#88ccff">RMS Titanic</div>
+      <div class="ov-body">
+        It's April 14, 1912.<br>
+        You're sailing on the <strong>Titanic</strong> — the biggest, most beautiful ship ever built!<br><br>
+        It's a cold, dark night out on the Atlantic Ocean...<br><br>
+        <strong style="color:yellow">Will YOU survive? 🛟</strong>
+      </div>
+      <button class="big-btn" onclick="startGame()">⚓ BOARD THE SHIP!</button>
+    </div>
+
+    <!-- SURVIVED -->
+    <div class="overlay" id="ov-win">
+      <div class="ov-emoji">🛟</div>
+      <div class="ov-title" style="color:#00ff88">YOU SURVIVED!</div>
+      <div class="ov-body" id="win-text"></div>
+      <button class="big-btn" onclick="startGame()">Play Again!</button>
+      <a class="big-btn" href="index.html">🏠 Home</a>
+    </div>
+
+    <!-- LOST -->
+    <div class="overlay" id="ov-lose">
+      <div class="ov-emoji">🌊</div>
+      <div class="ov-title" style="color:#ff5555">The Ship Went Down...</div>
+      <div class="ov-body" id="lose-text"></div>
+      <button class="big-btn" onclick="startGame()">Try Again!</button>
+      <a class="big-btn" href="index.html">🏠 Home</a>
+    </div>
+
+    <script>
+      var score = 0;
+
+      var scenes = {
+
+        s1: {
+          title: "🌙  11:00 PM  —  April 14, 1912",
+          text: "You're on the Titanic! Stars sparkle above the dark ocean. The ship hums as it glides through the water. It feels like the safest place in the world. Where do you go?",
+          choices: [
+            { text: "🛏️  Go to your cabin and sleep",          next: "s2a", pts: 0 },
+            { text: "⭐  Walk up to the top deck to see the stars", next: "s2b", pts: 1 },
+            { text: "🍪  Get a midnight snack in the kitchen",  next: "s2c", pts: 0 }
+          ]
+        },
+
+        s2a: {
+          title: "🛏️  Your Cozy Cabin",
+          text: "You fall fast asleep rocking with the waves. Then — BOOM! A huge thud shakes the whole ship. Your pillow falls on the floor. The ship goes quiet and slows down...",
+          choices: [
+            { text: "😴  Go back to sleep, probably nothing",    next: "s3_bad",  pts: -1, fx: "quake" },
+            { text: "🧥  Grab your life jacket and run to deck!", next: "s3_deck", pts:  2, fx: "quake" },
+            { text: "🚪  Bang on every door in the hallway",     next: "s3_deck", pts:  1, fx: "quake" }
+          ]
+        },
+
+        s2b: {
+          title: "⭐  The Top Deck",
+          text: "Wow! You can see a million stars. The ocean stretches forever in every direction. Then you spot something — something HUGE and white drifting right into the ship's path. An ICEBERG!",
+          choices: [
+            { text: "🏃  Sprint to find a life jacket immediately!", next: "s3_deck", pts: 2, fx: "iceberg" },
+            { text: "📢  Shout a warning and help people wake up",   next: "s3_deck", pts: 1, fx: "iceberg" },
+            { text: "😮  Just stand there and stare",               next: "s3_stare",pts:-1, fx: "iceberg" }
+          ]
+        },
+
+        s2c: {
+          title: "🍪  The Kitchen",
+          text: "Cookies! You find a whole tray. Then — SCRAAAAAPE — a horrible grinding noise rumbles through the ship. An officer bursts in shouting: 'ICEBERG! Everyone to the lifeboats NOW!'",
+          choices: [
+            { text: "🚣  Drop the cookies and RUN to the lifeboats!", next: "s3_deck", pts: 2, fx: "quake" },
+            { text: "🍪  Grab cookies to go (you might need them!)",  next: "s3_deck", pts: 1, fx: "quake" },
+            { text: "👶  Help carry two little kids to the lifeboats", next: "s3_deck", pts: 2, fx: "quake" }
+          ]
+        },
+
+        s3_bad: {
+          title: "💧  Uh Oh...",
+          text: "You wake up to cold water on your feet! The floor is flooded! You race to the deck in your pyjamas. Lifeboats are everywhere... but they're all full and being lowered already!",
+          choices: [
+            { text: "🪵  Search the ship for a wooden door to float on", next: "end_close", pts: 0, fx: "sink" },
+            { text: "🌊  Jump in and swim towards a lifeboat",           next: "end_lost",  pts: 0, fx: "sink" }
+          ]
+        },
+
+        s3_stare: {
+          title: "💥  CRASH!",
+          text: "BOOM! The iceberg rips along the whole side of the ship like a can opener. You fall over. The lights flicker. The ship begins to tilt. Water gushes onto the lower decks!",
+          choices: [
+            { text: "🚣  Jump up and sprint to the lifeboats!",   next: "s4", pts: 0, fx: "sink" },
+            { text: "😱  Panic and run around not knowing what to do", next: "end_lost", pts: -1, fx: "sink" }
+          ]
+        },
+
+        s3_deck: {
+          title: "🚢  The Ship is Tilting!",
+          text: "You're on deck. The Titanic is slowly leaning to one side. Cold ocean air bites your face. Sailors are loading the lifeboats. People are shouting and crying. What do you do?",
+          choices: [
+            { text: "🚣  Climb into a lifeboat right now!",               next: "s4",      pts: 1, fx: "sink" },
+            { text: "👵  Help an elderly lady into the lifeboat first",    next: "s4",      pts: 2, fx: "sink" },
+            { text: "🎒  Run back inside to grab your bag first",          next: "end_lost", pts:-2, fx: "sink" }
+          ]
+        },
+
+        s4: {
+          title: "🌊  Into the Lifeboat!",
+          text: "You get into a lifeboat! Sailors lower it down with ropes toward the dark, freezing ocean far below. SPLASH! You're on the water. You watch the huge ship slowly sink behind you...",
+          choices: [
+            { text: "🙏  Row as far from the ship as possible",            next: "end_win",    pts: 1 },
+            { text: "🗣️  Shout to other lifeboats to row together",        next: "end_great",  pts: 2 },
+            { text: "🔙  Row back towards the ship to help more people",   next: "end_hero",   pts: 3 }
+          ]
+        },
+
+        end_win:   { end: "win",   pts: 0 },
+        end_great: { end: "win",   pts: 0 },
+        end_hero:  { end: "hero",  pts: 0 },
+        end_close: { end: "close", pts: 0 },
+        end_lost:  { end: "lost",  pts: 0 }
+      };
+
+      var winMessages = [
+        "You made smart choices! You got on a lifeboat and rowed away. At 4am, the rescue ship <em>Carpathia</em> found you. You wrapped in blankets and drank hot soup. <strong>You survived! 🌟</strong>",
+        "You helped others AND got on a lifeboat! The rescue ship <em>Carpathia</em> picked everyone up. You were shaking from the cold, but safe. <strong>You're a hero AND a survivor! 🌟</strong>",
+        "You rowed BACK to help people in the water! It was dangerous and freezing, but you pulled three people into your boat. The <em>Carpathia</em> rescued you all. <strong>You're the BIGGEST hero of all! 🏆</strong>"
+      ];
+
+      function makeStars() {
+        var c = document.getElementById("stars");
+        for (var i = 0; i < 90; i++) {
+          var s = document.createElement("div");
+          s.className = "star";
+          s.style.cssText = "left:" + (Math.random()*100) + "vw;top:" + (Math.random()*65) + "vh;width:" + (1+Math.random()*2.5) + "px;height:" + (1+Math.random()*2.5) + "px;animation-delay:" + (Math.random()*2) + "s;animation-duration:" + (1.5+Math.random()*2) + "s";
+          c.appendChild(s);
+        }
+      }
+
+      function startGame() {
+        score = 0;
+        document.getElementById("ship").className = "";
+        document.getElementById("ocean").className = "";
+        document.getElementById("bg").className = "";
+        document.getElementById("iceberg").className = "";
+        document.getElementById("iceberg").style.right = "-200px";
+        ["ov-start","ov-win","ov-lose"].forEach(function(id){ document.getElementById(id).classList.remove("show"); });
+        showScene("s1");
+      }
+
+      function showScene(id) {
+        var sc = scenes[id];
+
+        if (sc.end) { handleEnd(sc.end); return; }
+
+        score += (sc.pts || 0);
+        document.getElementById("scene-title").innerText = sc.title;
+        document.getElementById("scene-text").innerText  = sc.text;
+
+        var box = document.getElementById("choices"); box.innerHTML = "";
+        sc.choices.forEach(function(ch) {
+          var b = document.createElement("button");
+          b.className = "choice-btn"; b.innerText = ch.text;
+          b.ontouchstart = function(e){ e.preventDefault(); pick(ch); };
+          b.onclick = function(){ pick(ch); };
+          box.appendChild(b);
+        });
+      }
+
+      function pick(ch) {
+        score += ch.pts || 0;
+        if (ch.fx === "quake") {
+          document.body.classList.add("quaking");
+          setTimeout(function(){ document.body.classList.remove("quaking"); }, 600);
+        }
+        if (ch.fx === "iceberg") {
+          document.getElementById("iceberg").classList.add("show");
+          setTimeout(function(){
+            document.getElementById("iceberg").classList.remove("show");
+            document.getElementById("iceberg").style.right = "-200px";
+          }, 3500);
+          setTimeout(function(){
+            document.body.classList.add("quaking");
+            setTimeout(function(){ document.body.classList.remove("quaking"); }, 600);
+          }, 2800);
+        }
+        if (ch.fx === "sink") {
+          document.getElementById("bg").classList.add("sinking");
+          document.getElementById("ship").classList.add("sinking");
+          document.getElementById("ocean").classList.add("rising");
+        }
+        setTimeout(function(){ showScene(ch.next); }, ch.fx ? 400 : 0);
+      }
+
+      function handleEnd(type) {
+        if (type === "lost") {
+          document.getElementById("lose-text").innerHTML =
+            "Your choices cost precious minutes. The ocean was freezing cold that night.<br><br>" +
+            "<strong>Next time: grab your life jacket FIRST and head to the lifeboats right away!</strong>";
+          document.getElementById("ov-lose").classList.add("show");
+        } else {
+          var idx = type === "hero" ? 2 : (score >= 5 ? 1 : 0);
+          document.getElementById("win-text").innerHTML = winMessages[idx];
+          document.getElementById("ov-win").classList.add("show");
+        }
+      }
+
+      makeStars();
+    </script>
+
+  </body>
+</html>
