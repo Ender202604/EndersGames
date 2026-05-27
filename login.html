@@ -95,6 +95,12 @@ if (sessionStorage.getItem('visitorLogged')) {
   location.href = 'index.html';
 }
 
+function goToGames(first) {
+  sessionStorage.setItem('visitorLogged', '1');
+  sessionStorage.setItem('visitorName', first);
+  window.location.href = 'index.html';
+}
+
 function submitName() {
   var first = document.getElementById('fname').value.trim();
   var last  = document.getElementById('lname').value.trim();
@@ -107,24 +113,25 @@ function submitName() {
   document.getElementById('msg').textContent = 'Entering game world...';
 
   if (!firebaseReady) {
-    sessionStorage.setItem('visitorLogged', '1');
-    sessionStorage.setItem('visitorName', first);
-    window.location.href = 'index.html';
+    goToGames(first);
     return;
   }
+
+  // 5-second timeout — if Firebase doesn't respond, let them in anyway
+  var redirectTimer = setTimeout(function() { goToGames(first); }, 5000);
 
   fetch('https://ipapi.co/json/')
     .then(function(r) { return r.json(); })
     .then(function(geo) {
       logVisitor(first, last, geo.ip || 'unknown',
-        [geo.city, geo.region, geo.country_name].filter(Boolean).join(', ') || 'unknown');
+        [geo.city, geo.region, geo.country_name].filter(Boolean).join(', ') || 'unknown', redirectTimer);
     })
     .catch(function() {
-      logVisitor(first, last, 'unavailable', 'unavailable');
+      logVisitor(first, last, 'unavailable', 'unavailable', redirectTimer);
     });
 }
 
-function logVisitor(first, last, ip, loc) {
+function logVisitor(first, last, ip, loc, redirectTimer) {
   var now = new Date();
   var entry = {
     firstName: first,
@@ -138,14 +145,12 @@ function logVisitor(first, last, ip, loc) {
   };
   db.ref('visitors').push(entry)
     .then(function() {
-      sessionStorage.setItem('visitorLogged', '1');
-      sessionStorage.setItem('visitorName', first);
-      window.location.href = 'index.html';
+      clearTimeout(redirectTimer);
+      goToGames(first);
     })
-    .catch(function(err) {
-      document.getElementById('msg').textContent = 'Error saving. Check Firebase config!';
-      document.getElementById('btn').disabled = false;
-      console.error(err);
+    .catch(function() {
+      clearTimeout(redirectTimer);
+      goToGames(first);
     });
 }
 
