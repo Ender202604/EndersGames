@@ -69,39 +69,28 @@
   <div id="msg"></div>
 </div>
 
-<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
 <script>
-// ============================================================
-// STEP 1: Paste your Firebase config here.
-// Get it from: console.firebase.google.com
-//   > Your project > Project Settings > Your apps > Web app
-// ============================================================
 var firebaseConfig = {
-  apiKey: "PASTE_API_KEY_HERE",
-  authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://PASTE_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId: "PASTE_PROJECT_ID",
-  storageBucket: "PASTE_PROJECT_ID.appspot.com",
-  messagingSenderId: "PASTE_SENDER_ID",
-  appId: "PASTE_APP_ID"
+  apiKey: "AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",
+  authDomain: "enders-games.firebaseapp.com",
+  databaseURL: "https://enders-games-default-rtdb.firebaseio.com",
+  projectId: "enders-games",
+  storageBucket: "enders-games.firebasestorage.app",
+  messagingSenderId: "87049074470",
+  appId: "1:87049074470:web:bc38b35669b43aedceb3e7"
 };
-// ============================================================
 
-// Detect if Firebase is actually configured
 var firebaseReady = false;
 var db = null;
 try {
-  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== 'PASTE_API_KEY_HERE') {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.database();
-    firebaseReady = true;
-  }
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+  firebaseReady = true;
 } catch(e) { firebaseReady = false; }
 
-// Skip login if already logged in this browser session
 if (sessionStorage.getItem('visitorLogged')) {
   location.href = 'index.html';
 }
@@ -118,7 +107,6 @@ function submitName() {
   document.getElementById('msg').textContent = 'Entering game world...';
 
   if (!firebaseReady) {
-    // Firebase not configured yet -- let them in anyway
     sessionStorage.setItem('visitorLogged', '1');
     sessionStorage.setItem('visitorName', first);
     window.location.href = 'index.html';
