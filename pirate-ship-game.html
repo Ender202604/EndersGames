@@ -1,0 +1,612 @@
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: #0a1628; }
+  body { display: flex; justify-content: center; align-items: center; }
+  #gameCanvas { display: block; cursor: crosshair; }
+  #ui { position: fixed; top: 0; left: 0; width: 100%; pointer-events: none; font-family: 'Courier New', monospace; color: #fff; }
+  #hud { padding: 12px; display: flex; justify-content: space-between; align-items: flex-start; }
+  #health-bar { background: #333; border: 2px solid #666; width: 180px; height: 18px; border-radius: 3px; overflow: hidden; }
+  #health-fill { background: #e24b4a; height: 100%; transition: width 0.2s; }
+  #score { color: #fac775; font-size: 16px; margin-top: 6px; }
+  #hotbar { display: flex; gap: 6px; justify-content: center; position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); pointer-events: all; }
+  .slot { width: 50px; height: 50px; border: 2px solid #666; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; font-size: 24px; border-radius: 5px; cursor: pointer; }
+  .slot.active { border-color: #fff; background: rgba(255,255,255,0.18); }
+  #controls { background: rgba(0,0,0,0.7); border: 1px solid #444; padding: 10px 14px; border-radius: 5px; font-size: 12px; color: #ccc; line-height: 1.8; }
+  #msg { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); font-size: 14px; text-align: center; background: rgba(0,0,0,0.7); padding: 6px 14px; border-radius: 5px; opacity: 0; transition: opacity 0.5s; color: #fff; }
+  #msg.show { opacity: 1; }
+</style>
+
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+  <div id="hud">
+    <div>
+      <div style="font-size:12px;color:#aaa">HEALTH</div>
+      <div id="health-bar"><div id="health-fill" style="width:100%"></div></div>
+      <div id="score">⚓ Score: 0</div>
+    </div>
+    <div id="controls">
+      WASD — move<br>
+      SPACE — jump<br>
+      1 sword &nbsp; 2 pistol<br>
+      CLICK — attack
+    </div>
+  </div>
+  <div id="hotbar">
+    <div class="slot active" id="slot1" onclick="selectSlot(0)">⚔️</div>
+    <div class="slot" id="slot2" onclick="selectSlot(1)">🔫</div>
+  </div>
+  <div id="msg"></div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Isometric projection
+const TILE = 36;
+const TILE_H = 18;
+const BLOCK_H = 30;
+
+function project(x, y, z) {
+  return {
+    sx: (x - y) * TILE,
+    sy: (x + y) * TILE_H - z * BLOCK_H
+  };
+}
+
+const SHIP_W = 12;
+const SHIP_L = 18;
+
+const player = {
+  x: SHIP_W / 2, y: SHIP_L / 2, z: 0,
+  vx: 0, vy: 0, vz: 0,
+  facing: { x: 1, y: 0 },
+  onGround: true
+};
+
+const SPEED = 0.08;
+const GRAVITY = 0.018;
+const JUMP = 0.32;
+
+let camX = 0, camY = 0;
+let health = 100, score = 0, selectedSlot = 0;
+let enemies = [], powerups = [], projectiles = [], particles = [];
+let speedTimer = 0, attackAnim = 0, spawnTimer = 200, powerupTimer = 300;
+let frame = 0;
+
+function showMsg(t, dur = 1800) {
+  const m = document.getElementById('msg');
+  m.textContent = t; m.classList.add('show');
+  clearTimeout(m._t);
+  m._t = setTimeout(() => m.classList.remove('show'), dur);
+}
+function selectSlot(i) {
+  selectedSlot = i;
+  document.getElementById('slot1').classList.toggle('active', i === 0);
+  document.getElementById('slot2').classList.toggle('active', i === 1);
+}
+function updateHUD() {
+  document.getElementById('health-fill').style.width = Math.max(0, health) + '%';
+  document.getElementById('score').textContent = '⚓ Score: ' + score;
+}
+function spawnParticles(x, y, z, color, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y, z,
+      vx: (Math.random() - 0.5) * 0.15,
+      vy: (Math.random() - 0.5) * 0.15,
+      vz: Math.random() * 0.15 + 0.05,
+      life: 1, color
+    });
+  }
+}
+
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (player.onGround) { player.vz = JUMP; player.onGround = false; }
+  }
+  if (e.code === 'Digit1') selectSlot(0);
+  if (e.code === 'Digit2') selectSlot(1);
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+canvas.addEventListener('click', attack);
+
+function attack() {
+  attackAnim = 14;
+  if (selectedSlot === 0) {
+    const px = player.x + player.facing.x * 0.6;
+    const py = player.y + player.facing.y * 0.6;
+    let hitAny = false;
+    enemies.forEach(e => {
+      const dx = e.x - px, dy = e.y - py;
+      if (dx * dx + dy * dy < 1.5 * 1.5) {
+        e.hp--;
+        e.knockX = Math.sign(player.facing.x) * 0.4;
+        e.knockY = Math.sign(player.facing.y) * 0.4;
+        spawnParticles(e.x, e.y, 0.6, '#eee', 8);
+        score += 5; hitAny = true;
+        if (e.hp <= 0 && Math.random() < 0.4) spawnPowerup(e.x, e.y);
+      }
+    });
+    enemies = enemies.filter(e => e.hp > 0);
+    if (hitAny) showMsg('⚔ Slash!');
+  } else if (selectedSlot === 1) {
+    projectiles.push({
+      x: player.x, y: player.y, z: 0.6,
+      vx: player.facing.x * 0.4,
+      vy: player.facing.y * 0.4,
+      life: 80
+    });
+    spawnParticles(player.x, player.y, 0.6, '#ef9f27', 5);
+    showMsg('🔫 Bang!');
+  }
+  updateHUD();
+}
+
+function spawnEnemy() {
+  const side = Math.floor(Math.random() * 4);
+  let x, y;
+  if (side === 0) { x = 1 + Math.random() * (SHIP_W - 2); y = 1; }
+  else if (side === 1) { x = 1 + Math.random() * (SHIP_W - 2); y = SHIP_L - 2; }
+  else if (side === 2) { x = 1; y = 1 + Math.random() * (SHIP_L - 2); }
+  else { x = SHIP_W - 2; y = 1 + Math.random() * (SHIP_L - 2); }
+  enemies.push({
+    x, y, z: 0, hp: 2, maxHp: 2,
+    speed: 0.022 + Math.random() * 0.01,
+    attackTimer: 0, knockX: 0, knockY: 0
+  });
+}
+
+function spawnPowerup(x, y) {
+  if (x == null) {
+    x = 1.5 + Math.random() * (SHIP_W - 3);
+    y = 1.5 + Math.random() * (SHIP_L - 3);
+  }
+  powerups.push({
+    x, y, type: Math.random() < 0.5 ? 'heal' : 'speed',
+    bob: Math.random() * Math.PI * 2, life: 600
+  });
+}
+
+function updatePlayer() {
+  let dx = 0, dy = 0;
+  if (keys['KeyW'] || keys['ArrowUp']) dy -= 1;
+  if (keys['KeyS'] || keys['ArrowDown']) dy += 1;
+  if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
+  if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
+  if (dx || dy) {
+    const len = Math.hypot(dx, dy);
+    dx /= len; dy /= len;
+    const sp = speedTimer > 0 ? SPEED * 1.7 : SPEED;
+    player.vx = dx * sp; player.vy = dy * sp;
+    player.facing = { x: dx, y: dy };
+  } else {
+    player.vx *= 0.6; player.vy *= 0.6;
+  }
+  player.x += player.vx; player.y += player.vy;
+  player.x = Math.max(0.6, Math.min(SHIP_W - 0.6, player.x));
+  player.y = Math.max(0.6, Math.min(SHIP_L - 0.6, player.y));
+  player.vz -= GRAVITY; player.z += player.vz;
+  if (player.z <= 0) { player.z = 0; player.vz = 0; player.onGround = true; }
+  if (speedTimer > 0) speedTimer--;
+  if (attackAnim > 0) attackAnim--;
+
+  for (let i = powerups.length - 1; i >= 0; i--) {
+    const p = powerups[i];
+    const dx2 = p.x - player.x, dy2 = p.y - player.y;
+    if (dx2 * dx2 + dy2 * dy2 < 0.6 * 0.6) {
+      if (p.type === 'heal') {
+        health = Math.min(100, health + 30);
+        showMsg('❤ +30 Health!');
+        spawnParticles(p.x, p.y, 0.4, '#e24b4a', 12);
+      } else {
+        speedTimer = 360;
+        showMsg('⚡ Speed Boost!');
+        spawnParticles(p.x, p.y, 0.4, '#fac775', 12);
+      }
+      powerups.splice(i, 1); updateHUD();
+    }
+  }
+
+  const target = project(player.x, player.y, 0);
+  camX += (target.sx - camX) * 0.1;
+  camY += (target.sy - camY) * 0.1;
+}
+
+function updateEnemies() {
+  spawnTimer--;
+  if (spawnTimer <= 0 && enemies.length < 5) {
+    spawnEnemy();
+    spawnTimer = 220 + Math.random() * 160;
+  }
+  enemies.forEach(e => {
+    const dx = player.x - e.x, dy = player.y - e.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0.05) {
+      e.x += (dx / dist) * e.speed + e.knockX;
+      e.y += (dy / dist) * e.speed + e.knockY;
+    }
+    e.knockX *= 0.7; e.knockY *= 0.7;
+    e.x = Math.max(0.6, Math.min(SHIP_W - 0.6, e.x));
+    e.y = Math.max(0.6, Math.min(SHIP_L - 0.6, e.y));
+    e.attackTimer--;
+    if (dist < 0.8 && e.attackTimer <= 0) {
+      health = Math.max(0, health - 8);
+      e.attackTimer = 60;
+      spawnParticles(player.x, player.y, 0.5, '#e24b4a', 6);
+      updateHUD();
+      if (health <= 0) showMsg('💀 You died! Score: ' + score, 4000);
+    }
+  });
+}
+
+function updateProjectiles() {
+  projectiles.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.life--;
+    enemies.forEach(e => {
+      const dx = p.x - e.x, dy = p.y - e.y;
+      if (p.life > 0 && dx * dx + dy * dy < 0.5 * 0.5) {
+        e.hp -= 2; p.life = 0;
+        spawnParticles(p.x, p.y, 0.5, '#ef9f27', 8);
+        score += 10;
+        if (e.hp <= 0 && Math.random() < 0.4) spawnPowerup(e.x, e.y);
+        updateHUD();
+      }
+    });
+  });
+  projectiles = projectiles.filter(p => p.life > 0 && p.x > 0 && p.x < SHIP_W && p.y > 0 && p.y < SHIP_L);
+  enemies = enemies.filter(e => e.hp > 0);
+}
+
+function updatePowerups() {
+  powerupTimer--;
+  if (powerupTimer <= 0 && powerups.length < 3) {
+    spawnPowerup();
+    powerupTimer = 500 + Math.random() * 300;
+  }
+  powerups.forEach(p => { p.bob += 0.08; p.life--; });
+  powerups = powerups.filter(p => p.life > 0);
+}
+
+function updateParticles() {
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.z += p.vz;
+    p.vz -= 0.012; p.life -= 0.025;
+  });
+  particles = particles.filter(p => p.life > 0);
+}
+
+let SCREEN_CX = 0, SCREEN_CY = 0;
+
+function toScreen(x, y, z) {
+  const p = project(x, y, z);
+  return { x: p.sx + SCREEN_CX - camX, y: p.sy + SCREEN_CY - camY };
+}
+
+function drawBox(x, y, z, w, l, h, top, left, right, tex) {
+  const c000 = toScreen(x,     y,     z);
+  const c100 = toScreen(x + w, y,     z);
+  const c010 = toScreen(x,     y + l, z);
+  const c110 = toScreen(x + w, y + l, z);
+  const c001 = toScreen(x,     y,     z + h);
+  const c101 = toScreen(x + w, y,     z + h);
+  const c011 = toScreen(x,     y + l, z + h);
+  const c111 = toScreen(x + w, y + l, z + h);
+
+  // TOP face
+  ctx.fillStyle = top;
+  ctx.beginPath(); ctx.moveTo(c001.x, c001.y); ctx.lineTo(c101.x, c101.y); ctx.lineTo(c111.x, c111.y); ctx.lineTo(c011.x, c011.y); ctx.closePath(); ctx.fill();
+  // LEFT face
+  ctx.fillStyle = left;
+  ctx.beginPath(); ctx.moveTo(c001.x, c001.y); ctx.lineTo(c011.x, c011.y); ctx.lineTo(c010.x, c010.y); ctx.lineTo(c000.x, c000.y); ctx.closePath(); ctx.fill();
+  // RIGHT face
+  ctx.fillStyle = right;
+  ctx.beginPath(); ctx.moveTo(c001.x, c001.y); ctx.lineTo(c000.x, c000.y); ctx.lineTo(c100.x, c100.y); ctx.lineTo(c101.x, c101.y); ctx.closePath(); ctx.fill();
+
+  // Textures (pixel-art style overlays)
+  if (tex === 'plank') {
+    // Plank lines across the top (3 lines parallel to one diagonal)
+    ctx.strokeStyle = 'rgba(60,30,10,0.55)'; ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+      const t = i / 4;
+      const a = { x: c001.x + (c101.x - c001.x) * t, y: c001.y + (c101.y - c001.y) * t };
+      const b = { x: c011.x + (c111.x - c011.x) * t, y: c011.y + (c111.y - c011.y) * t };
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    // Vertical grain on side faces
+    ctx.strokeStyle = 'rgba(40,20,5,0.35)';
+    for (let i = 1; i < 4; i++) {
+      const t = i / 4;
+      // Left face vertical
+      const al = { x: c001.x + (c011.x - c001.x) * t, y: c001.y + (c011.y - c001.y) * t };
+      const bl = { x: c000.x + (c010.x - c000.x) * t, y: c000.y + (c010.y - c000.y) * t };
+      ctx.beginPath(); ctx.moveTo(al.x, al.y); ctx.lineTo(bl.x, bl.y); ctx.stroke();
+      // Right face vertical
+      const ar = { x: c001.x + (c101.x - c001.x) * t, y: c001.y + (c101.y - c001.y) * t };
+      const br = { x: c000.x + (c100.x - c000.x) * t, y: c000.y + (c100.y - c000.y) * t };
+      ctx.beginPath(); ctx.moveTo(ar.x, ar.y); ctx.lineTo(br.x, br.y); ctx.stroke();
+    }
+  } else if (tex === 'stone') {
+    // Speckled stone dots
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    const cx = (c001.x + c111.x) / 2, cy = (c001.y + c111.y) / 2;
+    for (let i = 0; i < 6; i++) {
+      const tx = (i * 17 + Math.floor(x*9 + y*7)) % 7;
+      const ty = (i * 13 + Math.floor(x*5 + y*11)) % 7;
+      ctx.fillRect(cx - 8 + tx * 2, cy - 8 + ty * 2, 2, 2);
+    }
+  } else if (tex === 'metal') {
+    // Rivets — small darker dots
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(c001.x - 1, c001.y + 1, 2, 2);
+    ctx.fillRect(c101.x - 1, c101.y + 1, 2, 2);
+    ctx.fillRect(c011.x - 1, c011.y - 1, 2, 2);
+    ctx.fillRect(c111.x - 1, c111.y - 1, 2, 2);
+  }
+}
+
+function drawBlock(x, y, z, top, left, right, tex) {
+  drawBox(x, y, z, 1, 1, 1, top, left, right, tex);
+}
+
+function drawBackground() {
+  const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  sky.addColorStop(0, '#0a1a35');
+  sky.addColorStop(0.6, '#1e4a7e');
+  sky.addColorStop(1, '#0a1a35');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  for (let i = 0; i < 80; i++) {
+    const sx = (i * 137 + 31) % canvas.width;
+    const sy = (i * 89 + 17) % (canvas.height * 0.5);
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+
+  ctx.fillStyle = '#faeeda';
+  ctx.beginPath();
+  ctx.arc(canvas.width - 90, 90, 36, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#1e4a7e';
+  ctx.beginPath();
+  ctx.arc(canvas.width - 75, 82, 30, 0, Math.PI * 2); ctx.fill();
+
+  const water = [
+    toScreen(-30, -30, -1),
+    toScreen(SHIP_W + 30, -30, -1),
+    toScreen(SHIP_W + 30, SHIP_L + 30, -1),
+    toScreen(-30, SHIP_L + 30, -1)
+  ];
+  const grad = ctx.createLinearGradient(0, canvas.height * 0.4, 0, canvas.height);
+  grad.addColorStop(0, '#1e4a7e');
+  grad.addColorStop(1, '#071529');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(water[0].x, water[0].y);
+  for (let i = 1; i < 4; i++) ctx.lineTo(water[i].x, water[i].y);
+  ctx.closePath(); ctx.fill();
+
+  ctx.strokeStyle = 'rgba(150,200,255,0.18)';
+  ctx.lineWidth = 1.5;
+  for (let i = -20; i < SHIP_L + 20; i += 3) {
+    const wave = Math.sin(frame * 0.04 + i) * 0.4;
+    const a = toScreen(-25, i + wave, -1);
+    const b = toScreen(SHIP_W + 25, i + wave, -1);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+}
+
+function drawShip(drawables) {
+  // Deck floor — warm wood planks
+  for (let x = 0; x < SHIP_W; x++) {
+    for (let y = 0; y < SHIP_L; y++) {
+      const variation = ((x * 7 + y * 13) % 3);
+      const top = variation === 0 ? '#b07a3a' : variation === 1 ? '#a06832' : '#a87236';
+      drawables.push({
+        sort: x + y - 0.5,
+        draw: () => drawBlock(x, y, -1, top, '#6b3f10', '#7a4a16', 'plank')
+      });
+    }
+  }
+  // Walls (darker wood)
+  for (let x = 0; x < SHIP_W; x++) {
+    drawables.push({ sort: x + 0, draw: () => drawBlock(x, 0, 0, '#8a5621', '#4a280a', '#5a3010', 'plank') });
+    drawables.push({ sort: x + (SHIP_L - 1), draw: () => drawBlock(x, SHIP_L - 1, 0, '#8a5621', '#4a280a', '#5a3010', 'plank') });
+  }
+  for (let y = 1; y < SHIP_L - 1; y++) {
+    drawables.push({ sort: 0 + y, draw: () => drawBlock(0, y, 0, '#8a5621', '#4a280a', '#5a3010', 'plank') });
+    drawables.push({ sort: (SHIP_W - 1) + y, draw: () => drawBlock(SHIP_W - 1, y, 0, '#8a5621', '#4a280a', '#5a3010', 'plank') });
+  }
+
+  const mx = Math.floor(SHIP_W / 2) - 1;
+  const my = Math.floor(SHIP_L / 2);
+  for (let zz = 0; zz < 6; zz++) {
+    drawables.push({
+      sort: mx + my + zz * 0.001,
+      draw: () => drawBox(mx + 0.35, my + 0.35, zz, 0.3, 0.3, 1, '#7a4a16', '#3d1e06', '#4a280a', 'plank')
+    });
+  }
+  drawables.push({
+    sort: mx + my + 0.2,
+    draw: () => drawBox(mx - 0.3, my - 0.3, 6, 1.6, 1.6, 0.3, '#8a5621', '#4a280a', '#5a3010', 'plank')
+  });
+  drawables.push({
+    sort: mx + my - 0.01,
+    draw: () => {
+      const a = toScreen(mx + 0.5, my + 0.5, 3);
+      const b = toScreen(mx + 0.5, my + 0.5, 5.5);
+      const w = TILE * 1.6;
+      ctx.fillStyle = 'rgba(255,248,220,0.95)';
+      ctx.beginPath();
+      ctx.moveTo(a.x - w, a.y);
+      ctx.lineTo(a.x + w, a.y);
+      ctx.lineTo(b.x + w, b.y);
+      ctx.lineTo(b.x - w, b.y);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.font = 'bold 48px serif'; ctx.textAlign = 'center';
+      ctx.fillText('☠', (a.x + b.x) / 2, (a.y + b.y) / 2 + 15);
+    }
+  });
+
+  const cannons = [
+    { x: 1.3, y: 3 }, { x: 1.3, y: 10 },
+    { x: SHIP_W - 2.3, y: 5 }, { x: SHIP_W - 2.3, y: 13 }
+  ];
+  cannons.forEach(c => {
+    drawables.push({
+      sort: c.x + c.y,
+      draw: () => drawBox(c.x, c.y, 0, 0.9, 0.5, 0.5, '#555', '#222', '#333', 'metal')
+    });
+  });
+}
+
+function drawPlayer(drawables) {
+  drawables.push({
+    sort: player.x + player.y + 99,
+    draw: () => {
+      drawBox(player.x - 0.25, player.y - 0.25, player.z, 0.5, 0.5, 0.5, '#185fa5', '#0e3f72', '#124d8a');
+      drawBox(player.x - 0.28, player.y - 0.28, player.z + 0.5, 0.56, 0.56, 0.55, '#378add', '#1c5a99', '#256eb8');
+      drawBox(player.x - 0.22, player.y - 0.22, player.z + 1.05, 0.44, 0.44, 0.42, '#f5c4b3', '#c98570', '#dc9e89');
+      drawBox(player.x - 0.22, player.y - 0.22, player.z + 1.4, 0.44, 0.44, 0.08, '#e24b4a', '#8a2828', '#a83434');
+      const eyeBase = toScreen(player.x, player.y, player.z + 1.25);
+      ctx.fillStyle = '#222';
+      ctx.fillRect(eyeBase.x - 6, eyeBase.y - 4, 3, 3);
+      ctx.fillRect(eyeBase.x + 3, eyeBase.y - 4, 3, 3);
+      if (selectedSlot === 0) {
+        const ang = attackAnim > 0 ? (attackAnim / 14) * Math.PI : 0;
+        const hx = player.x + player.facing.x * 0.5;
+        const hy = player.y + player.facing.y * 0.5;
+        const a = toScreen(hx, hy, player.z + 0.7);
+        const b = toScreen(hx + player.facing.x * 0.6, hy + player.facing.y * 0.6, player.z + 0.7 + Math.sin(ang) * 0.4);
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      } else {
+        const hx = player.x + player.facing.x * 0.5;
+        const hy = player.y + player.facing.y * 0.5;
+        const a = toScreen(hx, hy, player.z + 0.7);
+        ctx.fillStyle = '#333';
+        ctx.fillRect(a.x - 4, a.y - 3, 12, 6);
+      }
+      if (speedTimer > 0) {
+        const c = toScreen(player.x, player.y, 0);
+        ctx.fillStyle = 'rgba(250,199,117,0.35)';
+        ctx.beginPath(); ctx.ellipse(c.x, c.y + 4, 26, 12, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  });
+}
+
+function drawEnemies(drawables) {
+  enemies.forEach(e => {
+    drawables.push({
+      sort: e.x + e.y + 50,
+      draw: () => {
+        drawBox(e.x - 0.25, e.y - 0.25, 0, 0.5, 0.5, 0.5, '#999', '#555', '#666', 'stone');
+        drawBox(e.x - 0.28, e.y - 0.28, 0.5, 0.56, 0.56, 0.55, '#ccc', '#777', '#888', 'stone');
+        drawBox(e.x - 0.22, e.y - 0.22, 1.05, 0.44, 0.44, 0.42, '#eee', '#aaa', '#ccc', 'stone');
+        const eyeBase = toScreen(e.x, e.y, 1.25);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(eyeBase.x - 6, eyeBase.y - 4, 4, 4);
+        ctx.fillRect(eyeBase.x + 2, eyeBase.y - 4, 4, 4);
+        const head = toScreen(e.x, e.y, 1.7);
+        ctx.fillStyle = '#333'; ctx.fillRect(head.x - 14, head.y - 6, 28, 4);
+        ctx.fillStyle = '#e24b4a';
+        ctx.fillRect(head.x - 14, head.y - 6, 28 * (e.hp / e.maxHp), 4);
+      }
+    });
+  });
+}
+
+function drawPowerups(drawables) {
+  powerups.forEach(p => {
+    drawables.push({
+      sort: p.x + p.y + 40,
+      draw: () => {
+        const bob = Math.sin(p.bob) * 0.15;
+        const c = toScreen(p.x, p.y, 0.5 + bob);
+        const fade = p.life < 120 ? (Math.floor(p.life / 8) % 2 ? 0.4 : 1) : 1;
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = p.type === 'heal' ? 'rgba(226,75,74,0.35)' : 'rgba(250,199,117,0.35)';
+        ctx.beginPath(); ctx.arc(c.x, c.y, 28, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = p.type === 'heal' ? '#e24b4a' : '#fac775';
+        ctx.beginPath(); ctx.arc(c.x, c.y, 18, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 22px serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(p.type === 'heal' ? '❤' : '⚡', c.x, c.y + 2);
+        ctx.globalAlpha = 1;
+      }
+    });
+  });
+}
+
+function drawProjectiles(drawables) {
+  projectiles.forEach(p => {
+    drawables.push({
+      sort: p.x + p.y + 30,
+      draw: () => {
+        const s = toScreen(p.x, p.y, p.z);
+        ctx.fillStyle = '#ef9f27';
+        ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+      }
+    });
+  });
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    const s = toScreen(p.x, p.y, p.z);
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
+  });
+  ctx.globalAlpha = 1;
+}
+
+function draw() {
+  SCREEN_CX = canvas.width / 2;
+  SCREEN_CY = canvas.height / 2 - 80;
+  drawBackground();
+  const drawables = [];
+  drawShip(drawables);
+  drawPowerups(drawables);
+  drawProjectiles(drawables);
+  drawEnemies(drawables);
+  drawPlayer(drawables);
+  drawables.sort((a, b) => a.sort - b.sort);
+  drawables.forEach(d => d.draw());
+  drawParticles();
+}
+
+function loop() {
+  frame++;
+  if (health > 0) {
+    updatePlayer();
+    updateEnemies();
+    updateProjectiles();
+    updatePowerups();
+  }
+  updateParticles();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+spawnPowerup(SHIP_W / 2 - 1, SHIP_L / 2 - 3);
+spawnPowerup(SHIP_W / 2 + 2, SHIP_L / 2 + 4);
+showMsg('⚓ Welcome aboard! WASD to move, SPACE to jump, CLICK to attack', 3500);
+updateHUD();
+loop();
+</script>
