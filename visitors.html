@@ -5,24 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #1a0000; font-family: Arial, sans-serif; color: white; padding: 16px; min-height: 100vh; }
+    body {
+      background: #1a0000;
+      font-family: Arial, sans-serif;
+      color: white;
+      padding: 16px;
+      min-height: 100vh;
+    }
     .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
     .back { color: #ffaaaa; text-decoration: none; font-size: 14px; border: 1px solid #ff6666; padding: 6px 12px; border-radius: 8px; }
     .back:hover { color: yellow; border-color: yellow; }
     h1 { color: yellow; font-size: 24px; }
-    .count-box { background: darkred; border-radius: 14px; padding: 18px 24px; text-align: center;
-                 margin-bottom: 16px; display: flex; align-items: center; justify-content: center;
-                 gap: 28px; flex-wrap: wrap; }
+    .count-box { background: darkred; border-radius: 14px; padding: 18px 24px; text-align: center; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
+    .stat { text-align: center; }
     .stat .num { font-size: 44px; font-weight: bold; color: yellow; line-height: 1; }
     .stat .lbl { font-size: 13px; color: #ffaaaa; margin-top: 4px; }
-    #searchbar { width: 100%; padding: 10px 14px; margin-bottom: 12px;
-                 border-radius: 8px; border: 2px solid #ff6666;
-                 background: rgba(0,0,0,0.35); color: white; font-size: 15px; }
+    #searchbar { width: 100%; padding: 10px 14px; margin-bottom: 12px; border-radius: 8px; border: 2px solid #ff6666; background: rgba(0,0,0,0.35); color: white; font-size: 15px; }
     #searchbar:focus { outline: none; border-color: yellow; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; min-width: 560px; }
-    th { background: darkred; color: yellow; padding: 10px; text-align: left;
-         font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+    th { background: darkred; color: yellow; padding: 10px 10px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
     td { padding: 9px 10px; font-size: 13px; border-bottom: 1px solid rgba(255,100,100,0.15); white-space: nowrap; }
     tr:hover td { background: rgba(255,0,0,0.1); }
     .num-cell { color: #ff9999; font-size: 11px; }
@@ -35,82 +37,124 @@
   </style>
 </head>
 <body>
+
+<div id="lockScreen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:-16px;">
+  <div style="background:darkred;border-radius:20px;padding:36px 32px;max-width:340px;width:92%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.7);">
+    <div style="font-size:48px;margin-bottom:10px;">🔒</div>
+    <h1 style="color:yellow;margin-bottom:16px;">Admin Only</h1>
+    <input type="password" id="pwInput" placeholder="Enter password" style="width:100%;padding:12px 14px;border-radius:10px;border:2px solid #ff6666;background:rgba(0,0,0,0.35);color:white;font-size:16px;margin-bottom:12px;">
+    <button onclick="checkPw()" style="width:100%;padding:13px;background:yellow;color:#1a0000;border:none;border-radius:10px;font-size:17px;font-weight:bold;cursor:pointer;">Enter</button>
+    <div id="pwMsg" style="color:#ff9999;margin-top:10px;font-size:13px;min-height:18px;"></div>
+  </div>
+</div>
+
+<div id="mainContent" style="display:none;">
+
 <div class="topbar">
   <a href="index.html" class="back">← Games</a>
   <h1>📋 Visitor Log</h1>
 </div>
+
 <div class="count-box">
   <div class="stat"><div class="num" id="totalCount">—</div><div class="lbl">Total Visits</div></div>
   <div class="stat"><div class="num" id="todayCount">—</div><div class="lbl">Today</div></div>
   <div class="stat"><div class="num" id="uniqueCount">—</div><div class="lbl">Unique Names</div></div>
 </div>
+
 <input type="text" id="searchbar" placeholder="🔍  Search by name..." oninput="filterRows()">
+
 <div id="loading">Loading visitor log...</div>
 <div class="table-wrap">
   <table id="tbl" style="display:none">
-    <thead><tr><th>#</th><th>Name</th><th>Date</th><th>Time</th><th>IP Address</th><th>Location</th></tr></thead>
+    <thead>
+      <tr><th>#</th><th>Name</th><th>Date</th><th>Time</th><th>IP Address</th><th>Location</th></tr>
+    </thead>
     <tbody id="tbody"></tbody>
   </table>
 </div>
 <div class="empty" id="emptyMsg" style="display:none">No visitors yet!</div>
 
+</div><!-- end mainContent -->
+
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
 <script>
-// ============================================================
-// PASTE YOUR FIREBASE CONFIG HERE (same as login.html)
-// ============================================================
 const firebaseConfig = {
-  apiKey: "PASTE_API_KEY_HERE",
-  authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://PASTE_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId: "PASTE_PROJECT_ID",
-  storageBucket: "PASTE_PROJECT_ID.appspot.com",
-  messagingSenderId: "PASTE_SENDER_ID",
-  appId: "PASTE_APP_ID"
+  apiKey: "AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",
+  authDomain: "enders-games.firebaseapp.com",
+  databaseURL: "https://enders-games-default-rtdb.firebaseio.com",
+  projectId: "enders-games",
+  storageBucket: "enders-games.firebasestorage.app",
+  messagingSenderId: "87049074470",
+  appId: "1:87049074470:web:bc38b35669b43aedceb3e7"
 };
-// ============================================================
+
+// Password protection
+var ADMIN_PASSWORD = 'ender2026';
+function checkPw() {
+  var val = document.getElementById('pwInput').value;
+  if (val === ADMIN_PASSWORD) {
+    sessionStorage.setItem('visitorLogUnlocked', '1');
+    document.getElementById('lockScreen').style.display = 'none';
+    document.getElementById('mainContent').style.display = 'block';
+  } else {
+    document.getElementById('pwMsg').textContent = 'Wrong password!';
+  }
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && document.getElementById('lockScreen').style.display !== 'none') checkPw();
+});
+if (sessionStorage.getItem('visitorLogUnlocked')) {
+  document.getElementById('lockScreen').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'block';
+}
+
 firebase.initializeApp(firebaseConfig);
 var db = firebase.database();
 var allRows = [];
 
 db.ref('visitors').on('value', function(snapshot) {
   var data = snapshot.val();
-  allRows = data ? Object.values(data).sort(function(a,b){return b.timestamp-a.timestamp;}) : [];
+  allRows = [];
+  if (data) {
+    allRows = Object.values(data).sort(function(a, b) { return b.timestamp - a.timestamp; });
+  }
   renderStats();
   renderTable(allRows);
   document.getElementById('loading').style.display = 'none';
 });
 
 function renderStats() {
-  var today = new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
-  var todayN = allRows.filter(function(v){return v.date===today;}).length;
+  var total = allRows.length;
+  var today = new Date().toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'});
+  var todayCount = allRows.filter(function(v) { return v.date === today; }).length;
   var names = {};
-  allRows.forEach(function(v){names[(v.fullName||'').toLowerCase()]=1;});
-  document.getElementById('totalCount').textContent = allRows.length;
-  document.getElementById('todayCount').textContent = todayN;
+  allRows.forEach(function(v) { names[(v.fullName||'').toLowerCase()] = 1; });
+  document.getElementById('totalCount').textContent = total;
+  document.getElementById('todayCount').textContent = todayCount;
   document.getElementById('uniqueCount').textContent = Object.keys(names).length;
 }
 
 function renderTable(rows) {
   var tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
-  if (!rows.length) {
+  if (rows.length === 0) {
     document.getElementById('tbl').style.display = 'none';
     document.getElementById('emptyMsg').style.display = 'block';
     return;
   }
   document.getElementById('tbl').style.display = 'table';
   document.getElementById('emptyMsg').style.display = 'none';
-  rows.forEach(function(v,i) {
+  rows.forEach(function(v, i) {
     var tr = document.createElement('tr');
     tr.innerHTML =
-      '<td class="num-cell">'+(rows.length-i)+'</td>'+
-      '<td class="name-cell">'+esc(v.fullName||(v.firstName+' '+v.lastName))+'</td>'+
-      '<td class="date-cell">'+esc(v.date||'')+'</td>'+
-      '<td class="date-cell">'+esc(v.time||'')+'</td>'+
-      '<td class="ip-cell">'+esc(v.ip||'')+'</td>'+
-      '<td class="loc-cell">'+esc(v.location||'')+'</td>';
+      '<td class="num-cell">' + (rows.length - i) + '</td>' +
+      '<td class="name-cell">' + esc(v.fullName || (v.firstName + ' ' + v.lastName)) + '</td>' +
+      '<td class="date-cell">' + esc(v.date || '') + '</td>' +
+      '<td class="date-cell">' + esc(v.time || '') + '</td>' +
+      '<td class="ip-cell">'   + esc(v.ip   || '') + '</td>' +
+      '<td class="loc-cell">'  + esc(v.location || '') + '</td>';
     tbody.appendChild(tr);
   });
 }
@@ -118,14 +162,16 @@ function renderTable(rows) {
 function filterRows() {
   var q = document.getElementById('searchbar').value.trim().toLowerCase();
   if (!q) { renderTable(allRows); return; }
-  renderTable(allRows.filter(function(v){
-    return (v.fullName||'').toLowerCase().includes(q)||
-           (v.firstName||'').toLowerCase().includes(q)||
-           (v.lastName||'').toLowerCase().includes(q);
+  renderTable(allRows.filter(function(v) {
+    return (v.fullName || '').toLowerCase().includes(q) ||
+           (v.firstName || '').toLowerCase().includes(q) ||
+           (v.lastName || '').toLowerCase().includes(q);
   }));
 }
 
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 </script>
 </body>
 </html>
