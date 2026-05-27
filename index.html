@@ -5,44 +5,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body {
+        height: 100%;
+        overflow: hidden;
+      }
       body {
         background: #1a0000;
         font-family: Arial, sans-serif;
         color: white;
-        min-height: 100vh;
-        padding-bottom: 40px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 12px 16px;
       }
       h1 {
-        font-size: 48px;
-        text-align: center;
-        padding: 30px 20px 10px;
+        font-size: 28px;
         color: yellow;
+        margin-bottom: 2px;
       }
       .subtitle {
-        text-align: center;
-        font-size: 24px;
+        font-size: 14px;
         color: #ffaaaa;
-        margin-bottom: 40px;
+        margin-bottom: 10px;
       }
       .grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 24px;
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 0 24px;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        width: 100%;
+        max-width: 900px;
+        flex: 1;
       }
       .game-card {
         background: darkred;
-        border-radius: 24px;
-        padding: 30px 20px;
+        border-radius: 14px;
+        padding: 10px 8px;
         text-align: center;
         text-decoration: none;
         color: white;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 12px;
+        justify-content: center;
+        gap: 4px;
         transition: transform 0.1s, filter 0.1s;
         -webkit-tap-highlight-color: transparent;
         touch-action: manipulation;
@@ -52,74 +57,87 @@
         transform: scale(0.96);
         filter: brightness(1.4);
       }
-      .game-emoji { font-size: 72px; }
-      .game-name { font-size: 26px; font-weight: bold; }
-      .game-desc { font-size: 18px; color: #ffcccc; }
+      .game-emoji { font-size: 36px; }
+      .game-name { font-size: 13px; font-weight: bold; line-height: 1.2; }
+      .game-desc { font-size: 11px; color: #ffcccc; line-height: 1.2; }
+      .game-date { font-size: 10px; color: #ff9999; opacity: 0.75; margin-top: 2px; }
     </style>
   </head>
   <body>
     <h1>🎮 Ender's Game World!</h1>
     <p class="subtitle">Pick a game to play!</p>
     <div class="grid">
-      <a class="game-card" href="pizza.html">
-        <div class="game-emoji">🍕</div>
-        <div class="game-name">Last Pizza Slice</div>
-        <div class="game-desc">2 players eat pizza!</div>
-      </a>
-      <a class="game-card" href="balloons.html">
-        <div class="game-emoji">🎈</div>
-        <div class="game-name">Pop the Balloons</div>
-        <div class="game-desc">Tap balloons before they float away!</div>
-      </a>
-      <a class="game-card" href="turtles.html">
-        <div class="game-emoji">🐢</div>
-        <div class="game-name">Turtle Race</div>
-        <div class="game-desc">2 players race to the finish!</div>
-      </a>
-      <a class="game-card" href="memory.html">
-        <div class="game-emoji">🧠</div>
-        <div class="game-name">Memory Match</div>
-        <div class="game-desc">Find all the matching pairs!</div>
-      </a>
-      <a class="game-card" href="stars.html">
-        <div class="game-emoji">🌟</div>
-        <div class="game-name">Shooting Stars</div>
-        <div class="game-desc">Catch the stars flying by!</div>
-      </a>
-      <a class="game-card" href="whackamole.html">
-        <div class="game-emoji">🐹</div>
-        <div class="game-name">Whack a Mole</div>
-        <div class="game-desc">Whack the moles before they hide!</div>
-      </a>
       <a class="game-card" href="puzzle-box.html">
         <div class="game-emoji">🧩</div>
         <div class="game-name">Puzzle Box</div>
         <div class="game-desc">Word searches &amp; mazes!</div>
+        <div class="game-date">May 27, 2026</div>
       </a>
       <a class="game-card" href="pirate-ship.html">
         <div class="game-emoji">⚓</div>
         <div class="game-name">Pirate Ship</div>
         <div class="game-desc">Battle on the high seas!</div>
+        <div class="game-date">May 27, 2026</div>
       </a>
-      <a class="game-card" href="monuments.html" style="grid-column: span 2;">
+      <a class="game-card" href="monuments.html">
         <div class="game-emoji">🏛️</div>
-        <div class="game-name">Monuments Explorer 3D</div>
-        <div class="game-desc">Explore famous monuments in 3D!</div>
+        <div class="game-name">Monuments 3D</div>
+        <div class="game-desc">Explore monuments in 3D!</div>
+        <div class="game-date">May 27, 2026</div>
       </a>
-      <a class="game-card" href="numbers.html" style="grid-column: span 1;">
+      <a class="game-card" href="pizza.html">
+        <div class="game-emoji">🍕</div>
+        <div class="game-name">Last Pizza Slice</div>
+        <div class="game-desc">2 players eat pizza!</div>
+        <div class="game-date">Apr 13, 2026</div>
+      </a>
+      <a class="game-card" href="balloons.html">
+        <div class="game-emoji">🎈</div>
+        <div class="game-name">Pop the Balloons</div>
+        <div class="game-desc">Tap before they float away!</div>
+        <div class="game-date">Apr 13, 2026</div>
+      </a>
+      <a class="game-card" href="turtles.html">
+        <div class="game-emoji">🐢</div>
+        <div class="game-name">Turtle Race</div>
+        <div class="game-desc">2 players race to finish!</div>
+        <div class="game-date">Apr 13, 2026</div>
+      </a>
+      <a class="game-card" href="memory.html">
+        <div class="game-emoji">🧠</div>
+        <div class="game-name">Memory Match</div>
+        <div class="game-desc">Find the matching pairs!</div>
+        <div class="game-date">Apr 13, 2026</div>
+      </a>
+      <a class="game-card" href="stars.html">
+        <div class="game-emoji">🌟</div>
+        <div class="game-name">Shooting Stars</div>
+        <div class="game-desc">Catch the flying stars!</div>
+        <div class="game-date">Apr 13, 2026</div>
+      </a>
+      <a class="game-card" href="whackamole.html">
+        <div class="game-emoji">🐹</div>
+        <div class="game-name">Whack a Mole</div>
+        <div class="game-desc">Whack before they hide!</div>
+        <div class="game-date">Apr 13, 2026</div>
+      </a>
+      <a class="game-card" href="numbers.html">
         <div class="game-emoji">🔢</div>
         <div class="game-name">Number Blaster</div>
-        <div class="game-desc">Tap the numbers in order 1, 2, 3...!</div>
+        <div class="game-desc">Tap numbers 1, 2, 3...!</div>
+        <div class="game-date">Apr 13, 2026</div>
       </a>
-      <a class="game-card" href="titanic.html" style="grid-column: span 1;">
+      <a class="game-card" href="titanic.html">
         <div class="game-emoji">🚢</div>
-        <div class="game-name">Titanic: Story Game</div>
-        <div class="game-desc">Make choices on the Titanic's last voyage!</div>
+        <div class="game-name">Titanic Story</div>
+        <div class="game-desc">Choices on the Titanic!</div>
+        <div class="game-date">Apr 13, 2026</div>
       </a>
-      <a class="game-card" href="titanic3d.html" style="grid-column: span 2;">
+      <a class="game-card" href="titanic3d.html">
         <div class="game-emoji">🎮</div>
         <div class="game-name">Titanic 3D</div>
-        <div class="game-desc">Walk around the Titanic in 3D — WASD + mouse like Minecraft!</div>
+        <div class="game-desc">WASD + mouse like Minecraft!</div>
+        <div class="game-date">Apr 13, 2026</div>
       </a>
     </div>
   </body>
