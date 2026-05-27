@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Welcome to Ender's Game World!</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body { background: #1a0000; font-family: Arial, sans-serif; color: white;
+           display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .card { background: darkred; border-radius: 20px; padding: 36px 32px;
+            max-width: 380px; width: 92%; text-align: center;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.7); }
+    .emoji { font-size: 64px; margin-bottom: 10px; }
+    h1 { font-size: 26px; color: yellow; margin-bottom: 6px; }
+    p { color: #ffcccc; margin-bottom: 24px; font-size: 14px; }
+    input { width: 100%; padding: 13px 16px; margin-bottom: 14px;
+            border-radius: 10px; border: 2px solid #ff6666;
+            background: rgba(0,0,0,0.35); color: white; font-size: 17px;
+            -webkit-tap-highlight-color: transparent; }
+    input::placeholder { color: #ff9999; }
+    input:focus { outline: none; border-color: yellow; }
+    button { width: 100%; padding: 15px; background: yellow; color: #1a0000;
+             border: none; border-radius: 10px; font-size: 19px;
+             font-weight: bold; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    button:active { background: #ffe066; }
+    button:disabled { opacity: 0.6; cursor: default; }
+    #msg { margin-top: 12px; font-size: 13px; color: #ffaaaa; min-height: 18px; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="emoji">🎮</div>
+  <h1>Welcome!</h1>
+  <p>Enter your name to visit Ender's Game World</p>
+  <input type="text" id="fname" placeholder="First Name" maxlength="30" autocomplete="given-name">
+  <input type="text" id="lname" placeholder="Last Name" maxlength="30" autocomplete="family-name">
+  <button id="btn" onclick="submitName()">Enter the Game World! 🚀</button>
+  <div id="msg"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script>
+// ============================================================
+// PASTE YOUR FIREBASE CONFIG HERE
+// Get it from: console.firebase.google.com
+//   Your project > Project Settings > Your Apps > Web app
+// ============================================================
+const firebaseConfig = {
+  apiKey: "PASTE_API_KEY_HERE",
+  authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://PASTE_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId: "PASTE_PROJECT_ID",
+  storageBucket: "PASTE_PROJECT_ID.appspot.com",
+  messagingSenderId: "PASTE_SENDER_ID",
+  appId: "PASTE_APP_ID"
+};
+// ============================================================
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+
+if (sessionStorage.getItem('visitorLogged')) {
+  location.href = 'index.html';
+}
+
+function submitName() {
+  var first = document.getElementById('fname').value.trim();
+  var last  = document.getElementById('lname').value.trim();
+  if (!first || !last) {
+    document.getElementById('msg').textContent = 'Please enter both first and last name!';
+    return;
+  }
+  var btn = document.getElementById('btn');
+  btn.disabled = true;
+  document.getElementById('msg').textContent = 'Logging you in...';
+  fetch('https://ipapi.co/json/')
+    .then(function(r) { return r.json(); })
+    .then(function(geo) {
+      logVisitor(first, last, geo.ip || 'unknown',
+        [geo.city, geo.region, geo.country_name].filter(Boolean).join(', ') || 'unknown');
+    })
+    .catch(function() { logVisitor(first, last, 'unavailable', 'unavailable'); });
+}
+
+function logVisitor(first, last, ip, loc) {
+  var now = new Date();
+  var entry = {
+    firstName: first, lastName: last, fullName: first + ' ' + last,
+    ip: ip, location: loc, timestamp: now.getTime(),
+    date: now.toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}),
+    time: now.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit'})
+  };
+  db.ref('visitors').push(entry)
+    .then(function() {
+      sessionStorage.setItem('visitorLogged', '1');
+      sessionStorage.setItem('visitorName', first);
+      window.location.href = 'index.html';
+    })
+    .catch(function(err) {
+      document.getElementById('msg').textContent = 'Error saving. Check Firebase config!';
+      document.getElementById('btn').disabled = false;
+      console.error(err);
+    });
+}
+
+document.addEventListener('keydown', function(e) { if (e.key === 'Enter') submitName(); });
+</script>
+</body>
+</html>
