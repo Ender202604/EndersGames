@@ -16,7 +16,26 @@
         padding: 8px 12px;
       }
       h1 { font-size: 24px; color: yellow; margin-bottom: 2px; }
-      .subtitle { font-size: 12px; color: #ffaaaa; margin-bottom: 8px; }
+      .subtitle {
+        font-size: 12px;
+        color: #ffaaaa;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .subtitle a {
+        color: #ffaaaa;
+        font-size: 11px;
+        text-decoration: none;
+        border: 1px solid #ff6666;
+        padding: 2px 8px;
+        border-radius: 6px;
+        white-space: nowrap;
+      }
+      .subtitle a:hover { color: yellow; border-color: yellow; }
       .grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -69,10 +88,18 @@
         font-weight: bold;
       }
     </style>
+    <script>
+      if (!sessionStorage.getItem('visitorLogged')) {
+        location.href = 'login.html';
+      }
+    </script>
   </head>
   <body>
     <h1>🎮 Ender's Game World!</h1>
-    <p class="subtitle">Pick a game to play!</p>
+    <p class="subtitle">
+      <span id="welcome">Pick a game to play!</span>
+      <a href="visitors.html">📋 Visitor Log</a>
+    </p>
     <div class="grid">
 
       <a class="game-card" href="puzzle-box.html">
@@ -194,5 +221,9 @@
       </a>
 
     </div>
+    <script>
+      var name = sessionStorage.getItem('visitorName');
+      if (name) document.getElementById('welcome').textContent = 'Welcome, ' + name + '! Pick a game!';
+    </script>
   </body>
 </html>
