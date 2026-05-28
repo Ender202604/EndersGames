@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trivia Quiz - Ender's Games</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a0000;
+    color: white;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 60px 16px 24px;
+  }
+  h1 {
+    color: yellow;
+    font-size: clamp(1.4rem, 5vw, 2.2rem);
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+    text-shadow: 0 0 12px #ffff00aa;
+    text-align: center;
+  }
+  #game-area {
+    width: 100%;
+    max-width: 620px;
+    margin-top: 10px;
+  }
+
+  /* Progress */
+  #progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+    color: #ffaaaa;
+  }
+  #progress-bar-wrap {
+    width: 100%;
+    height: 8px;
+    background: #330000;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  #progress-bar {
+    height: 100%;
+    background: linear-gradient(to right, #ff4444, #ffaa00);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+
+  /* Timer */
+  #timer-wrap {
+    width: 100%;
+    height: 10px;
+    background: #330000;
+    border-radius: 5px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  #timer-bar {
+    height: 100%;
+    background: linear-gradient(to right, #ff0000, #ffcc00);
+    border-radius: 5px;
+    transition: width 0.1s linear, background 0.5s;
+  }
+
+  /* Category badge */
+  #category-badge {
+    display: inline-block;
+    background: #330033;
+    color: #cc88ff;
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+    border: 1px solid #660066;
+  }
+
+  /* Question */
+  #question-box {
+    background: #2a0000;
+    border: 1px solid #660000;
+    border-radius: 12px;
+    padding: 18px 20px;
+    font-size: clamp(1rem, 3.5vw, 1.2rem);
+    line-height: 1.5;
+    margin-bottom: 16px;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Answers */
+  #answers-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 420px) {
+    #answers-grid { grid-template-columns: 1fr; }
+  }
+  .ans-btn {
+    background: #2a0000;
+    border: 2px solid #660000;
+    border-radius: 10px;
+    color: white;
+    font-size: clamp(0.85rem, 3vw, 1rem);
+    padding: 14px 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    line-height: 1.3;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ans-btn:hover:not(:disabled) {
+    background: #440000;
+    border-color: #ff6666;
+    transform: translateY(-1px);
+  }
+  .ans-btn .letter {
+    font-weight: bold;
+    color: #ffaa88;
+    font-size: 1.05em;
+    flex-shrink: 0;
+  }
+  .ans-btn.correct {
+    background: #003300 !important;
+    border-color: #00ff44 !important;
+    animation: flashGreen 0.3s ease;
+  }
+  .ans-btn.wrong {
+    background: #330000 !important;
+    border-color: #ff2222 !important;
+    animation: flashRed 0.3s ease;
+  }
+  .ans-btn.reveal {
+    background: #003300 !important;
+    border-color: #00cc33 !important;
+    color: #aaffaa;
+  }
+  .ans-btn:disabled { cursor: default; }
+
+  @keyframes flashGreen {
+    0% { background: #00ff44; }
+    100% { background: #003300; }
+  }
+  @keyframes flashRed {
+    0% { background: #ff2222; }
+    100% { background: #330000; }
+  }
+
+  /* Feedback */
+  #feedback {
+    min-height: 28px;
+    text-align: center;
+    font-size: clamp(0.85rem, 3vw, 1rem);
+    margin-bottom: 10px;
+    font-weight: bold;
+  }
+  #feedback.correct { color: #44ff88; }
+  #feedback.wrong { color: #ff4444; }
+
+  /* Start / End screen */
+  #start-screen, #end-screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    padding: 20px;
+    background: #2a0000;
+    border: 1px solid #660000;
+    border-radius: 16px;
+    max-width: 520px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  #start-screen.show, #end-screen.show { display: flex; }
+  #game-area.hide { display: none; }
+  #start-screen h2, #end-screen h2 { color: yellow; font-size: clamp(1.3rem, 5vw, 2rem); }
+  .big-score { font-size: clamp(2.5rem, 10vw, 4rem); font-weight: bold; color: yellow; }
+  .score-msg { color: #ffcccc; font-size: clamp(0.9rem, 3vw, 1.1rem); }
+  .score-breakdown { color: #ffaaaa; font-size: 0.9rem; }
+  .start-btn {
+    background: #cc0000;
+    color: white;
+    border: none;
+    padding: 14px 36px;
+    font-size: clamp(1rem, 3.5vw, 1.2rem);
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .start-btn:hover { background: #ff2222; transform: scale(1.03); }
+  .rules { color: #ff9999; font-size: 0.85rem; line-height: 1.6; }
+</style>
+</head>
+<body>
+<a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
+
+<h1>🧠 TRIVIA QUIZ</h1>
+
+<!-- Start Screen -->
+<div id="start-screen" class="show">
+  <h2>Welcome to Trivia!</h2>
+  <div class="rules">
+    10 random questions from 5 categories<br>
+    15 seconds per question<br>
+    Animals • Science • Geography • Pop Culture • Sports
+  </div>
+  <button class="start-btn" onclick="startGame()">Let's Play!</button>
+</div>
+
+<!-- Game Area -->
+<div id="game-area" class="hide">
+  <div id="progress-header">
+    <span id="q-counter">Question 1 of 10</span>
+    <span id="score-display">Score: 0</span>
+  </div>
+  <div id="progress-bar-wrap">
+    <div id="progress-bar" style="width:10%"></div>
+  </div>
+  <div id="timer-wrap">
+    <div id="timer-bar" style="width:100%"></div>
+  </div>
+  <div id="category-badge">Animals</div>
+  <div id="question-box">Loading question...</div>
+  <div id="answers-grid"></div>
+  <div id="feedback"></div>
+</div>
+
+<!-- End Screen -->
+<div id="end-screen">
+  <h2 id="end-title">Quiz Complete!</h2>
+  <div class="big-score" id="final-score">0/10</div>
+  <div class="score-msg" id="score-msg">Well done!</div>
+  <div class="score-breakdown" id="score-breakdown"></div>
+  <button class="start-btn" onclick="startGame()">Play Again</button>
+</div>
+
+<script>
+const QUESTIONS = [
+  // Animals
+  { q: "What is the largest land animal on Earth?", a: ["African Elephant", "Giraffe", "Hippopotamus", "White Rhino"], correct: 0, cat: "🐾 Animals" },
+  { q: "How many legs does a spider have?", a: ["6", "8", "10", "12"], correct: 1, cat: "🐾 Animals" },
+  { q: "What do you call a group of lions?", a: ["Pack", "Herd", "Pride", "Flock"], correct: 2, cat: "🐾 Animals" },
+  { q: "Which bird is known for being unable to fly but can run very fast?", a: ["Penguin", "Ostrich", "Kiwi", "Emu"], correct: 1, cat: "🐾 Animals" },
+  { q: "What is the fastest land animal?", a: ["Lion", "Horse", "Cheetah", "Greyhound"], correct: 2, cat: "🐾 Animals" },
+
+  // Science
+  { q: "What is the closest star to Earth?", a: ["Betelgeuse", "Proxima Centauri", "Sirius", "The Sun"], correct: 3, cat: "🔬 Science" },
+  { q: "What is the chemical symbol for water?", a: ["WA", "H2O", "HO2", "OHH"], correct: 1, cat: "🔬 Science" },
+  { q: "How many planets are in our solar system?", a: ["7", "8", "9", "10"], correct: 1, cat: "🔬 Science" },
+  { q: "What force keeps us on the ground?", a: ["Magnetism", "Friction", "Gravity", "Inertia"], correct: 2, cat: "🔬 Science" },
+  { q: "What gas do plants absorb from the air to make food?", a: ["Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"], correct: 2, cat: "🔬 Science" },
+
+  // Geography
+  { q: "What is the capital of France?", a: ["London", "Berlin", "Madrid", "Paris"], correct: 3, cat: "🌍 Geography" },
+  { q: "What is the longest river in the world?", a: ["Amazon", "Nile", "Yangtze", "Mississippi"], correct: 1, cat: "🌍 Geography" },
+  { q: "On which continent is Brazil located?", a: ["Africa", "Asia", "South America", "Australia"], correct: 2, cat: "🌍 Geography" },
+  { q: "What is the smallest country in the world?", a: ["Monaco", "Vatican City", "San Marino", "Liechtenstein"], correct: 1, cat: "🌍 Geography" },
+  { q: "Which ocean is the largest in the world?", a: ["Atlantic", "Indian", "Arctic", "Pacific"], correct: 3, cat: "🌍 Geography" },
+
+  // Pop Culture
+  { q: "In Minecraft, what do you need to craft a crafting table?", a: ["4 Stone", "4 Planks", "4 Logs", "4 Sticks"], correct: 1, cat: "🎮 Pop Culture" },
+  { q: "What color is Pikachu?", a: ["Blue", "Red", "Yellow", "Green"], correct: 2, cat: "🎮 Pop Culture" },
+  { q: "How many colored rings are on the Olympic flag?", a: ["4", "5", "6", "7"], correct: 1, cat: "🎮 Pop Culture" },
+  { q: "What superhero is also known as the Man of Steel?", a: ["Batman", "Iron Man", "Thor", "Superman"], correct: 3, cat: "🎮 Pop Culture" },
+  { q: "In which game do you collect stars and save Princess Peach?", a: ["Zelda", "Kirby", "Super Mario", "Sonic"], correct: 2, cat: "🎮 Pop Culture" },
+
+  // Sports
+  { q: "How many players are on a soccer team (on the field)?", a: ["9", "10", "11", "12"], correct: 2, cat: "⚽ Sports" },
+  { q: "In which sport do you use a shuttlecock?", a: ["Tennis", "Badminton", "Squash", "Table Tennis"], correct: 1, cat: "⚽ Sports" },
+  { q: "How many points is a touchdown worth in American football?", a: ["3", "5", "6", "7"], correct: 2, cat: "⚽ Sports" },
+  { q: "In which sport would you perform a 'slam dunk'?", a: ["Baseball", "Volleyball", "Basketball", "Football"], correct: 2, cat: "⚽ Sports" },
+  { q: "How many holes are in a standard round of golf?", a: ["9", "12", "18", "21"], correct: 2, cat: "⚽ Sports" }
+];
+
+const LETTERS = ['A', 'B', 'C', 'D'];
+const TIMER_SECS = 15;
+
+let gameQuestions, currentQ, score, correct, timerInterval, timeLeft, answered;
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function startGame() {
+  document.getElementById('start-screen').classList.remove('show');
+  document.getElementById('end-screen').classList.remove('show');
+  document.getElementById('game-area').classList.remove('hide');
+
+  gameQuestions = shuffle(QUESTIONS).slice(0, 10);
+  currentQ = 0;
+  score = 0;
+  correct = 0;
+  showQuestion();
+}
+
+function showQuestion() {
+  if (currentQ >= 10) { endGame(); return; }
+
+  const q = gameQuestions[currentQ];
+  answered = false;
+
+  // Progress
+  document.getElementById('q-counter').textContent = `Question ${currentQ + 1} of 10`;
+  document.getElementById('score-display').textContent = `Score: ${score}`;
+  document.getElementById('progress-bar').style.width = `${((currentQ + 1) / 10) * 100}%`;
+  document.getElementById('category-badge').textContent = q.cat;
+  document.getElementById('question-box').textContent = q.q;
+  document.getElementById('feedback').textContent = '';
+  document.getElementById('feedback').className = '';
+
+  // Shuffle answer order
+  const indices = shuffle([0, 1, 2, 3]);
+  const grid = document.getElementById('answers-grid');
+  grid.innerHTML = '';
+  indices.forEach((origIdx, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'ans-btn';
+    btn.innerHTML = `<span class="letter">${LETTERS[i]}</span> ${q.a[origIdx]}`;
+    btn.addEventListener('click', () => answerClicked(btn, origIdx, indices, q.correct));
+    grid.appendChild(btn);
+  });
+
+  // Timer
+  clearInterval(timerInterval);
+  timeLeft = TIMER_SECS;
+  updateTimer();
+  timerInterval = setInterval(() => {
+    timeLeft -= 0.1;
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      updateTimer();
+      clearInterval(timerInterval);
+      if (!answered) timeUp(indices, q.correct);
+    } else {
+      updateTimer();
+    }
+  }, 100);
+}
+
+function updateTimer() {
+  const pct = (timeLeft / TIMER_SECS) * 100;
+  const bar = document.getElementById('timer-bar');
+  bar.style.width = pct + '%';
+  if (pct < 30) bar.style.background = 'linear-gradient(to right, #ff0000, #ff4400)';
+  else if (pct < 60) bar.style.background = 'linear-gradient(to right, #ff6600, #ffcc00)';
+  else bar.style.background = 'linear-gradient(to right, #ff0000, #ffcc00)';
+}
+
+function answerClicked(btn, origIdx, indices, correctOrig) {
+  if (answered) return;
+  answered = true;
+  clearInterval(timerInterval);
+
+  const btns = document.querySelectorAll('.ans-btn');
+  btns.forEach(b => b.disabled = true);
+
+  const isCorrect = origIdx === correctOrig;
+
+  if (isCorrect) {
+    btn.classList.add('correct');
+    score += 10;
+    correct++;
+    document.getElementById('feedback').textContent = '✅ Correct! +10 points';
+    document.getElementById('feedback').className = 'correct';
+  } else {
+    btn.classList.add('wrong');
+    // Reveal correct answer
+    btns.forEach((b, i) => {
+      if (indices[i] === correctOrig) b.classList.add('reveal');
+    });
+    const q = gameQuestions[currentQ];
+    document.getElementById('feedback').textContent = `❌ Wrong! The answer was: ${q.a[correctOrig]}`;
+    document.getElementById('feedback').className = 'wrong';
+  }
+
+  document.getElementById('score-display').textContent = `Score: ${score}`;
+
+  setTimeout(() => {
+    currentQ++;
+    showQuestion();
+  }, 1800);
+}
+
+function timeUp(indices, correctOrig) {
+  answered = true;
+  const btns = document.querySelectorAll('.ans-btn');
+  btns.forEach((b, i) => {
+    b.disabled = true;
+    if (indices[i] === correctOrig) b.classList.add('reveal');
+  });
+  const q = gameQuestions[currentQ];
+  document.getElementById('feedback').textContent = `⏰ Time's up! Answer: ${q.a[correctOrig]}`;
+  document.getElementById('feedback').className = 'wrong';
+  setTimeout(() => { currentQ++; showQuestion(); }, 1800);
+}
+
+function endGame() {
+  clearInterval(timerInterval);
+  document.getElementById('game-area').classList.add('hide');
+  const end = document.getElementById('end-screen');
+  end.classList.add('show');
+
+  document.getElementById('final-score').textContent = `${correct}/10`;
+
+  const msgs = [
+    [0, 2, "Better luck next time! Keep learning! 📚"],
+    [3, 4, "Not bad! You know some things! 🙂"],
+    [5, 6, "Pretty good! Keep it up! 👍"],
+    [7, 8, "Great job! You're a quiz star! ⭐"],
+    [9, 9, "Amazing! Almost perfect! 🔥"],
+    [10, 10, "PERFECT SCORE! You're a genius! 🏆🎉"]
+  ];
+  const msg = msgs.find(([lo, hi]) => correct >= lo && correct <= hi);
+  document.getElementById('score-msg').textContent = msg ? msg[2] : 'Well done!';
+  document.getElementById('end-title').textContent = correct >= 8 ? 'Fantastic! 🎉' : correct >= 5 ? 'Well Done!' : 'Quiz Complete!';
+  document.getElementById('score-breakdown').textContent = `${score} total points • ${correct} correct • ${10 - correct} wrong`;
+}
+</script>
+</body>
+</html>

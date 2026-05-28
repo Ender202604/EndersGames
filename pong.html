@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Pong - Ender's Games</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a0000;
+    color: white;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    touch-action: none;
+  }
+  h1 {
+    color: yellow;
+    font-size: clamp(1.2rem, 4vw, 2rem);
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px #ffff00aa;
+  }
+  #hint {
+    color: #ff9999;
+    font-size: clamp(0.65rem, 2.5vw, 0.82rem);
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  #canvas-wrap {
+    position: relative;
+    border: 2px solid #ff6666;
+    border-radius: 8px;
+    box-shadow: 0 0 20px #ff000055;
+  }
+  canvas { display: block; border-radius: 6px; }
+  #overlay {
+    display: none;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(26,0,0,0.9);
+    border-radius: 6px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+  #overlay.show { display: flex; }
+  #overlay h2 { color: yellow; font-size: clamp(1.4rem, 5vw, 2.2rem); }
+  #overlay .sub { color: #ffcccc; font-size: clamp(0.9rem, 3vw, 1.1rem); }
+  #play-again {
+    background: #cc0000;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    font-size: clamp(0.9rem, 3vw, 1.1rem);
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.2s;
+  }
+  #play-again:hover { background: #ff2222; }
+  #start-prompt {
+    position: absolute;
+    bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    color: #aaaaff;
+    font-size: clamp(0.75rem, 2.5vw, 0.9rem);
+    text-align: center;
+    white-space: nowrap;
+  }
+  /* Mobile touch zones */
+  #touch-controls {
+    display: none;
+    width: 100%;
+    margin-top: 10px;
+    gap: 10px;
+    justify-content: space-around;
+  }
+  .touch-side {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+  }
+  .touch-side label { color: #ff9999; font-size: 0.75rem; }
+  .touch-btn {
+    width: 60px; height: 52px;
+    background: #440000;
+    border: 2px solid #ff6666;
+    border-radius: 8px;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .touch-btn:active { background: #880000; }
+  @media (max-width: 700px) {
+    #touch-controls { display: flex; }
+    #hint .desktop-hint { display: none; }
+  }
+  @media (hover: none) {
+    #touch-controls { display: flex; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
+
+<h1>🏓 PONG</h1>
+<div id="hint">
+  <span class="desktop-hint">P1: W/S &nbsp;|&nbsp; P2: ↑/↓ &nbsp;|&nbsp;</span>First to 7 wins!
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="gameCanvas"></canvas>
+  <div id="overlay">
+    <h2 id="winner-text">Player 1 Wins!</h2>
+    <div class="sub" id="score-final"></div>
+    <button id="play-again">Play Again</button>
+  </div>
+  <div id="start-prompt">Press W, S, ↑ or ↓ to begin!</div>
+</div>
+
+<div id="touch-controls">
+  <div class="touch-side">
+    <label>Player 1</label>
+    <button class="touch-btn" id="p1-up">▲</button>
+    <button class="touch-btn" id="p1-down">▼</button>
+  </div>
+  <div class="touch-side">
+    <label>Player 2</label>
+    <button class="touch-btn" id="p2-up">▲</button>
+    <button class="touch-btn" id="p2-down">▼</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const startPrompt = document.getElementById('start-prompt');
+
+const WIN_SCORE = 7;
+const PADDLE_W = 12;
+const BALL_SIZE = 10;
+let W, H, PADDLE_H, PADDLE_SPEED;
+
+function resize() {
+  W = Math.min(window.innerWidth - 20, 640);
+  H = Math.min(window.innerHeight - 200, 420);
+  if (W / H < 1.2) W = H * 1.4;
+  W = Math.floor(W); H = Math.floor(H);
+  canvas.width = W;
+  canvas.height = H;
+  PADDLE_H = Math.max(60, H * 0.18);
+  PADDLE_SPEED = H * 0.012;
+}
+resize();
+
+let p1, p2, ball, score1, score2, running, started, animId;
+const keys = {};
+
+function init() {
+  p1 = { x: 20, y: H / 2 - PADDLE_H / 2, vy: 0 };
+  p2 = { x: W - 20 - PADDLE_W, y: H / 2 - PADDLE_H / 2, vy: 0 };
+  resetBall(1);
+  score1 = 0; score2 = 0;
+  running = false; started = false;
+  overlay.classList.remove('show');
+  startPrompt.style.display = 'block';
+  draw();
+}
+
+function resetBall(dir) {
+  const angle = (Math.random() * 40 - 20) * Math.PI / 180;
+  const spd = Math.min(W, H) * 0.012;
+  ball = {
+    x: W / 2, y: H / 2,
+    vx: Math.cos(angle) * spd * dir,
+    vy: Math.sin(angle) * spd,
+    speed: spd
+  };
+}
+
+function startGame() {
+  if (started) return;
+  started = true;
+  running = true;
+  startPrompt.style.display = 'none';
+  if (animId) cancelAnimationFrame(animId);
+  loop();
+}
+
+// Touch button state
+const touchKeys = { p1u: false, p1d: false, p2u: false, p2d: false };
+function addTouchBtn(id, key) {
+  const btn = document.getElementById(id);
+  btn.addEventListener('touchstart', e => { touchKeys[key] = true; startGame(); e.preventDefault(); }, { passive: false });
+  btn.addEventListener('touchend', e => { touchKeys[key] = false; e.preventDefault(); }, { passive: false });
+  btn.addEventListener('mousedown', () => { touchKeys[key] = true; startGame(); });
+  btn.addEventListener('mouseup', () => { touchKeys[key] = false; });
+}
+addTouchBtn('p1-up', 'p1u'); addTouchBtn('p1-down', 'p1d');
+addTouchBtn('p2-up', 'p2u'); addTouchBtn('p2-down', 'p2d');
+
+function loop() {
+  if (!running) return;
+  update();
+  draw();
+  animId = requestAnimationFrame(loop);
+}
+
+function update() {
+  // Paddle movement
+  if ((keys['w'] || keys['W'] || touchKeys.p1u) && p1.y > 0) p1.y -= PADDLE_SPEED;
+  if ((keys['s'] || keys['S'] || touchKeys.p1d) && p1.y < H - PADDLE_H) p1.y += PADDLE_SPEED;
+  if ((keys['ArrowUp'] || touchKeys.p2u) && p2.y > 0) p2.y -= PADDLE_SPEED;
+  if ((keys['ArrowDown'] || touchKeys.p2d) && p2.y < H - PADDLE_H) p2.y += PADDLE_SPEED;
+
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // Wall bounce
+  if (ball.y - BALL_SIZE / 2 < 0) { ball.y = BALL_SIZE / 2; ball.vy = Math.abs(ball.vy); }
+  if (ball.y + BALL_SIZE / 2 > H) { ball.y = H - BALL_SIZE / 2; ball.vy = -Math.abs(ball.vy); }
+
+  // Paddle collision P1
+  if (ball.vx < 0 &&
+      ball.x - BALL_SIZE / 2 < p1.x + PADDLE_W &&
+      ball.x + BALL_SIZE / 2 > p1.x &&
+      ball.y > p1.y && ball.y < p1.y + PADDLE_H) {
+    ball.x = p1.x + PADDLE_W + BALL_SIZE / 2;
+    const hitPos = (ball.y - p1.y) / PADDLE_H - 0.5;
+    ball.speed = Math.min(ball.speed * 1.05, H * 0.025);
+    const angle = hitPos * 60 * Math.PI / 180;
+    ball.vx = Math.abs(Math.cos(angle)) * ball.speed;
+    ball.vy = Math.sin(angle) * ball.speed;
+  }
+
+  // Paddle collision P2
+  if (ball.vx > 0 &&
+      ball.x + BALL_SIZE / 2 > p2.x &&
+      ball.x - BALL_SIZE / 2 < p2.x + PADDLE_W &&
+      ball.y > p2.y && ball.y < p2.y + PADDLE_H) {
+    ball.x = p2.x - BALL_SIZE / 2;
+    const hitPos = (ball.y - p2.y) / PADDLE_H - 0.5;
+    ball.speed = Math.min(ball.speed * 1.05, H * 0.025);
+    const angle = hitPos * 60 * Math.PI / 180;
+    ball.vx = -Math.abs(Math.cos(angle)) * ball.speed;
+    ball.vy = Math.sin(angle) * ball.speed;
+  }
+
+  // Scoring
+  if (ball.x < 0) {
+    score2++;
+    if (score2 >= WIN_SCORE) { endGame(2); return; }
+    resetBall(1);
+  }
+  if (ball.x > W) {
+    score1++;
+    if (score1 >= WIN_SCORE) { endGame(1); return; }
+    resetBall(-1);
+  }
+}
+
+function endGame(winner) {
+  running = false;
+  cancelAnimationFrame(animId);
+  document.getElementById('winner-text').textContent = `Player ${winner} Wins! 🎉`;
+  document.getElementById('score-final').textContent = `Final Score: ${score1} — ${score2}`;
+  overlay.classList.add('show');
+  draw();
+}
+
+function draw() {
+  ctx.fillStyle = '#000a1a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Center line
+  ctx.setLineDash([8, 8]);
+  ctx.strokeStyle = '#334';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Score
+  ctx.fillStyle = '#ffffff44';
+  ctx.font = `bold ${Math.min(W, H) * 0.15}px 'Segoe UI'`;
+  ctx.textAlign = 'center';
+  ctx.fillText(score1, W / 4, H * 0.2);
+  ctx.fillText(score2, W * 3 / 4, H * 0.2);
+
+  // Paddles
+  function drawPaddle(paddle, color) {
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.roundRect(paddle.x, paddle.y, PADDLE_W, PADDLE_H, 4);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  drawPaddle(p1, '#4488ff');
+  drawPaddle(p2, '#ff4444');
+
+  // Ball
+  ctx.fillStyle = 'white';
+  ctx.shadowColor = 'white';
+  ctx.shadowBlur = 15;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_SIZE / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (['w','W','s','S','ArrowUp','ArrowDown'].includes(e.key)) {
+    e.preventDefault();
+    startGame();
+  }
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; });
+
+document.getElementById('play-again').addEventListener('click', init);
+
+window.addEventListener('resize', () => { resize(); init(); });
+
+init();
+</script>
+</body>
+</html>

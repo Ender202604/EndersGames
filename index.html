@@ -89,6 +89,7 @@
       }
     </style>
     <script>
+      // Redirect to login page if not yet logged in this session
       if (!sessionStorage.getItem('visitorLogged')) {
         location.href = 'login.html';
       }
@@ -101,6 +102,43 @@
       <a href="visitors.html">📋 Visitor Log</a>
     </p>
     <div class="grid">
+
+      <a class="game-card" href="snake.html">
+        <div class="game-emoji">🐍</div>
+        <div class="game-name">Snake</div>
+        <div class="game-desc">Classic snake game!</div>
+        <div class="dates">
+          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 28</span></div>
+          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 28</span></div>
+        </div>
+      </a>
+      <a class="game-card" href="pong.html">
+        <div class="game-emoji">🏓</div>
+        <div class="game-name">Pong</div>
+        <div class="game-desc">2-player paddle battle!</div>
+        <div class="dates">
+          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 28</span></div>
+          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 28</span></div>
+        </div>
+      </a>
+      <a class="game-card" href="brick-breaker.html">
+        <div class="game-emoji">🧱</div>
+        <div class="game-name">Brick Breaker</div>
+        <div class="game-desc">Break all the bricks!</div>
+        <div class="dates">
+          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 28</span></div>
+          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 28</span></div>
+        </div>
+      </a>
+      <a class="game-card" href="trivia.html">
+        <div class="game-emoji">🧠</div>
+        <div class="game-name">Trivia Quiz</div>
+        <div class="game-desc">10 random questions!</div>
+        <div class="dates">
+          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 28</span></div>
+          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 28</span></div>
+        </div>
+      </a>
 
       <a class="game-card" href="puzzle-box.html">
         <div class="game-emoji">🧩</div>
