@@ -1,545 +1,863 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Titanic 3D</title>
-  <meta charset="utf-8">
-  <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { background:#000; overflow:hidden; font-family:Georgia,serif; }
-    canvas { display:block; }
-    #crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,0.8); font-size:22px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
-    #hud { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.65); padding:10px 22px; border-radius:12px; color:white; font-size:17px; text-align:center; pointer-events:none; z-index:5; transition:color 0.5s; }
-    #clock { position:fixed; top:16px; right:18px; background:rgba(0,0,0,0.65); padding:8px 16px; border-radius:10px; color:#aaddff; font-size:22px; pointer-events:none; z-index:5; }
-    #location { position:fixed; top:16px; left:18px; background:rgba(0,0,0,0.65); padding:8px 16px; border-radius:10px; color:#ccffcc; font-size:18px; pointer-events:none; z-index:5; }
-    #interact { position:fixed; top:58%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.78); padding:10px 22px; border-radius:12px; color:yellow; font-size:19px; pointer-events:none; z-index:5; display:none; }
-    #dialog { display:none; position:fixed; bottom:90px; left:50%; transform:translateX(-50%); width:min(620px,92vw); background:rgba(0,0,25,0.94); border:2px solid rgba(100,160,255,0.35); border-radius:18px; padding:20px 24px; z-index:25; }
-    #dlg-name { font-size:19px; color:#88ccff; margin-bottom:6px; }
-    #dlg-text { font-size:18px; color:#eee; line-height:1.55; margin-bottom:14px; }
-    #dlg-choices { display:flex; flex-direction:column; gap:8px; }
-    .dbtn { font-size:17px; padding:11px 14px; background:rgba(0,30,90,0.9); border:1px solid rgba(255,255,255,0.25); border-radius:10px; color:white; cursor:pointer; text-align:left; }
-    .dbtn:hover { background:rgba(0,70,180,0.9); }
-    .screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.93); z-index:20; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:30px; text-align:center; color:white; }
-    .screen.show { display:flex; }
-    .se { font-size:80px; }
-    .st { font-size:44px; font-weight:bold; }
-    .sb { font-size:21px; line-height:1.6; max-width:500px; }
-    .sbtn { font-size:26px; padding:14px 38px; border-radius:16px; border:none; background:yellow; color:#000033; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; }
-    .sbtn:hover { background:white; }
-    #lock-screen { position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:15; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:white; cursor:pointer; }
-    #lock-screen p { font-size:28px; }
-    #lock-screen small { font-size:17px; color:#aaa; }
-    .home-btn { position:fixed; top:12px; left:50%; transform:translateX(-50%); font-size:18px; padding:7px 16px; border-radius:10px; border:none; background:rgba(0,0,0,0.55); color:white; cursor:pointer; z-index:30; text-decoration:none; display:none; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Titanic 3D — RMS Titanic Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,0.7); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(0,0,0,0.72); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:1px solid rgba(255,255,255,0.08); }
+#loc { color:#aaddff; font-size:13px; min-width:160px; }
+#phase-el { color:#ff5533; font-size:12px; font-weight:bold; display:none; animation:blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+#clock-el { color:#ffeeaa; font-size:13px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.65); padding:8px 20px; border-radius:12px; color:white; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(255,200,0,0.35); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(0,0,20,0.96); border:2px solid rgba(100,160,255,0.38); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#88ccff; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-choices { display:flex; flex-direction:column; gap:7px; }
+.dbtn { font-size:14px; padding:9px 13px; background:rgba(0,25,80,0.9); border:1px solid rgba(255,255,255,0.22); border-radius:9px; color:white; cursor:pointer; text-align:left; transition:background 0.15s; }
+.dbtn:hover { background:rgba(0,70,190,0.9); }
+.dbtn.correct { background:rgba(20,150,70,0.9) !important; border-color:#5c5; }
+.dbtn.wrong   { background:rgba(170,30,30,0.9) !important; border-color:#c55; }
+#inv { position:fixed; top:38px; right:10px; background:rgba(0,0,0,0.7); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(255,255,255,0.1); }
+#inv-title { color:#FFD700; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.9); color:#FFD700; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,200,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+#vignette { position:fixed; inset:0; background:radial-gradient(transparent 50%, rgba(200,0,0,0.45) 100%); pointer-events:none; opacity:0; z-index:4; transition:opacity 1.2s; }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:yellow; color:#00002a; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#fff; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(0,0,0,0.76); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(255,255,255,0.28); background:rgba(0,0,0,0.65); color:white; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.28); border-radius:8px; color:white; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(255,255,255,0.18); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(255,200,0,0.32); border:2px solid #FFD700; border-radius:50%; color:#FFD700; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
 </head>
 <body>
 
 <div id="crosshair">+</div>
-<div id="clock">🕐 11:30 PM</div>
-<div id="location">📍 Your Cabin</div>
-<div id="hud">W A S D to move &nbsp;|&nbsp; Mouse to look &nbsp;|&nbsp; Shift to run &nbsp;|&nbsp; E to talk</div>
-<div id="interact"></div>
-<div id="dialog"><div id="dlg-name"></div><div id="dlg-text"></div><div id="dlg-choices"></div></div>
-<a class="home-btn" id="home-btn" href="index.html">🏠 Home</a>
 
+<div id="topbar">
+  <span id="loc">📍 Your Cabin</span>
+  <span id="phase-el">⚠️ SINKING</span>
+  <span id="clock-el">🕐 11:30 PM</span>
+  <span id="score-el">🏆 0 pts</span>
+</div>
+
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact &nbsp;·&nbsp; Shift to run</div>
+<div id="interact"></div>
+
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <div id="dlg-choices"></div>
+</div>
+
+<div id="inv">
+  <div id="inv-title">Inventory</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Empty</div>
+</div>
+
+<div id="toast"></div>
+<div id="vignette"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<!-- Start Screen -->
 <div class="screen show" id="scr-start">
   <div class="se">🚢</div>
-  <div class="st" style="color:#88ccff">RMS Titanic — 3D</div>
-  <div class="sb">April 14, 1912. You have just boarded the most magnificent ship ever built — for her first and only voyage.<br><br>Explore the ship. Talk to the passengers. But something is coming tonight...<br><br><span style="color:yellow">Will YOU survive? 🛟</span></div>
+  <div class="st" style="color:#88ccff">RMS TITANIC — 3D</div>
+  <div class="sb">April 14, 1912. You are a passenger aboard the most magnificent ship ever built — on her maiden voyage from Southampton to New York.<br><br>Explore the ship. Talk to passengers and crew. Answer Titanic trivia to earn points. Collect items that may save your life.<br><br><span style="color:yellow">Something is coming tonight. Will YOU survive? 🛟</span></div>
   <button class="sbtn" onclick="beginGame()">⚓ BOARD THE SHIP</button>
-  <small style="color:#888">WASD to walk • Mouse to look around • E to talk to people</small>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up · Shift to sprint</small>
 </div>
 
+<!-- Win Screen -->
 <div class="screen" id="scr-win">
   <div class="se">🛟</div>
-  <div class="st" style="color:#00ff88">YOU SURVIVED!</div>
+  <div class="st" style="color:#00ee88">YOU SURVIVED!</div>
   <div class="sb" id="win-body"></div>
-  <button class="sbtn" onclick="location.reload()">Play Again</button>
-  <a class="sbtn" href="index.html">🏠 Home</a>
+  <div id="win-score" style="font-size:24px;color:#FFD700;font-weight:bold;margin:6px 0;"></div>
+  <button class="sbtn" onclick="location.reload()">⚓ Play Again</button>
+  <a class="sbtn sec" href="index.html">🏠 Home</a>
 </div>
 
+<!-- Lose Screen -->
 <div class="screen" id="scr-lose">
   <div class="se">🌊</div>
   <div class="st" style="color:#ff5555">The Ship Went Down...</div>
   <div class="sb" id="lose-body"></div>
+  <div id="lose-score" style="font-size:20px;color:#aaa;margin:6px 0;"></div>
   <button class="sbtn" onclick="location.reload()">Try Again</button>
-  <a class="sbtn" href="index.html">🏠 Home</a>
+  <a class="sbtn sec" href="index.html">🏠 Home</a>
 </div>
 
+<!-- Lock Screen -->
 <div id="lock-screen" onclick="lockPointer()">
   <p>🖱️ Click to look around</p>
-  <small>Move mouse to look • WASD to walk • Shift to run • E to talk</small>
+  <small>WASD · Mouse · E to interact · Shift to sprint</small>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-// ── renderer ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// RENDERER & SCENE
+// ─────────────────────────────────────────────
 var renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
-// ── scene / camera ────────────────────────────────────────
 var scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000011);
-scene.fog = new THREE.Fog(0x000011, 12, 55);
+scene.fog = new THREE.Fog(0x000011, 16, 65);
 
 var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
 camera.position.set(0, 1.7, 0);
 
-// ── state ─────────────────────────────────────────────────
-var yaw = Math.PI, pitch = 0;
-var locked = false, gameOn = false, dlgOpen = false;
-var phase = "explore"; // explore → sinking → ended
-var elapsed = 0, score = 0;
-var shipRoll = 0, rollTarget = 0;
-var nearNPC = null;
-var keys = {};
-var triggered = {};
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+var yaw=Math.PI, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var phase='explore', elapsed=0, score=0;
+var shipRoll=0, rollTarget=0, shakeAmount=0;
+var nearNPC=null, nearPickup=null;
+var keys={}, triggered={};
+var inventory=[], npcTalked={}, quizUsed={};
 
-document.addEventListener('keydown', function(e){
-  keys[e.code] = true;
-  if(e.code==='KeyE') interact();
-});
-document.addEventListener('keyup', function(e){ keys[e.code]=false; });
-
-// ── pointer lock ──────────────────────────────────────────
-function lockPointer(){ renderer.domElement.requestPointerLock(); }
-document.addEventListener('pointerlockchange', function(){
-  locked = document.pointerLockElement === renderer.domElement;
-  document.getElementById('lock-screen').style.display = (locked || dlgOpen) ? 'none' : 'flex';
-});
-document.addEventListener('mousemove', function(e){
-  if(!locked || !gameOn) return;
-  yaw   -= e.movementX * 0.002;
-  pitch -= e.movementY * 0.002;
-  pitch = Math.max(-1.1, Math.min(1.1, pitch));
-});
-
-// ── materials ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// MATERIALS
+// ─────────────────────────────────────────────
 function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
 var M = {
-  wood:    lm(0x6B3A2A), richwood: lm(0x8B4513), cream: lm(0xFFF8E7),
-  carpet:  lm(0x8B0000), white:    lm(0xF0EDE0), brass: lm(0xB8860B),
-  metal:   lm(0x607080), deck:     lm(0x5C4030), ocean: lm(0x001133),
-  hull:    lm(0x1A1A1A), lifeboat: lm(0xE8D5A0), red:   lm(0xCC2200),
-  skin:    lm(0xE8C49A), darksuit: lm(0x1C2A5E), redsuit:lm(0xAA2222),
-  blacksuit:lm(0x111111),navysuit: lm(0x1C3A6E), greensuit:lm(0x1A5A2A),
-  sky: new THREE.MeshLambertMaterial({color:0x000008, side:THREE.BackSide}),
-  porthole: new THREE.MeshLambertMaterial({color:0x2255AA, transparent:true, opacity:0.6})
+  wood:lm(0x6B3A2A),rich:lm(0x8B4513),cream:lm(0xFFFBF0),carpet:lm(0x8B0000),
+  white:lm(0xF0EDE0),brass:lm(0xB8860B),metal:lm(0x607080),deck:lm(0x5C4030),
+  ocean:lm(0x001133),hull:lm(0x1A1A1A),boat:lm(0xE8D5A0),red:lm(0xCC2200),
+  skin:lm(0xE8C49A),marble:lm(0xE8E0D0),panel:lm(0x7A5520),gold:lm(0xD4AF37),
+  navy:lm(0x1C2A5E),blk:lm(0x111111),teal:lm(0x1A5A5A),grn:lm(0x1A5A2A),
+  grey:lm(0x555566),pur:lm(0x4A2A7A),redsuit:lm(0xAA2222),
+  sky:new THREE.MeshLambertMaterial({color:0x000008,side:THREE.BackSide}),
+  port:new THREE.MeshLambertMaterial({color:0x2255AA,transparent:true,opacity:0.6}),
+  ice:lm(0xBBDDEE)
 };
 
-// ── geometry helpers ──────────────────────────────────────
-function addBox(w,h,d,mat,x,y,z,ry){
+// ─────────────────────────────────────────────
+// GEO HELPERS
+// ─────────────────────────────────────────────
+function box(w,h,d,mat,x,y,z,ry){
   var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
   m.position.set(x,y,z); if(ry) m.rotation.y=ry;
   scene.add(m); return m;
 }
-function addCyl(rt,rb,h,mat,x,y,z){
-  var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,12),mat);
-  m.position.set(x,y,z); scene.add(m); return m;
+function box2(g,w,h,d,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); g.add(m); return m;
 }
-function addSphere(r,mat,x,y,z){
-  var m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),mat);
-  m.position.set(x,y,z); scene.add(m); return m;
-}
-function addLight(x,y,z,col,i,d){
-  var l=new THREE.PointLight(col,i,d||18); l.position.set(x,y,z); scene.add(l); return l;
-}
+function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,12),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||18); l.position.set(x,y,z); scene.add(l); return l; }
 
-// ── label sprites ─────────────────────────────────────────
-function makeLabel(text){
+function label(text,color){
   var c=document.createElement('canvas'); c.width=256; c.height=60;
   var ctx=c.getContext('2d');
-  ctx.fillStyle='rgba(0,0,30,0.88)'; ctx.fillRect(0,0,256,60);
-  ctx.strokeStyle='rgba(100,160,255,0.5)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
-  ctx.fillStyle='white'; ctx.font='bold 21px Arial';
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(text,128,30);
+  ctx.fillStyle='rgba(0,0,24,0.88)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(100,160,255,0.4)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
   var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
-  sp.scale.set(2.4,0.6,1); return sp;
+  sp.scale.set(2.5,0.62,1); return sp;
 }
 
-// ── walkable zones ────────────────────────────────────────
+// ─────────────────────────────────────────────
+// ZONES
+// ─────────────────────────────────────────────
 var zones = [
-  {x1:-2.5, x2:2.5,  z1:-2.5, z2:6.0,  name:"Your Cabin"},
-  {x1:-2.2, x2:2.2,  z1:4.0,  z2:30.0, name:"First Class Corridor"},
-  {x1:1.5,  x2:6.5,  z1:11.0, z2:21.0, name:"First Class Corridor"},
-  {x1:3.5,  x2:18.0, z1:7.5,  z2:23.0, name:"First Class Dining Room"},
-  {x1:-11,  x2:11,   z1:27.0, z2:53.0, name:"Boat Deck"},
+  {x1:-2.5, x2:2.5,  z1:-3,   z2:6.5,  name:"Your Cabin",             col:"#aaddff"},
+  {x1:-2.4, x2:2.4,  z1:6.0,  z2:25.0, name:"First Class Corridor",   col:"#aaffaa"},
+  {x1:2.4,  x2:19.0, z1:8.5,  z2:23.5, name:"First Class Dining Room",col:"#ffddaa"},
+  {x1:-12.0,x2:-2.4, z1:8.5,  z2:22.5, name:"Smoking Room",            col:"#ddbbff"},
+  {x1:-13.0,x2:13.0, z1:24.5, z2:58.0, name:"Boat Deck",               col:"#aaddff"},
 ];
-
 function getZone(x,z){
   for(var i=0;i<zones.length;i++){
     var a=zones[i];
-    if(x>a.x1+0.1&&x<a.x2-0.1&&z>a.z1+0.1&&z<a.z2-0.1) return a;
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
   }
   return null;
 }
 
-// ── build ship ────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// PICKUPS
+// ─────────────────────────────────────────────
+var pickups = [];
+function addPickup(name,icon,x,y,z,pts,desc){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.SphereGeometry(0.18,8,8),lm(0xFF8800));
+  g.add(glow);
+  var lbl=label(icon+' '+name,'#FFD700'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g,pos:new THREE.Vector3(x,y,z),name,icon,pts,desc,collected:false});
+}
+
+// ─────────────────────────────────────────────
+// BUILD SHIP
+// ─────────────────────────────────────────────
 function buildShip(){
-  scene.add(new THREE.AmbientLight(0x223355, 0.7));
+  scene.add(new THREE.AmbientLight(0x223355,0.8));
 
   // Ocean
-  addBox(300,0.4,300, M.ocean, 0,-2,25);
+  box(400,0.3,400,M.ocean,0,-2.1,28);
 
-  // ── CABIN ────────────────────────────────────────────────
-  addBox(5,0.15,5, M.wood,     0,-0.08,0);    // floor
-  addBox(5,0.12,5, M.cream,    0,3.08, 0);    // ceiling
-  addBox(5,3.2,0.15, M.richwood,0,1.5,-2.6);  // back wall
-  addBox(0.15,3.2,5, M.richwood,-2.6,1.5,0);  // left wall
-  addBox(0.15,3.2,5, M.richwood, 2.6,1.5,0);  // right wall
-  // Front wall with door gap
-  addBox(1.8,3.2,0.15, M.richwood,-1.7,1.5,2.6);
-  addBox(1.8,3.2,0.15, M.richwood, 1.7,1.5,2.6);
-  addBox(1.6,0.9,0.15, M.richwood, 0,2.75,2.6); // lintel
+  // ── CABIN ──────────────────────────────────
+  box(5,0.15,9.5,  M.wood,   0,-0.08,1.75);    // floor
+  box(5,0.12,9.5,  M.cream,  0, 3.08,1.75);    // ceiling
+  box(5,3.2,0.15,  M.rich,   0, 1.5, -3.0);    // back wall
+  box(0.15,3.2,9.5,M.rich,  -2.6,1.5,1.75);   // left wall
+  box(0.15,3.2,9.5,M.rich,   2.6,1.5,1.75);   // right wall
+  // Front wall — door gap -1 to +1
+  box(1.7,3.2,0.15,M.rich,  -1.65,1.5,6.5);
+  box(1.7,3.2,0.15,M.rich,   1.65,1.5,6.5);
+  box(2.0,0.9,0.15,M.rich,   0,2.75,6.5);
   // Bed
-  addBox(1.2,0.45,2.2, M.white, 1.8,0.25,-1.5);
-  addBox(1.2,0.2,0.5,  M.cream, 1.8,0.55,-2.5); // pillow
-  // Small desk + chair
-  addBox(0.8,0.06,0.6, M.richwood,-1.8,0.78,-1.4);
-  addCyl(0.04,0.04,0.78,M.richwood,-1.8,0.39,-1.4);
-  addBox(0.4,0.05,0.4, M.darksuit,-1.8,0.52,-0.9);
-  addBox(0.4,0.45,0.08,M.darksuit,-1.8,0.78,-1.15);
+  box(1.4,0.45,2.4,M.white,  1.85,0.25,-1.6);
+  box(1.4,0.2,0.5, M.cream,  1.85,0.55,-2.65);
+  box(1.4,0.06,2.4,lm(0x224488),1.85,0.50,-1.6);
+  // Dresser
+  box(0.9,1.0,0.5, M.rich,  -1.9,0.5,-2.0);
+  box(0.9,0.06,0.5,M.brass, -1.9,1.04,-2.0);
+  box(0.7,1.0,0.06,lm(0x88aacc),-1.9,1.6,-2.95);
+  box(0.8,1.12,0.08,M.brass,-1.9,1.6,-2.95);
+  // Desk
+  box(1.0,0.06,0.6,M.rich,  -1.9,0.82,-0.5);
+  cyl(0.04,0.04,0.82,M.rich, -1.9,0.41,-0.5);
+  box(0.5,0.05,0.45,M.navy, -1.9,0.57,0.24);
+  box(0.5,0.48,0.08,M.navy, -1.9,0.81,0.02);
   // Porthole
-  addCyl(0.35,0.35,0.1, M.brass,-0.6,1.9,-2.55);
-  var ph=new THREE.Mesh(new THREE.CircleGeometry(0.27,16), M.porthole);
-  ph.position.set(-0.6,1.9,-2.5); ph.rotation.y=0; scene.add(ph);
-  // Light
-  addLight(0,2.8,0, 0xFFDDAA,1.5,14);
+  cyl(0.38,0.38,0.1,M.brass,-0.85,1.9,-2.96);
+  var ph=new THREE.Mesh(new THREE.CircleGeometry(0.3,16),M.port);
+  ph.position.set(-0.85,1.9,-2.91); scene.add(ph);
+  // Luggage
+  box(0.85,0.4,0.55,lm(0x8B4513),1.8,0.2,3.8);
+  pl(0,2.8,1.75,0xFFDDAA,1.6,14);
+  addPickup('Life Belt','🟠',1.2,1.2,-0.5,25,'An orange cork life belt — it could save your life!');
 
-  // ── CORRIDOR ─────────────────────────────────────────────
-  addBox(4.2,0.15,25,  M.wood,   0,-0.08,16.5);
-  addBox(1.6,0.06,25,  M.carpet, 0, 0.02,16.5); // runner
-  addBox(4.2,0.12,25,  M.cream,  0, 3.08,16.5); // ceiling
-  addBox(0.15,3.2,25,  M.richwood,-2.2,1.5,16.5); // left wall
-  // Right wall with dining opening z=12-19
-  addBox(0.15,3.2,9.5, M.richwood, 2.2,1.5, 7.25);
-  addBox(0.15,3.2,9.5, M.richwood, 2.2,1.5,24.25);
+  // ── FIRST CLASS CORRIDOR ───────────────────
+  box(4.8,0.15,19,  M.wood,   0,-0.08,15.5);
+  box(1.7,0.06,19,  M.carpet, 0, 0.02,15.5);
+  box(4.8,0.12,19,  M.cream,  0, 3.08,15.5);
+  box(0.15,3.2,19,  M.rich,  -2.45,1.5,15.5);
+  // Right wall — dining opening z=8.5-23.5
+  box(0.15,3.2,2,   M.rich,   2.45,1.5,7.5);
+  box(0.15,3.2,1.5, M.rich,   2.45,1.5,24.25);
+  box(3.6,0.9,0.15, M.rich,   2.45,2.75,16.0);
+  // Left wall — smoking opening z=8.5-22.5
+  box(0.15,3.2,2,   M.rich,  -2.45,1.5,7.5);
+  box(0.15,3.2,2.5, M.rich,  -2.45,1.5,23.25);
+  box(3.6,0.9,0.15, M.rich,  -2.45,2.75,15.5);
+  // Back wall (cabin end)
+  box(4.8,3.2,0.15, M.rich,   0,1.5,6.2);
   // Sconces
-  for(var sz=7;sz<=26;sz+=5){
-    addBox(0.12,0.28,0.12, M.brass,-2.12,2.1,sz);
-    addBox(0.12,0.28,0.12, M.brass, 2.12,2.1,sz);
-    addLight(0,2.75,sz, 0xFFDDAA,0.9,10);
+  for(var sz=8;sz<=24;sz+=4){
+    box(0.12,0.28,0.12,M.brass,-2.37,2.1,sz);
+    box(0.12,0.28,0.12,M.brass, 2.37,2.1,sz);
+    pl(0,2.75,sz,0xFFDDAA,1.0,10);
   }
-  // End wall before deck
-  addBox(1.5,3.2,0.15, M.richwood,-1.35,1.5,29.1);
-  addBox(1.5,3.2,0.15, M.richwood, 1.35,1.5,29.1);
-  addBox(3,0.9,0.15,   M.richwood, 0,2.75,29.1);
+  // Door lintel to deck
+  box(4.8,0.9,0.15,M.rich,0,2.75,24.9);
+  // Grand staircase teaser (just before deck)
+  box(4.0,0.18,0.6,M.marble,0,-0.02,24.3);
+  for(var bi=-1.4;bi<=1.4;bi+=0.7){
+    cyl(0.045,0.045,1.05,M.gold,bi,0.5,24.0);
+    box(0.08,0.08,2.8,M.gold,bi,1.1,22.6);
+  }
+  cyl(0.55,0.55,0.12,M.gold,0,3.0,22);
+  pl(0,2.85,22,0xFFEECC,2.5,16);
+  addPickup('Brandy Flask','🥃',-0.8,1.1,12,10,'A silver flask. Takes the edge off the cold.');
 
-  // ── DINING ROOM ───────────────────────────────────────────
-  addBox(14,0.15,15, M.richwood,  10.5,-0.08,15);
-  addBox(14,0.06,15, lm(0x7A5A10),10.5, 0.02,15); // fancy carpet
-  addBox(14,0.12,15, M.cream,     10.5, 3.08,15);  // ceiling
-  addBox(14,3.2,0.15, M.richwood, 10.5,1.5,7.5);   // back wall
-  addBox(14,3.2,0.15, M.richwood, 10.5,1.5,22.5);  // front wall
-  addBox(0.15,3.2,15, M.richwood, 17.6,1.5,15);    // right wall
-  // Left wall with opening
-  addBox(0.15,3.2,5.5, M.richwood, 3.6,1.5,10.25);
-  addBox(0.15,3.2,3.5, M.richwood, 3.6,1.5,20.75);
-  addBox(3.2,0.9,0.15, M.richwood, 5.2,2.75,13.5); // door lintel top
+  // ── SMOKING ROOM ───────────────────────────
+  box(9.6,0.15,14, M.rich,  -7.2,-0.08,15.5);
+  box(9.6,0.06,14, lm(0x4A2010),-7.2,0.02,15.5);
+  box(9.6,0.12,14, M.cream, -7.2,3.08,15.5);
+  box(9.6,3.2,0.15,M.panel, -7.2,1.5,8.5);
+  box(9.6,3.2,0.15,M.panel, -7.2,1.5,22.5);
+  box(0.15,3.2,14, M.panel,-12.05,1.5,15.5);
+  // Right wall with corridor opening
+  box(0.15,3.2,2,   M.panel,-2.55,1.5,7.5);
+  box(0.15,3.2,1.5, M.panel,-2.55,1.5,23.25);
+  box(3.6,0.9,0.15, M.panel,-2.55,2.75,15.5);
+  // Armchairs
+  [[-9,11],[-7,14],[-9,18],[-5.5,11],[-5.5,18]].forEach(function(p){
+    box(0.8,0.62,0.8,lm(0x6B3010),p[0],0.31,p[1]);
+    box(0.8,0.5,0.1, lm(0x6B3010),p[0],0.82,p[1]-0.42);
+  });
   // Tables
-  var tpos=[[7,11],[12,11],[7,17],[12,17],[16,14]];
-  tpos.forEach(function(p){
-    addBox(1.5,0.07,1.0, M.white,   p[0],0.78,p[1]);
-    addCyl(0.05,0.05,0.78,M.brass,  p[0],0.39,p[1]);
-    addBox(0.06,0.35,0.06,M.brass,  p[0]-0.5,0.17,p[1]-0.3);
-    addBox(0.06,0.35,0.06,M.brass,  p[0]+0.5,0.17,p[1]-0.3);
-    addBox(0.06,0.35,0.06,M.brass,  p[0]-0.5,0.17,p[1]+0.3);
-    addBox(0.06,0.35,0.06,M.brass,  p[0]+0.5,0.17,p[1]+0.3);
-    addBox(1.6,0.04,1.1, M.brass, p[0],0.35,p[1]);
+  [[-7.5,12.5],[-7.5,17],[-10,15]].forEach(function(p){
+    box(0.6,0.06,0.6,M.rich,p[0],0.58,p[1]);
+    cyl(0.04,0.04,0.58,M.rich,p[0],0.29,p[1]);
+  });
+  // Fireplace
+  box(2.2,2.2,0.45,M.marble,-7.2,1.1,8.65);
+  box(1.5,1.5,0.1, lm(0x111111),-7.2,0.75,8.65);
+  pl(-7.2,1.0,9.5,0xFF6622,2.2,11);
+  pl(-7.2,2.6,15.5,0xFFDDAA,1.6,16);
+  addPickup("Ship's Chart","📜",-8.5,1.1,17,15,"A navigation chart. It shows the ice field ahead...");
+
+  // ── DINING ROOM ────────────────────────────
+  box(16.6,0.15,15, M.rich,  10.7,-0.08,16.0);
+  box(16.6,0.06,15, lm(0x7A5A10),10.7,0.02,16.0);
+  box(16.6,0.12,15, M.cream, 10.7,3.08,16.0);
+  box(16.6,3.2,0.15,M.rich,  10.7,1.5,8.5);
+  box(16.6,3.2,0.15,M.rich,  10.7,1.5,23.5);
+  box(0.15,3.2,15,  M.rich,  19.05,1.5,16.0);
+  // Left wall with corridor opening
+  box(0.15,3.2,2,   M.rich,  2.55,1.5,7.5);
+  box(0.15,3.2,1.5, M.rich,  2.55,1.5,24.25);
+  box(3.6,0.9,0.15, M.rich,  2.55,2.75,16.0);
+  // Tables
+  var tp=[[7,11],[11,11],[15,11],[7,17],[11,17],[15,17],[7,14],[15,14]];
+  tp.forEach(function(p){
+    box(1.65,0.07,1.15,M.white,p[0],0.79,p[1]);
+    cyl(0.05,0.05,0.79,M.brass,p[0],0.39,p[1]);
+    box(0.28,0.01,0.28,M.white,p[0]-0.52,0.87,p[1]);
+    box(0.28,0.01,0.28,M.white,p[0]+0.52,0.87,p[1]);
+    box(0.55,0.48,0.55,M.navy,p[0]-0.58,0.24,p[1]+0.9);
+    box(0.55,0.48,0.55,M.navy,p[0]+0.58,0.24,p[1]+0.9);
   });
   // Chandeliers
-  addCyl(0.5,0.5,0.1, M.brass,  8,2.9,11);
-  addCyl(0.5,0.5,0.1, M.brass,  13,2.9,11);
-  addCyl(0.5,0.5,0.1, M.brass,  10.5,2.9,17);
-  addLight(8,2.8,11,   0xFFEEBB,2.2,16);
-  addLight(13,2.8,11,  0xFFEEBB,2.2,16);
-  addLight(10.5,2.8,17,0xFFEEBB,2.2,16);
+  [[7,11],[13,11],[10.5,17]].forEach(function(p){
+    cyl(0.6,0.6,0.12,M.brass,p[0],2.9,p[1]);
+    pl(p[0],2.8,p[1],0xFFEEBB,2.6,18);
+  });
+  // Columns
+  [3.0,18.9].forEach(function(cx){
+    [10,15,21].forEach(function(cz){
+      cyl(0.2,0.24,3.0,M.marble,cx,1.5,cz);
+    });
+  });
 
-  // ── TOP DECK ──────────────────────────────────────────────
-  addBox(22,0.15,24, M.deck, 0,-0.08,40);
+  // ── BOAT DECK ──────────────────────────────
+  box(26,0.15,33, M.deck,0,-0.08,41.5);
   // Railings
-  for(var rx=-10;rx<=10;rx+=2){
-    addBox(0.09,1.1,0.09,M.white, rx,0.72,29.2);
-    addBox(0.09,1.1,0.09,M.white, rx,0.72,51.8);
+  for(var rx=-12;rx<=12;rx+=2){
+    box(0.08,1.1,0.08,M.white,rx,0.72,25.2);
+    box(0.08,1.1,0.08,M.white,rx,0.72,57.8);
   }
-  for(var rz=30;rz<=51;rz+=2){
-    addBox(0.09,1.1,0.09,M.white,-11,0.72,rz);
-    addBox(0.09,1.1,0.09,M.white, 11,0.72,rz);
+  for(var rz=26;rz<=57;rz+=2){
+    box(0.08,1.1,0.08,M.white,-13,0.72,rz);
+    box(0.08,1.1,0.08,M.white, 13,0.72,rz);
   }
-  addBox(20,0.09,0.09,M.white, 0,1.28,29.2);
-  addBox(20,0.09,0.09,M.white, 0,1.28,51.8);
-  addBox(0.09,0.09,22,M.white,-11,1.28,40.5);
-  addBox(0.09,0.09,22,M.white, 11,1.28,40.5);
-  // Lifeboats
-  [-7.5,-4.5,-1.5,1.5,4.5,7.5].forEach(function(bx,i){
-    addBox(3,0.7,1, M.lifeboat, bx>0?12:-12, 2.1, 33+Math.abs(bx)*1.5);
+  box(25,0.08,0.08,M.white, 0,1.28,25.2);
+  box(25,0.08,0.08,M.white, 0,1.28,57.8);
+  box(0.08,0.08,32,M.white,-13,1.28,41.5);
+  box(0.08,0.08,32,M.white, 13,1.28,41.5);
+  // Lifeboats — 8 each side
+  for(var li=0;li<8;li++){
+    box(3.2,0.75,1.1,M.boat,-14.1,2.1,28+li*3.5);
+    box(3.2,0.75,1.1,M.boat, 14.1,2.1,28+li*3.5);
+    box(3.2,0.06,1.1,lm(0xD0C090),-14.1,2.5,28+li*3.5);
+    box(3.2,0.06,1.1,lm(0xD0C090), 14.1,2.5,28+li*3.5);
+  }
+  // 4 funnels
+  [-5.5,-1.8,1.8,5.5].forEach(function(fx,i){
+    cyl(0.95,1.18,7.5,M.hull,fx,5.95,35+i*4.5);
+    cyl(0.9,0.9,0.38,i<3?M.red:lm(0x222222),fx,9.7,35+i*4.5);
+    if(i<3) cyl(0.38,0.62,0.9,lm(0x2a2a2a),fx,10.45,35+i*4.5);
   });
-  // Funnels
-  [-3,3].forEach(function(fx){
-    addCyl(0.9,1.1,6, M.hull,   fx,5.5,38);
-    addCyl(0.85,0.85,0.3,M.red, fx,8.4,38);
-  });
+  // Bridge / Wheelhouse
+  box(9,3.6,5.5,M.rich,0,2.0,27.5);
+  box(8.8,0.15,5.3,M.cream,0,3.73,27.5);
+  box(0.15,3.6,5.5,M.rich,-4.55,2.0,27.5);
+  box(0.15,3.6,5.5,M.rich, 4.55,2.0,27.5);
+  box(9,3.6,0.15,M.rich,0,2.0,30.3);
+  for(var wi=-3.5;wi<=3.5;wi+=1.8){
+    var wm=new THREE.Mesh(new THREE.PlaneGeometry(0.95,1.5),M.port);
+    wm.position.set(wi,2.35,24.68); scene.add(wm);
+  }
+  // Ventilators
+  for(var vx=-8;vx<=8;vx+=4){
+    cyl(0.48,0.58,1.2,M.metal,vx,0.7,33);
+    cyl(0.58,0.58,0.15,M.metal,vx,1.38,33);
+  }
   // Deck lights
-  for(var dl=32;dl<=50;dl+=6) addLight(0,3.5,dl, 0x334466,0.6,15);
-  // Sky dome
-  scene.add(new THREE.Mesh(new THREE.SphereGeometry(100,16,16), M.sky));
-  // Moon
-  addSphere(4, lm(0xEEEECC), 35,50,-65);
-  var moonLight = new THREE.PointLight(0x334477,0.3,200);
-  moonLight.position.set(35,50,-65); scene.add(moonLight);
+  for(var dl=28;dl<=56;dl+=5) pl(0,3.6,dl,0x334466,0.7,18);
+  // Stern bow extension
+  box(8,0.15,4,M.deck,0,-0.08,59.5);
+  box(0.1,1.1,4,M.white,-4.1,0.72,59.5);
+  box(0.1,1.1,4,M.white, 4.1,0.72,59.5);
+  box(9.5,0.09,0.09,M.white,0,1.28,61.5);
+
+  // Hull sides
+  box(0.4,8,70,M.hull,-13.4,1,29);
+  box(0.4,8,70,M.hull, 13.4,1,29);
+  box(26,0.3,70,M.hull,0,-2.1,28);
+
+  // ── SKY ────────────────────────────────────
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(115,16,16),M.sky));
+  sph(5.5,lm(0xEEEECC),42,58,-72);
+  var ml=new THREE.PointLight(0x334477,0.38,280); ml.position.set(42,58,-72); scene.add(ml);
   // Stars
   var sv=[];
-  for(var s=0;s<1000;s++){
-    var ph2=Math.random()*Math.PI, th=Math.random()*Math.PI*2, rs=88;
-    sv.push(rs*Math.sin(ph2)*Math.cos(th), rs*Math.cos(ph2), rs*Math.sin(ph2)*Math.sin(th));
+  for(var s=0;s<1800;s++){
+    var ph2=Math.random()*Math.PI, th=Math.random()*Math.PI*2, rs=105;
+    sv.push(rs*Math.sin(ph2)*Math.cos(th),rs*Math.cos(ph2),rs*Math.sin(ph2)*Math.sin(th));
   }
   var sg=new THREE.BufferGeometry();
   sg.setAttribute('position',new THREE.Float32BufferAttribute(sv,3));
-  scene.add(new THREE.Points(sg, new THREE.PointsMaterial({color:0xffffff,size:0.35})));
-  // Hull sides
-  addBox(0.3,6,60, M.hull,-11.3,1,31);
-  addBox(0.3,6,60, M.hull, 11.3,1,31);
+  scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xffffff,size:0.28})));
+
+  // Iceberg (hidden until strike)
+  window._iceberg = box(14,20,12,M.ice,22,6,0);
+  window._iceberg.visible = false;
+
+  addPickup('Distress Flare','🔴',6,1.1,42,15,'A red distress flare. Signal the rescue ships!');
 }
 
-// ── NPCs ──────────────────────────────────────────────────
-var npcs = [];
-function buildNPC(x,z, bodyM, name, lines){
-  var g = new THREE.Group();
-  // legs
+// ─────────────────────────────────────────────
+// NPC BUILDER
+// ─────────────────────────────────────────────
+var npcs=[];
+function spawnNPC(x,z,bodyMat,name,data){
+  var g=new THREE.Group();
   [-0.13,0.13].forEach(function(lx){
-    addBox2(g, 0.22,0.7,0.24, bodyM, lx,-0.35,0);
+    var leg=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.72,0.24),bodyMat);
+    leg.position.set(lx,-0.36,0); g.add(leg);
   });
-  // body
-  addBox2(g, 0.52,0.88,0.3, bodyM, 0,0.44,0);
-  // head
-  addBox2(g, 0.4,0.4,0.38, M.skin, 0,1.1,0);
-  // label
-  var lbl=makeLabel(name); lbl.position.set(0,1.78,0); g.add(lbl);
-  g.position.set(x,0,z);
-  scene.add(g);
-  npcs.push({g:g, pos:new THREE.Vector3(x,0,z), name:name, lines:lines});
-}
-function addBox2(parent,w,h,d,mat,x,y,z){
-  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-  m.position.set(x,y,z); parent.add(m);
+  box2(g,0.54,0.9,0.3,bodyMat,0,0.45,0);
+  box2(g,0.42,0.42,0.38,M.skin,0,1.12,0);
+  box2(g,0.44,0.12,0.4,lm(data.hair||0x3D2B1F),0,1.37,0);
+  var lbl=label(name,data.lc||'#ffffff'); lbl.position.set(0,1.88,0); g.add(lbl);
+  g.position.set(x,0,z); scene.add(g);
+  npcs.push({g,pos:new THREE.Vector3(x,0,z),name,data,chatted:false});
 }
 
+// ─────────────────────────────────────────────
+// TRIVIA QUESTIONS
+// ─────────────────────────────────────────────
+var Q = [
+  {q:"How many lifeboats did Titanic actually have?",opts:["14","16","20","32"],ans:2,fact:"Titanic had 20 lifeboats — only enough for about half those aboard."},
+  {q:"What city did Titanic depart from?",opts:["Liverpool","London","Belfast","Southampton"],ans:3,fact:"Titanic sailed from Southampton on April 10, 1912."},
+  {q:"Who was Titanic's captain?",opts:["Captain Murdoch","Captain E.J. Smith","Captain Scott","Captain Jones"],ans:1,fact:"Captain Edward John Smith commanded Titanic on her final voyage."},
+  {q:"How long did it take Titanic to sink after hitting the iceberg?",opts:["1 hour","2 hrs 40 min","4 hours","30 minutes"],ans:1,fact:"Titanic sank at 2:20 AM, about 2 hrs 40 min after the 11:40 PM collision."},
+  {q:"How many people were aboard Titanic in total?",opts:["1,200","1,800","2,224","3,000"],ans:2,fact:"Titanic carried 2,224 passengers and crew."},
+  {q:"Where was Titanic built?",opts:["Southampton","Liverpool","Belfast","Glasgow"],ans:2,fact:"Titanic was built by Harland & Wolff in Belfast, launched 1911."},
+  {q:"Approximately how many people survived the sinking?",opts:["500","710","940","1,100"],ans:1,fact:"About 710 people survived, rescued by RMS Carpathia."},
+  {q:"Who discovered the Titanic wreck in 1985?",opts:["Jacques Cousteau","Robert Ballard","James Cameron","Paul-Henri Nargeolet"],ans:1,fact:"Robert Ballard and his team found Titanic's wreck on September 1, 1985."},
+  {q:"What temperature was the North Atlantic water that night?",opts:["28°F (-2°C)","35°F (2°C)","40°F (4°C)","45°F (7°C)"],ans:0,fact:"The water was about 28°F (-2°C) — lethal in minutes without a life belt."},
+  {q:"How fast was Titanic traveling when she struck the iceberg?",opts:["16 knots","22 knots","26 knots","30 knots"],ans:1,fact:"Titanic was cruising at about 22 knots (25 mph) when she hit the iceberg."},
+];
+
+function nextQ(npcName){
+  for(var i=0;i<Q.length;i++){ if(!quizUsed[i]){ quizUsed[i]=npcName; return {q:Q[i],idx:i}; } }
+  return null;
+}
+
+// ─────────────────────────────────────────────
+// BUILD NPCs
+// ─────────────────────────────────────────────
 function buildNPCs(){
-  buildNPC(1.2,1.2, M.darksuit, "James (Steward)", {
-    explore:"Good evening! Welcome aboard the RMS Titanic — the finest ship ever built! Dinner is in the dining room down the corridor. The top deck has wonderful views tonight. Enjoy your voyage!",
-    sinking:"SIR — PLEASE go to the boat deck NOW! We've struck an iceberg! Grab a life belt and GO! There's no time!"
-  });
-  buildNPC(0.3,10, M.redsuit, "Lady Margaret", {
-    explore:"Isn't this ship magnificent? I've never seen anything like it. They say she simply cannot sink — sixteen watertight compartments! I do hope the crossing stays this smooth...",
-    sinking:"Oh heavens! Did you feel that dreadful scraping? My husband says to stay calm but the floor is TILTING! Please — the lifeboats!"
-  });
-  buildNPC(5,14, M.blacksuit, "Henri (Waiter)", {
-    explore:"Bonsoir! Welcome to the First Class Dining Saloon. Tonight we have oysters, lobster thermidor, and roast duckling. Seven courses! Can I show you to a table? C'est magnifique!",
-    sinking:"Mon Dieu — everyone LEAVE! The ship is going down! Do not wait — ALLEZ! To the boat deck! VITE!"
-  });
-  buildNPC(13,13, M.navysuit, "Mr. Charles", {
-    explore:"Capital ship, what? Absolutely unsinkable, they say. I'm not worried in the slightest. Have you tried the first class smoking room? Finest cigars at sea, I tell you!",
-    sinking:"Good God... the engines have stopped. And the list — you can FEEL it now, can't you. To the lifeboats! WOMEN AND CHILDREN FIRST!"
-  });
-  buildNPC(3,40, M.hull, "Captain Smith", {
-    explore:"Good evening. Beautiful night — clear skies, calm sea. We've had some ice warnings today but I've adjusted our course. Nothing to worry about. This ship is the safest afloat.",
-    sinking:"We have struck ice. The damage is fatal — she cannot survive. All passengers to lifeboat stations at once. Women and children first. God save us all."
-  });
-  buildNPC(-5,35, M.greensuit, "Frederick (Lookout)", {
-    explore:"Evening. Bitterly cold tonight. Very clear though. I'm watching for ice — we've had warnings. Between you and me... we don't have binoculars up in the crow's nest tonight. Keep your eyes peeled.",
-    sinking:"ICEBERG RIGHT AHEAD — I rang the bell three times but we couldn't turn in time... Please — get a life jacket and go to the boats. RUN!"
-  });
+  spawnNPC(1.2,0.8, M.navy,'James (Steward)',{hair:0x3D2B1F,
+    explore:"Good evening! Welcome aboard the RMS Titanic — the grandest ship ever built! Dinner is in the First Class Dining Room down the corridor. The Smoking Room is through the left passage. And the Boat Deck is straight ahead at the end of the corridor. Enjoy your voyage!",
+    sinking:"Sir, you MUST go to the Boat Deck immediately! Grab your life belt — is it in your cabin? GO NOW! Women and children first!",quiz:true});
+
+  spawnNPC(0.4,10, M.redsuit,'Lady Margaret',{hair:0xC07040,lc:'#ffcccc',
+    explore:"Isn't this magnificent? Sixteen watertight compartments — they say she absolutely cannot sink! I do hope we maintain this lovely smooth crossing all the way to New York.",
+    sinking:"Oh heavens — did you feel that dreadful scraping?! The floor is tilting — I can feel it! I am going to the lifeboats this instant! Come — hurry!",quiz:true});
+
+  spawnNPC(5.5,13, M.blk,'Henri (Head Waiter)',{hair:0x111111,lc:'#ffeecc',
+    explore:"Bonsoir! Welcome to the First Class Dining Saloon. Tonight — oysters Rockefeller, lobster thermidor, roast duckling... seven magnificent courses! Shall I show you to a table? C'est magnifique!",
+    sinking:"Mon Dieu — EVERYONE LEAVE! The ship goes down! Do not wait — ALLEZ! Boat deck! VITE VITE!",quiz:true});
+
+  spawnNPC(13,12, M.navy,'Mr. Charles Moody',{hair:0x666666,
+    explore:"Capital ship, what? Absolutely unsinkable — I read it in White Star's own brochure! Have you seen the first-class Turkish bath? Remarkable. I've got a thousand on a record Atlantic crossing.",
+    sinking:"Good God... you can actually feel the list now, can't you? Right — enough cards. BOATS. Women and children FIRST — make way there!",quiz:true});
+
+  spawnNPC(-7.5,10, M.pur,'Lord Asquith',{hair:0x222222,lc:'#ddbbff',
+    explore:"Dreadful weather we left Southampton in, but look at this crossing! Smooth as a millpond. Finest brandy at sea, I tell you. What say you to a game of cards, old chap?",
+    sinking:"...Well. Cards can wait. The ship appears to be sinking and I for one intend to keep a stiff upper lip about it. After you to the lifeboats, old boy.",quiz:true});
+
+  spawnNPC(-9,17, M.grn,'Dr. O'Loughlin (Surgeon)',{hair:0xBBBBBB,
+    explore:"Good evening. I've been treating a few seasick passengers in steerage — the lower decks are rather crowded. Between us, I had hoped to retire after this voyage. Finest ship of my career.",
+    sinking:"Listen carefully — hypothermia kills in minutes in that water. If you go in, keep moving. Find a life belt. Find a lifeboat. Don't panic. God be with you.",quiz:true});
+
+  spawnNPC(0,29, M.navy,'Capt. E.J. Smith',{hair:0xBBBBBB,lc:'#aaddff',
+    explore:"Good evening. Beautiful clear night — calm sea. We've had some ice warnings today but I've set a course to keep us clear. Nothing to worry about. This is the finest ship I've ever commanded.",
+    sinking:"We have struck ice. The damage is fatal — she cannot survive. All hands and passengers to lifeboat stations at ONCE. Women and children first. God save us all.",quiz:true});
+
+  spawnNPC(-5,34, M.grey,'Fred Fleet (Lookout)',{hair:0x3D3D1F,lc:'#aaffaa',
+    explore:"Evening. Bitter cold tonight — very clear though. I've been on watch since 10. We've had ice warnings but no binoculars in the crow's nest tonight! I reported that up the chain. Nothing was done.",
+    sinking:"ICEBERG RIGHT AHEAD — I rang three bells and phoned the bridge but we couldn't turn in time. Please — get your life belt and RUN to the boats! Don't wait!",quiz:true});
+
+  spawnNPC(5,40, M.teal,'Miss Rose O'Brien',{hair:0xCC4444,lc:'#ffccff',
+    explore:"Oh it's such a beautiful night! I've been watching the stars from the bow — the sea is like glass. I've never felt so alive! The Milky Way is extraordinary out here.",
+    sinking:"Did you hear that? Like a grinding, ripping sound... and the engines stopped. Something is very wrong. I'm frightened. The officers are uncovering the lifeboats...",quiz:true});
+
+  spawnNPC(-3,46, M.navy,'Officer Lowe',{hair:0x222266,lc:'#aaddff',
+    explore:"All in order tonight. Clear skies, moderate speed. We received ice warnings via Marconi but the captain has adjusted course. I'll be on watch until 0200. Have a pleasant evening.",
+    sinking:"Listen up — Lifeboat 14 is loading NOW on the port side. Women and children first — then anyone else if there's room. MOVE — we haven't much time!",quiz:false});
+
+  spawnNPC(-1.5,13, M.grn,'Marta (3rd Class)',{hair:0x8B4513,lc:'#ffaaaa',
+    explore:"Excuse — my English not good. I go to New York! My brother is waiting. This ship — so big! I am lost. Which way to top of ship? The air is better there?",
+    sinking:"Please help — they lock gates for third class! My children — we cannot get up! Please open gate — please help us! Please!",quiz:false});
 }
 
-// ── story events ──────────────────────────────────────────
-var events = [
-  {t:75,  fn: icebergStrike},
-  {t:105, fn: function(){ showHUD("🔔 'All passengers — life belts on — report to the boat deck!'", "#ffaa00"); }},
-  {t:145, fn: finalChoice}
+// ─────────────────────────────────────────────
+// DIALOG
+// ─────────────────────────────────────────────
+function openDlg(name,text,choices){
+  dlgOpen=true; document.exitPointerLock();
+  document.getElementById('dlg-name').innerText=name;
+  document.getElementById('dlg-text').innerText=text;
+  var box2=document.getElementById('dlg-choices'); box2.innerHTML='';
+  choices.forEach(function(ch){
+    var b=document.createElement('button'); b.className='dbtn'; b.innerText=ch.t;
+    b.onclick=function(){ ch.fn(b); }; box2.appendChild(b);
+  });
+  document.getElementById('dialog').style.display='block';
+}
+function closeDlg(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false; if(gameOn) lockPointer();
+}
+
+function interact(){
+  if(dlgOpen) return;
+  if(nearPickup && !nearPickup.collected){ collectPickup(nearPickup); return; }
+  if(!nearNPC) return;
+  var npc=nearNPC;
+  var txt=phase==='sinking'?npc.data.sinking:npc.data.explore;
+  if(!npc.chatted){ npc.chatted=true; addScore(5,'Talked to '+npc.name); }
+  var choices=[{t:'Thanks! [Close]',fn:function(){ closeDlg(); }}];
+  if(phase==='explore' && npc.data.quiz){
+    var qd=nextQ(npc.name);
+    if(qd){
+      choices.unshift({t:'Ask a Titanic trivia question ❓',fn:function(){
+        closeDlg(); setTimeout(function(){ showQuiz(qd.q,qd.idx); },120);
+      }});
+    }
+  }
+  openDlg(npc.name,txt,choices);
+}
+
+// ─────────────────────────────────────────────
+// QUIZ
+// ─────────────────────────────────────────────
+function showQuiz(q,idx){
+  dlgOpen=true; document.exitPointerLock();
+  var done=false;
+  var opts=q.opts.map(function(opt,i){
+    return {t:opt,fn:function(btn){
+      if(done) return; done=true;
+      var allBtns=document.querySelectorAll('.dbtn');
+      if(i===q.ans){
+        btn.classList.add('correct'); btn.innerText='✅ '+opt+' — Correct!';
+        addScore(15,'Correct!');
+        showToast('🏆 +15 pts! '+q.fact);
+      } else {
+        btn.classList.add('wrong'); btn.innerText='❌ '+opt;
+        allBtns[q.ans] && allBtns[q.ans].classList.add('correct');
+        showToast('❌ Wrong. '+q.fact);
+      }
+      setTimeout(closeDlg,2600);
+    }};
+  });
+  opts.push({t:'Skip this question',fn:closeDlg});
+  openDlg('❓ Titanic Trivia',q.q,opts);
+}
+
+// ─────────────────────────────────────────────
+// PICKUPS
+// ─────────────────────────────────────────────
+function collectPickup(p){
+  p.collected=true; p.g.visible=false;
+  inventory.push(p.icon+' '+p.name);
+  addScore(p.pts,'Found '+p.name+'!');
+  showToast('🎒 Picked up: '+p.icon+' '+p.name+' — '+p.desc);
+  updateInv();
+}
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(!inventory.length){ el.innerText='Empty'; el.style.color='#aaa'; return; }
+  el.style.color='#eee';
+  el.innerHTML=inventory.map(function(i){ return '<div>'+i+'</div>'; }).join('');
+}
+function hasItem(n){ return inventory.some(function(i){ return i.indexOf(n)!==-1; }); }
+
+// ─────────────────────────────────────────────
+// SCORE / HUD
+// ─────────────────────────────────────────────
+function addScore(pts,reason){
+  score+=pts; document.getElementById('score-el').innerText='🏆 '+score+' pts';
+}
+var _toastT;
+function showToast(msg){
+  var el=document.getElementById('toast');
+  el.innerHTML=msg; el.style.display='block';
+  clearTimeout(_toastT); _toastT=setTimeout(function(){ el.style.display='none'; },3800);
+}
+function showHUD(msg,col){
+  var el=document.getElementById('hud');
+  el.innerHTML=msg; el.style.color=col||'white';
+  setTimeout(function(){ el.innerHTML='W A S D · Mouse · E to interact · Shift to run'; el.style.color='white'; },5500);
+}
+
+// ─────────────────────────────────────────────
+// STORY EVENTS
+// ─────────────────────────────────────────────
+var events=[
+  {t:25, fn:function(){ showToast('📻 Radio: "SS Baltic reports large quantities of field ice in our path..."'); }},
+  {t:55, fn:function(){ showToast('🔔 A faint vibration through the deck... the engines have changed pitch.'); }},
+  {t:85, fn:icebergStrike},
+  {t:105,fn:function(){
+    document.getElementById('clock-el').style.color='#ff5533';
+    document.getElementById('phase-el').style.display='inline';
+    showToast('📢 "All passengers — put on life belts — report to the Boat Deck at once!"');
+  }},
+  {t:130,fn:function(){
+    rollTarget=0.055;
+    document.getElementById('vignette').style.opacity='0.4';
+    showHUD('💧 Water is flooding decks E and F! GET TO THE BOAT DECK!','#ff6633');
+  }},
+  {t:158,fn:function(){
+    rollTarget=0.11;
+    document.getElementById('vignette').style.opacity='0.72';
+    showToast('🚨 The stern is rising! Most lifeboats are already gone!');
+  }},
+  {t:180,fn:finalChoice},
 ];
 
 function icebergStrike(){
-  document.getElementById('clock').innerText = "🕐 11:40 PM ❄️";
-  document.getElementById('clock').style.color = "#ff6666";
-  showHUD("💥 A terrible grinding sound tears through the ship...", "red");
-  shakeAmount = 0.18;
-  setTimeout(function(){ showHUD("❄️ THE TITANIC HAS STRUCK AN ICEBERG!", "red"); phase="sinking"; }, 2800);
-  setTimeout(function(){ rollTarget = 0.05; }, 12000);
-  setTimeout(function(){ rollTarget = 0.10; }, 35000);
+  document.getElementById('clock-el').innerText='🕐 11:40 PM ❄️';
+  shakeAmount=0.28;
+  showHUD('💥 A deafening grinding tears through the hull — the ship shudders!','red');
+  window._iceberg.visible=true;
+  setTimeout(function(){
+    showHUD('❄️ THE TITANIC HAS STRUCK AN ICEBERG!','red');
+    phase='sinking';
+    showToast('❄️ ICEBERG STRIKE! Find your Life Belt in the cabin — get to the Boat Deck!');
+  },2800);
+  setTimeout(function(){ rollTarget=0.03; },15000);
 }
 
 function finalChoice(){
-  rollTarget = 0.18;
-  dlgOpen = true;
-  document.exitPointerLock();
-  document.getElementById('dlg-name').innerText = "⚠️  THE SHIP IS SINKING — MAKE YOUR CHOICE!";
-  document.getElementById('dlg-text').innerText = "The Titanic is going down fast. You are on the boat deck next to a lifeboat being lowered. There are people everywhere. What do you do?";
-  var choices = [
-    {t:"🚣  Climb into the lifeboat RIGHT NOW!", res:"good", pts:2},
-    {t:"👵  Help the elderly woman beside you get in first, then jump in", res:"hero", pts:3},
-    {t:"🎒  Run back to your cabin to get your valuables", res:"bad",  pts:-3},
-    {t:"🪵  Grab a deck chair and throw yourself into the sea", res:"close",pts:0}
-  ];
-  var box = document.getElementById('dlg-choices'); box.innerHTML='';
-  choices.forEach(function(ch){
-    var b=document.createElement('button'); b.className='dbtn'; b.innerText=ch.t;
-    b.onclick=function(){ score+=ch.pts; closeDialog(); setTimeout(function(){endGame(ch.res);},2500); };
-    box.appendChild(b);
-  });
-  document.getElementById('dialog').style.display='block';
-}
-
-// ── endings ───────────────────────────────────────────────
-function endGame(type){
-  phase = "ended"; rollTarget = 0.45;
-  setTimeout(function(){
-    if(type==="bad"){
-      document.getElementById('lose-body').innerHTML = "You ran back for your bag and lost precious minutes. By the time you returned to the deck, the last lifeboat was already in the water...<br><br><strong>Next time: leave everything and head straight to the lifeboats!</strong>";
-      document.getElementById('scr-lose').classList.add('show');
-    } else if(type==="hero"){
-      document.getElementById('win-body').innerHTML = "You helped the elderly woman into the lifeboat, then squeezed in yourself. You rowed hard as the great ship went under behind you...<br><br>At dawn, the rescue ship <em>Carpathia</em> found you. <strong>You survived — and you're a HERO! 🌟</strong>";
-      document.getElementById('scr-win').classList.add('show');
-    } else if(type==="close"){
-      document.getElementById('win-body').innerHTML = "You floated on a deck chair in the freezing Atlantic for two hours. Just when you were about to give up, a lifeboat rowed over...<br><br>The <em>Carpathia</em> rescued you at dawn. <strong>You barely survived! 🛟</strong>";
-      document.getElementById('scr-win').classList.add('show');
-    } else {
-      document.getElementById('win-body').innerHTML = "You got into a lifeboat just in time! You watched the enormous ship tilt and slide under the dark ocean...<br><br>The rescue ship <em>Carpathia</em> arrived at dawn. You were given hot soup and blankets. <strong>You survived! 🎉</strong>";
-      document.getElementById('scr-win').classList.add('show');
-    }
-    document.getElementById('home-btn').style.display='block';
-  }, 3500);
-}
-
-// ── dialog / HUD helpers ──────────────────────────────────
-var hudTimer;
-function showHUD(msg, col){
-  var h=document.getElementById('hud');
-  h.style.color = col||'white'; h.innerHTML=msg;
-  clearTimeout(hudTimer);
-  hudTimer=setTimeout(function(){ h.style.color='white'; h.innerHTML='W A S D move &nbsp;|&nbsp; Mouse look &nbsp;|&nbsp; Shift run &nbsp;|&nbsp; E talk'; },6000);
-}
-function closeDialog(){
-  dlgOpen=false;
-  document.getElementById('dialog').style.display='none';
-  lockPointer();
-}
-function interact(){
-  if(!gameOn||phase==='ended') return;
-  if(dlgOpen){ closeDialog(); return; }
-  if(!nearNPC) return;
-  var line = phase==='explore' ? nearNPC.lines.explore : nearNPC.lines.sinking;
+  rollTarget=0.19;
   dlgOpen=true; document.exitPointerLock();
-  document.getElementById('dlg-name').innerText='💬 '+nearNPC.name;
-  document.getElementById('dlg-text').innerText=line;
-  var box=document.getElementById('dlg-choices'); box.innerHTML='';
-  var b=document.createElement('button'); b.className='dbtn'; b.innerText='[Walk Away]';
-  b.onclick=closeDialog; box.appendChild(b);
-  document.getElementById('dialog').style.display='block';
+  var lb=hasItem('Life Belt'), pts=score>=60, hero=score>=85;
+  openDlg('⚠️ THE SHIP IS SINKING — YOUR FINAL CHOICE',
+    'The Titanic is going down fast. You are on the Boat Deck. Collapsible Lifeboat D is being loaded — nearly full. An officer shouts: "Any more for this boat??" What do you do?',
+    [
+      {t:'🚣 Climb in immediately — take the last spot!',fn:function(){ closeDlg(); setTimeout(function(){
+        addScore(10,'Survived!');
+        showWin('You grabbed the last spot in Collapsible D. At 2:20 AM you watched the great Titanic disappear beneath the North Atlantic. RMS Carpathia rescued you at dawn.','You made it aboard the last lifeboat.',hero?15:0);
+      },2200); }},
+      {t:'👴 Help the elderly woman beside you into the boat first, then look for another way',fn:function(){ closeDlg(); setTimeout(function(){
+        if(lb && pts){ addScore(30,'Hero!'); showWin('You helped her into Collapsible D. With your life belt, you leapt after and were hauled aboard. Your heroism earned you the highest praise when Carpathia arrived.','Hero — and you survived!',30); }
+        else if(lb){ showWin('You helped her in, then jumped into the icy sea. Your life belt kept you afloat for two agonising hours until Carpathia spotted you at dawn.','The Life Belt saved your life.',10); }
+        else { showLose('You helped her into the boat — a truly noble act. But without a life belt, the 28°F water overcame you in minutes. <em>A hero, lost to the sea.</em>','Next time: find the Life Belt in your cabin first!',-5); }
+      },2200); }},
+      {t:'🎒 Run back to your cabin — your valuables are still there!',fn:function(){ closeDlg(); setTimeout(function(){
+        showLose('You ran back below deck. By the time you returned, Collapsible D was gone and the sea was pouring over the bow. The North Atlantic claimed the Titanic — and you — at 2:20 AM.','Next time: leave everything and head straight to the lifeboats!',-10);
+      },2200); }},
+      {t:'🪵 Grab two deck chairs and lash them together to float on',fn:function(){ closeDlg(); setTimeout(function(){
+        if(lb){ showWin('You lashed the chairs together and jumped. The life belt kept your head above water as the deck chairs helped you float. Carpathia\'s searchlights found you two hours later, barely alive but breathing.','The Life Belt made all the difference.',5); }
+        else { showLose('You grabbed the deck chairs and leapt. Without a life belt, the 28°F water was unsurvivable. The chairs helped — but not enough.<br><br><em>Next time: always find the Life Belt first!</em>','Found near the wreck site. A heroic attempt.',-5); }
+      },2200); }},
+    ]
+  );
 }
 
-// ── camera shake ──────────────────────────────────────────
-var shakeAmount=0;
-
-// ── begin game ────────────────────────────────────────────
-function beginGame(){
-  document.getElementById('scr-start').classList.remove('show');
-  gameOn=true;
-  camera.position.set(0,1.7,0); yaw=Math.PI; pitch=0;
-  lockPointer();
-  showHUD("Welcome aboard! Explore and talk to people (E). Something is coming tonight...","#aaddff");
+function showWin(body,sub,extra){
+  if(extra) addScore(extra,'ending bonus');
+  document.getElementById('win-body').innerHTML=body+(sub?'<br><br><strong style="color:#FFD700">'+sub+'</strong>':'');
+  document.getElementById('win-score').innerText='🏆 Final Score: '+score+' pts';
+  document.getElementById('scr-win').classList.add('show');
+  document.getElementById('home-btn').style.display='block';
+}
+function showLose(body,tip,penalty){
+  if(penalty) addScore(penalty,'penalty');
+  document.getElementById('lose-body').innerHTML=body+(tip?'<br><br><em style="color:#ffaa88">💡 Tip: '+tip+'</em>':'');
+  document.getElementById('lose-score').innerText='Score: '+score+' pts';
+  document.getElementById('scr-lose').classList.add('show');
+  document.getElementById('home-btn').style.display='block';
 }
 
-// ── main loop ─────────────────────────────────────────────
-var clock2 = new THREE.Clock();
+// ─────────────────────────────────────────────
+// CONTROLS
+// ─────────────────────────────────────────────
+function lockPointer(){ renderer.domElement.requestPointerLock(); }
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  document.getElementById('lock-screen').style.display=(locked||dlgOpen||!gameOn)?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||!gameOn||dlgOpen) return;
+  yaw-=e.movementX*0.002; pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){
+  keys[e.code]=true;
+  if(e.code==='KeyE') interact();
+  if(e.code==='Escape'&&dlgOpen) closeDlg();
+});
+document.addEventListener('keyup',function(e){ keys[e.code]=false; });
 
+function setupMobile(){
+  var mob=/Android|iPhone|iPad/i.test(navigator.userAgent)||window.innerWidth<800;
+  if(mob){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  var bm={'m-up':'KeyW','m-dn':'KeyS','m-left':'KeyA','m-right':'KeyD'};
+  Object.keys(bm).forEach(function(id){
+    var code=bm[id], el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){ keys[code]=true; e.preventDefault(); },{passive:false});
+    el.addEventListener('touchend',function(e){ keys[code]=false; e.preventDefault(); },{passive:false});
+  });
+  document.getElementById('e-btn').addEventListener('click',interact);
+  var ltx,lty;
+  renderer.domElement.addEventListener('touchstart',function(e){
+    if(e.touches.length===1){ ltx=e.touches[0].clientX; lty=e.touches[0].clientY; }
+    e.preventDefault();
+  },{passive:false});
+  renderer.domElement.addEventListener('touchmove',function(e){
+    if(e.touches.length===1){
+      yaw-=(e.touches[0].clientX-ltx)*0.004;
+      pitch-=(e.touches[0].clientY-lty)*0.004;
+      pitch=Math.max(-1.2,Math.min(1.2,pitch));
+      ltx=e.touches[0].clientX; lty=e.touches[0].clientY;
+    }
+    e.preventDefault();
+  },{passive:false});
+}
+
+// ─────────────────────────────────────────────
+// MAIN LOOP
+// ─────────────────────────────────────────────
+var clk=new THREE.Clock();
 function animate(){
   requestAnimationFrame(animate);
-  var dt = Math.min(clock2.getDelta(), 0.1);
-
+  var dt=Math.min(clk.getDelta(),0.1);
   if(!gameOn){ renderer.render(scene,camera); return; }
+  elapsed+=dt;
 
-  elapsed += dt;
-
-  // story events
   events.forEach(function(ev){
-    if(!triggered[ev.t] && elapsed>=ev.t){ triggered[ev.t]=true; ev.fn(); }
+    if(!triggered[ev.t]&&elapsed>=ev.t){ triggered[ev.t]=true; ev.fn(); }
   });
 
-  // clock display
   if(phase!=='ended'){
-    var gameMin = Math.floor(elapsed/2);
-    var hh=11, mm=30+gameMin;
+    var gm=Math.floor(elapsed/2), hh=11, mm=30+gm;
     if(mm>=60){ hh=0; mm-=60; }
-    if(phase==='explore') document.getElementById('clock').innerText = "🕐 "+(hh===0?12:hh)+":"+(mm<10?"0":"")+mm+" "+(hh===0?"AM":"PM");
+    if(phase!=='sinking')
+      document.getElementById('clock-el').innerText='🕐'+(hh===0?12:hh)+':'+(mm<10?'0':'')+mm+' '+(hh===0?'AM':'PM');
   }
 
-  // ship roll
-  shipRoll += (rollTarget - shipRoll)*0.004;
-  camera.rotation.z = -shipRoll;
+  shipRoll+=(rollTarget-shipRoll)*0.003;
+  camera.rotation.z=-shipRoll;
+  shakeAmount*=0.91;
 
-  // shake decay
-  shakeAmount *= 0.92;
-
-  // movement
   if(!dlgOpen){
-    var spd = (keys['ShiftLeft']||keys['ShiftRight']) ? 7 : 3.5;
-    var mx=0, mz=0;
-    if(keys['KeyW']) mz=-1;
-    if(keys['KeyS']) mz= 1;
-    if(keys['KeyA']) mx=-1;
-    if(keys['KeyD']) mx= 1;
+    var spd=(keys.ShiftLeft||keys.ShiftRight)?7:3.5;
+    var mx=0,mz=0;
+    if(keys.KeyW) mz=-1; if(keys.KeyS) mz=1;
+    if(keys.KeyA) mx=-1; if(keys.KeyD) mx=1;
     if(mx||mz){
-      var len=Math.sqrt(mx*mx+mz*mz);
-      mx/=len; mz/=len;
-      var cos=Math.cos(yaw), sin=Math.sin(yaw);
-      var dx=(mx*cos-mz*sin)*spd*dt;
-      var dz=(mx*sin+mz*cos)*spd*dt;
+      var len=Math.sqrt(mx*mx+mz*mz); mx/=len; mz/=len;
+      var co=Math.cos(yaw),si=Math.sin(yaw);
+      var dx=(mx*co-mz*si)*spd*dt, dz=(mx*si+mz*co)*spd*dt;
       var nx=camera.position.x+dx, nz=camera.position.z+dz;
-      if(getZone(nx, camera.position.z)) camera.position.x=nx;
-      if(getZone(camera.position.x, nz)) camera.position.z=nz;
+      if(getZone(nx,camera.position.z)) camera.position.x=nx;
+      if(getZone(camera.position.x,nz)) camera.position.z=nz;
     }
-    camera.position.y = 1.7 + shipRoll*0.4;
+    camera.position.y=1.7+shipRoll*0.55;
   }
 
-  // camera rotation
   var sx=(Math.random()-0.5)*shakeAmount, sy=(Math.random()-0.5)*shakeAmount;
   camera.rotation.order='YXZ';
-  camera.rotation.y = yaw+sx;
-  camera.rotation.x = pitch+sy;
+  camera.rotation.y=yaw+sx; camera.rotation.x=pitch+sy;
 
-  // location display
-  var z = getZone(camera.position.x, camera.position.z);
-  if(z) document.getElementById('location').innerText = "📍 "+z.name;
+  var z2=getZone(camera.position.x,camera.position.z);
+  if(z2){
+    document.getElementById('loc').innerText='📍 '+z2.name;
+    document.getElementById('loc').style.color=z2.col||'#aaddff';
+  }
 
-  // NPC face player + check proximity
-  nearNPC=null;
-  var closest=99;
+  nearNPC=null; var cn=3.5;
   npcs.forEach(function(npc){
     var dx=camera.position.x-npc.pos.x, dz=camera.position.z-npc.pos.z;
-    npc.g.rotation.y = Math.atan2(dx,dz);
-    var dist=Math.sqrt(dx*dx+dz*dz);
-    if(dist<3.5&&dist<closest){ closest=dist; nearNPC=npc; }
+    npc.g.rotation.y=Math.atan2(dx,dz);
+    var d=Math.sqrt(dx*dx+dz*dz);
+    if(d<cn){ cn=d; nearNPC=npc; }
   });
+
+  nearPickup=null; var cp=2.5;
+  pickups.forEach(function(p){
+    if(p.collected) return;
+    var dx=camera.position.x-p.pos.x, dz=camera.position.z-p.pos.z;
+    var d=Math.sqrt(dx*dx+dz*dz);
+    if(d<cp){ cp=d; nearPickup=p; }
+    p.g.position.y=p.pos.y+Math.sin(elapsed*2+p.pos.x)*0.08;
+    p.g.rotation.y=elapsed*1.3;
+  });
+
   var hint=document.getElementById('interact');
-  hint.style.display=(nearNPC&&!dlgOpen)?'block':'none';
-  if(nearNPC) hint.innerHTML='Press <strong>E</strong> to talk to '+nearNPC.name;
+  if(!dlgOpen&&(nearNPC||(nearPickup&&!nearPickup.collected))){
+    hint.style.display='block';
+    if(nearPickup&&!nearPickup.collected)
+      hint.innerHTML='Press <strong>E</strong> to pick up '+nearPickup.icon+' '+nearPickup.name;
+    else if(nearNPC)
+      hint.innerHTML='Press <strong>E</strong> to talk to '+nearNPC.name;
+  } else { hint.style.display='none'; }
 
   renderer.render(scene,camera);
 }
 
-// ── resize ────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// START
+// ─────────────────────────────────────────────
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('lock-screen').style.display='flex';
+  gameOn=true;
+  camera.position.set(0,1.7,0.5); yaw=Math.PI; pitch=0;
+  lockPointer();
+  showHUD('⚓ Welcome aboard! Explore the ship and talk to people (E). Tonight holds secrets...','#aaddff');
+  document.getElementById('home-btn').style.display='block';
+}
+
 window.addEventListener('resize',function(){
   camera.aspect=innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
 
-// ── go ────────────────────────────────────────────────────
 buildShip();
 buildNPCs();
+setupMobile();
 animate();
 </script>
 </body>
