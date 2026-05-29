@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Tower Defense</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial, sans-serif; overflow: hidden; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+h1 { color: #ffff00; font-size: 20px; margin-bottom: 2px; }
+#hud { color: #ffcccc; font-size: 13px; margin-bottom: 4px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+#hud span { color: #ffff00; font-weight: bold; }
+#shop { display: flex; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; justify-content: center; }
+.tower-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 5px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; }
+.tower-btn.active { background: darkred; border-color: yellow; color: #ffff00; }
+canvas { border: 2px solid #ff6666; border-radius: 8px; cursor: pointer; display: block; }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 10; }
+#overlay h2 { color: #ffff00; font-size: 26px; }
+#overlay p { color: #ffcccc; font-size: 14px; text-align: center; max-width: 340px; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+.btn:hover { background: #cc0000; }
+#diff-row { display: flex; gap: 10px; }
+.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
+.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🏰 Tower Defense</h1>
+<div id="hud">
+  Wave: <span id="wv">0</span>/10 &nbsp;
+  Lives: <span id="lv">5</span> &nbsp;
+  Gold: <span id="gld">50</span> &nbsp;
+  Best: <span id="hs">0</span>
+</div>
+<div id="shop">
+  <button class="tower-btn active" id="tb0" onclick="selectTower(0)">🗼 Basic (20g)</button>
+  <button class="tower-btn" id="tb1" onclick="selectTower(1)">⚡ Fast (40g)</button>
+  <button class="tower-btn" id="tb2" onclick="selectTower(2)">💣 Heavy (80g)</button>
+</div>
+<canvas id="c" width="420" height="300"></canvas>
+<div id="overlay">
+  <h2>🏰 Tower Defense</h2>
+  <p>Click empty spots to place towers. Defend against 10 waves!</p>
+  <p style="color:#ffaaaa">Basic: cheap | Fast: rapid fire | Heavy: high damage</p>
+  <p id="hs-msg" style="color:#ffff00"></p>
+  <div id="diff-row">
+    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy</button>
+    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard</button>
+  </div>
+  <button class="btn" onclick="startGame()">▶ Play</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 420, H = 300;
+const HS_KEY = 'hs_towerdefense';
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+let diff = 'easy', selectedTower = 0;
+let towers, enemies, bullets, lives, gold, wave, waveTimer, running, raf, frame, waveActive;
+
+const CELL = 30;
+const COLS = Math.floor(W/CELL); // 14
+const ROWS = Math.floor(H/CELL); // 10
+
+// Path: row 1, columns 0-13, then row 5, etc.
+const PATH = [];
+for (let c=0; c<COLS; c++) PATH.push({r:1,c});
+for (let r=1;r<=5;r++) PATH.push({r,c:COLS-1});
+for (let c=COLS-1;c>=0;c--) PATH.push({r:5,c});
+for (let r=5;r<=8;r++) PATH.push({r,c:0});
+for (let c=0;c<COLS;c++) PATH.push({r:8,c});
+
+const TOWER_TYPES = [
+  { name:'Basic', cost:20, range:90, rate:60, dmg:10, color:'#cc4400', bullet:'#ff6644' },
+  { name:'Fast', cost:40, range:80, rate:25, dmg:6, color:'#4444cc', bullet:'#8888ff' },
+  { name:'Heavy', cost:80, range:110, rate:90, dmg:35, color:'#228822', bullet:'#44ff44' }
+];
+
+function beep(freq, dur, type='sine') {
+  try {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.connect(g); g.connect(audio.destination);
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.15, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+    o.start(); o.stop(audio.currentTime + dur);
+  } catch(e) {}
+}
+function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(w) { if (w > getHS()) localStorage.setItem(HS_KEY, w); }
+function setDiff(d) {
+  diff = d;
+  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
+  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+}
+function selectTower(i) {
+  selectedTower = i;
+  [0,1,2].forEach(j => document.getElementById('tb'+j).classList.toggle('active', j===i));
+}
+
+function isOnPath(r, c) {
+  return PATH.some(p => p.r===r && p.c===c);
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  towers = []; enemies = []; bullets = [];
+  lives = 5; gold = 50; wave = 0; frame = 0; running = true; waveActive = false;
+  updateHUD();
+  setTimeout(spawnWave, 1000);
+  raf = requestAnimationFrame(loop);
+}
+
+function spawnWave() {
+  wave++;
+  if (wave > 10) { endGame(true); return; }
+  updateHUD();
+  const count = 4 + wave * 2;
+  const hpMult = diff==='hard' ? 2 : 1;
+  for (let i=0; i<count; i++) {
+    setTimeout(() => {
+      enemies.push({
+        pathIdx: 0,
+        px: PATH[0].c * CELL + CELL/2,
+        py: PATH[0].r * CELL + CELL/2,
+        hp: (10 + wave*8) * hpMult,
+        maxHp: (10 + wave*8) * hpMult,
+        speed: 1.2 + wave*0.08,
+        reward: 5 + wave
+      });
+    }, i*500);
+  }
+  waveActive = true;
+}
+
+canvas.addEventListener('click', e => {
+  if (!running) return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W/rect.width, scaleY = H/rect.height;
+  const mx = (e.clientX - rect.left)*scaleX;
+  const my = (e.clientY - rect.top)*scaleY;
+  const c = Math.floor(mx/CELL), r = Math.floor(my/CELL);
+  if (r<0||r>=ROWS||c<0||c>=COLS) return;
+  if (isOnPath(r,c)) return;
+  if (towers.some(t=>t.r===r&&t.c===c)) return;
+  const t = TOWER_TYPES[selectedTower];
+  if (gold < t.cost) { return; }
+  gold -= t.cost;
+  towers.push({ r, c, type: selectedTower, cooldown: 0 });
+  updateHUD();
+  beep(400, 0.1);
+});
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  const touch = e.changedTouches[0];
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W/rect.width, scaleY = H/rect.height;
+  const mx = (touch.clientX - rect.left)*scaleX;
+  const my = (touch.clientY - rect.top)*scaleY;
+  const fc = Math.floor(mx/CELL), fr = Math.floor(my/CELL);
+  if (fr<0||fr>=ROWS||fc<0||fc>=COLS) return;
+  if (isOnPath(fr,fc)) return;
+  if (towers.some(t=>t.r===fr&&t.c===fc)) return;
+  const t = TOWER_TYPES[selectedTower];
+  if (gold < t.cost) return;
+  gold -= t.cost;
+  towers.push({ r: fr, c: fc, type: selectedTower, cooldown: 0 });
+  updateHUD();
+  beep(400, 0.1);
+});
+
+function loop() {
+  if (!running) return;
+  frame++;
+
+  // Move enemies
+  for (let i=enemies.length-1;i>=0;i--) {
+    const en = enemies[i];
+    if (en.pathIdx >= PATH.length-1) {
+      enemies.splice(i,1);
+      lives--;
+      updateHUD();
+      beep(150, 0.4, 'sawtooth');
+      if (lives <= 0) { endGame(false); return; }
+      continue;
+    }
+    const target = PATH[en.pathIdx+1];
+    const tx = target.c*CELL+CELL/2, ty = target.r*CELL+CELL/2;
+    const dx = tx-en.px, dy = ty-en.py;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    if (dist < en.speed) { en.pathIdx++; en.px = tx; en.py = ty; }
+    else { en.px += dx/dist*en.speed; en.py += dy/dist*en.speed; }
+  }
+
+  // Towers shoot
+  for (const tw of towers) {
+    tw.cooldown--;
+    if (tw.cooldown > 0) continue;
+    const tt = TOWER_TYPES[tw.type];
+    const tx = tw.c*CELL+CELL/2, ty = tw.r*CELL+CELL/2;
+    let target = null, minDist = Infinity;
+    for (const en of enemies) {
+      const d = Math.sqrt((en.px-tx)**2+(en.py-ty)**2);
+      if (d < tt.range && d < minDist) { minDist=d; target=en; }
+    }
+    if (target) {
+      tw.cooldown = tt.rate;
+      bullets.push({ x:tx, y:ty, tx:target.px, ty:target.py, target, dmg:tt.dmg, color:tt.bullet, type:tw.type });
+      beep(300+tw.type*100, 0.05);
+    }
+  }
+
+  // Move bullets
+  for (let i=bullets.length-1;i>=0;i--) {
+    const b = bullets[i];
+    b.tx = b.target.px; b.ty = b.target.py;
+    const dx=b.tx-b.x, dy=b.ty-b.y, dist=Math.sqrt(dx*dx+dy*dy);
+    const spd = 8;
+    if (dist < spd) {
+      b.target.hp -= b.dmg;
+      if (b.target.hp <= 0) {
+        gold += b.target.reward;
+        const idx = enemies.indexOf(b.target);
+        if (idx >= 0) enemies.splice(idx,1);
+        updateHUD();
+        beep(600, 0.1);
+      }
+      bullets.splice(i,1);
+    } else {
+      b.x += dx/dist*spd; b.y += dy/dist*spd;
+    }
+  }
+
+  // Next wave
+  if (waveActive && enemies.length === 0) {
+    waveActive = false;
+    if (wave >= 10) { endGame(true); return; }
+    setTimeout(spawnWave, 1500);
+  }
+
+  draw();
+  raf = requestAnimationFrame(loop);
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#1a0800';
+  ctx.fillRect(0,0,W,H);
+  // Grid
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+    ctx.strokeStyle = '#330000'; ctx.lineWidth = 0.5;
+    ctx.strokeRect(c*CELL, r*CELL, CELL, CELL);
+  }
+  // Path
+  for (const p of PATH) {
+    ctx.fillStyle = '#3a1a00';
+    ctx.fillRect(p.c*CELL, p.r*CELL, CELL, CELL);
+  }
+  // Towers
+  for (const tw of towers) {
+    const tt = TOWER_TYPES[tw.type];
+    const x = tw.c*CELL, y = tw.r*CELL;
+    ctx.fillStyle = tt.color;
+    ctx.fillRect(x+3, y+3, CELL-6, CELL-6);
+    ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(x+3, y+3, CELL-6, CELL-6);
+    ctx.fillStyle = '#ffff00'; ctx.font = '14px serif';
+    ctx.fillText(['🗼','⚡','💣'][tw.type], x+4, y+22);
+  }
+  // Enemies
+  for (const en of enemies) {
+    ctx.fillStyle = '#ff4444';
+    ctx.beginPath(); ctx.arc(en.px, en.py, 8, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#ffaaaa'; ctx.lineWidth = 1.5; ctx.stroke();
+    // HP bar
+    const bw = 20, bh = 4;
+    ctx.fillStyle = '#440000';
+    ctx.fillRect(en.px-bw/2, en.py-13, bw, bh);
+    ctx.fillStyle = '#00ff44';
+    ctx.fillRect(en.px-bw/2, en.py-13, bw*(en.hp/en.maxHp), bh);
+  }
+  // Bullets
+  for (const b of bullets) {
+    ctx.fillStyle = b.color;
+    ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
+  }
+  // Start/end markers
+  ctx.fillStyle = '#00ff44'; ctx.font = '10px Arial'; ctx.fillText('START', PATH[0].c*CELL, PATH[0].r*CELL+11);
+  ctx.fillStyle = '#ff4444'; ctx.fillText('END', (PATH[PATH.length-1].c)*CELL, PATH[PATH.length-1].r*CELL+11);
+}
+
+function endGame(won) {
+  running = false;
+  cancelAnimationFrame(raf);
+  saveHS(wave);
+  const ov = document.getElementById('overlay');
+  ov.querySelector('h2').textContent = won ? '🏆 Victory!' : '💀 Defeated!';
+  ov.querySelector('p').textContent = won ? 'You survived all 10 waves!' : `Reached wave ${wave}`;
+  document.getElementById('hs-msg').textContent = `Best: Wave ${getHS()}`;
+  ov.style.display = 'flex';
+}
+
+function updateHUD() {
+  document.getElementById('wv').textContent = wave;
+  document.getElementById('lv').textContent = lives;
+  document.getElementById('gld').textContent = gold;
+  document.getElementById('hs').textContent = getHS();
+}
+document.getElementById('hs-msg').textContent = `Best: Wave ${getHS()}`;
+</script>
+</body>
+</html>

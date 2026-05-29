@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Tower Stacker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; overflow: hidden; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+h1 { color: #ffff00; font-size: 22px; margin-bottom: 4px; }
+#hud { color: #ffcccc; font-size: 14px; margin-bottom: 6px; display: flex; gap: 16px; }
+#hud span { color: #ffff00; font-weight: bold; }
+canvas { border: 2px solid #ff6666; border-radius: 8px; cursor: pointer; display: block; }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+#overlay h2 { color: #ffff00; font-size: 26px; }
+#overlay p { color: #ffcccc; font-size: 15px; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+.btn:hover { background: #cc0000; }
+#diff-row { display: flex; gap: 10px; }
+.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
+.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🏗️ Tower Stacker</h1>
+<div id="hud">Score: <span id="sc">0</span> &nbsp; Best: <span id="hs">0</span></div>
+<canvas id="c" width="340" height="480"></canvas>
+<div id="overlay">
+  <h2>🏗️ Tower Stacker</h2>
+  <p>Click/tap to drop the platform!</p>
+  <p id="hs-msg" style="color:#ffff00"></p>
+  <div id="diff-row">
+    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy</button>
+    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard</button>
+  </div>
+  <button class="btn" onclick="startGame()">▶ Play</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 340, H = 480;
+const HS_KEY = 'hs_towerstacker';
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+let diff = 'easy', score = 0, stack = [], moving = {}, dir = 1, running = false, raf;
+const BLOCK_H = 20, COLORS = ['#cc2200','#dd3300','#ee4400','#ff5500','#ff6600','#ff7700','#ff8800','#ff9900','#ffaa00','#ffbb00'];
+
+function beep(freq, dur, type='sine') {
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.connect(g); g.connect(audio.destination);
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.25, audio.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+  o.start(); o.stop(audio.currentTime + dur);
+}
+function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(s) { if (s > getHS()) localStorage.setItem(HS_KEY, s); }
+function setDiff(d) {
+  diff = d;
+  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
+  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  score = 0;
+  const initW = 120;
+  stack = [{ x: W/2 - initW/2, w: initW, y: H - BLOCK_H - 2 }];
+  moving = { x: 0, w: initW, y: H - BLOCK_H * 2 - 6 };
+  dir = 1;
+  running = true;
+  updateHUD();
+  loop();
+}
+
+function getSpeed() { return (diff==='hard' ? 4 : 2.5) + score * 0.15; }
+
+function loop() {
+  if (!running) return;
+  moving.x += dir * getSpeed();
+  if (moving.x + moving.w > W) { moving.x = W - moving.w; dir = -1; }
+  if (moving.x < 0) { moving.x = 0; dir = 1; }
+  draw();
+  raf = requestAnimationFrame(loop);
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  // BG gradient
+  const grd = ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0,'#1a0000'); grd.addColorStop(1,'#2a0000');
+  ctx.fillStyle = grd; ctx.fillRect(0,0,W,H);
+  // Stack
+  for (let i=0;i<stack.length;i++) {
+    const bl = stack[i];
+    ctx.fillStyle = COLORS[i % COLORS.length];
+    ctx.fillRect(bl.x, bl.y, bl.w, BLOCK_H);
+    ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 1;
+    ctx.strokeRect(bl.x, bl.y, bl.w, BLOCK_H);
+  }
+  // Moving
+  ctx.fillStyle = '#ffdd00';
+  ctx.fillRect(moving.x, moving.y, moving.w, BLOCK_H);
+  ctx.strokeStyle = 'white'; ctx.lineWidth = 2;
+  ctx.strokeRect(moving.x, moving.y, moving.w, BLOCK_H);
+}
+
+function drop() {
+  if (!running) return;
+  cancelAnimationFrame(raf);
+  const top = stack[stack.length-1];
+  const left = Math.max(moving.x, top.x);
+  const right = Math.min(moving.x + moving.w, top.x + top.w);
+  const overlap = right - left;
+  if (overlap <= 0) {
+    endGame(); return;
+  }
+  score++;
+  beep(300 + score*15, 0.1);
+  const newBlock = { x: left, w: overlap, y: top.y - BLOCK_H - 2 };
+  stack.push(newBlock);
+  // Scroll stack down
+  for (let b of stack) b.y += BLOCK_H + 2;
+  moving = { x: Math.random() < 0.5 ? -moving.w : W, w: overlap, y: H - BLOCK_H * 2 - 6 };
+  dir = moving.x < 0 ? 1 : -1;
+  if (overlap < 4) { endGame(); return; }
+  updateHUD();
+  running = true;
+  loop();
+}
+
+canvas.addEventListener('click', drop);
+canvas.addEventListener('touchend', e => { e.preventDefault(); drop(); });
+
+function endGame() {
+  running = false;
+  cancelAnimationFrame(raf);
+  saveHS(score);
+  draw();
+  const ov = document.getElementById('overlay');
+  ov.querySelector('h2').textContent = score < 3 ? 'Oops! 😬' : score < 8 ? 'Nice Stack! 🏗️' : 'Amazing! 🏆';
+  ov.querySelector('p').textContent = `Layers: ${score}`;
+  document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+  ov.style.display = 'flex';
+  beep(200, 0.6, 'sawtooth');
+}
+
+function updateHUD() {
+  document.getElementById('sc').textContent = score;
+  document.getElementById('hs').textContent = getHS();
+}
+document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+</script>
+</body>
+</html>

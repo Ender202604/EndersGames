@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Fruit Catcher</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: Arial, sans-serif; touch-action: none; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+h1 { color: #ffff00; font-size: 22px; margin-bottom: 4px; }
+#hud { color: #ffcccc; font-size: 14px; margin-bottom: 6px; display: flex; gap: 16px; }
+#hud span { color: #ffff00; font-weight: bold; }
+canvas { border: 2px solid #ff6666; background: #2a0000; border-radius: 8px; display: block; }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+#overlay h2 { color: #ffff00; font-size: 26px; }
+#overlay p { color: #ffcccc; font-size: 15px; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+.btn:hover { background: #cc0000; }
+#diff-row { display: flex; gap: 10px; }
+.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
+.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🍎 Fruit Catcher</h1>
+<div id="hud">Score: <span id="sc">0</span> &nbsp; Lives: <span id="lv">❤️❤️❤️</span> &nbsp; Best: <span id="hs">0</span></div>
+<canvas id="c" width="400" height="480"></canvas>
+<div id="overlay">
+  <h2>🍎 Fruit Catcher</h2>
+  <p>Catch fruits, avoid bombs!</p>
+  <p id="hs-msg" style="color:#ffff00"></p>
+  <div id="diff-row">
+    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy</button>
+    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard</button>
+  </div>
+  <button class="btn" onclick="startGame()">▶ Play</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 400, H = 480;
+let diff = 'easy', score = 0, lives = 3, items = [], basket = {x: 180, w: 60, y: H-30};
+let speed = 2, frame = 0, raf, running = false;
+const HS_KEY = 'hs_fruitcatcher';
+const FRUITS = ['🍎','🍊','🍋','🍇','🍓','🍑','🫐'];
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+
+function beep(freq, dur, type='sine', vol=0.3) {
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.connect(g); g.connect(audio.destination);
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, audio.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+  o.start(); o.stop(audio.currentTime + dur);
+}
+
+function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(s) { if (s > getHS()) localStorage.setItem(HS_KEY, s); }
+
+function setDiff(d) {
+  diff = d;
+  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
+  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  score = 0; lives = 3; items = []; speed = diff==='hard' ? 3.5 : 2; frame = 0;
+  basket.x = 170;
+  running = true;
+  updateHUD();
+  loop();
+}
+
+function updateHUD() {
+  document.getElementById('sc').textContent = score;
+  document.getElementById('lv').textContent = '❤️'.repeat(lives);
+  document.getElementById('hs').textContent = getHS();
+}
+
+function spawnItem() {
+  const isBomb = Math.random() < (diff==='hard' ? 0.35 : 0.2);
+  items.push({
+    x: Math.random() * (W - 30) + 10,
+    y: -20, s: isBomb ? '💣' : FRUITS[Math.floor(Math.random()*FRUITS.length)],
+    bomb: isBomb, vy: speed + Math.random()
+  });
+}
+
+let keys = {};
+document.addEventListener('keydown', e => keys[e.key] = true);
+document.addEventListener('keyup', e => keys[e.key] = false);
+
+let touchX = null;
+canvas.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width;
+  basket.x = (e.touches[0].clientX - rect.left) * scaleX - basket.w / 2;
+  basket.x = Math.max(0, Math.min(W - basket.w, basket.x));
+}, {passive: false});
+
+function loop() {
+  if (!running) return;
+  frame++;
+  if (keys['ArrowLeft']) basket.x = Math.max(0, basket.x - 6);
+  if (keys['ArrowRight']) basket.x = Math.min(W - basket.w, basket.x + 6);
+
+  // Increase speed over time
+  speed = (diff==='hard' ? 3.5 : 2) + frame / 600;
+
+  // Spawn
+  const spawnRate = diff==='hard' ? 40 : 55;
+  if (frame % spawnRate === 0) spawnItem();
+
+  // Move items
+  for (let i = items.length - 1; i >= 0; i--) {
+    items[i].y += items[i].vy + (speed - (diff==='hard'?3.5:2)) * 0.3;
+    const it = items[i];
+    // Collision
+    if (it.y + 16 > basket.y && it.y < basket.y + 18 && it.x > basket.x - 10 && it.x < basket.x + basket.w + 10) {
+      if (it.bomb) {
+        lives--;
+        beep(100, 0.4, 'sawtooth', 0.5);
+        updateHUD();
+        if (lives <= 0) { endGame(); return; }
+      } else {
+        score += 10;
+        beep(600 + Math.random()*200, 0.15, 'sine', 0.3);
+        updateHUD();
+      }
+      items.splice(i, 1);
+      continue;
+    }
+    if (it.y > H + 20) items.splice(i, 1);
+  }
+
+  // Draw
+  ctx.clearRect(0, 0, W, H);
+  // Items
+  ctx.font = '26px serif';
+  for (const it of items) ctx.fillText(it.s, it.x - 13, it.y);
+  // Basket
+  ctx.fillStyle = '#8B0000';
+  ctx.beginPath();
+  ctx.moveTo(basket.x, basket.y);
+  ctx.lineTo(basket.x + basket.w, basket.y);
+  ctx.lineTo(basket.x + basket.w - 8, basket.y + 18);
+  ctx.lineTo(basket.x + 8, basket.y + 18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#ff6666';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  raf = requestAnimationFrame(loop);
+}
+
+function endGame() {
+  running = false;
+  cancelAnimationFrame(raf);
+  saveHS(score);
+  const ov = document.getElementById('overlay');
+  ov.querySelector('h2').textContent = 'Game Over!';
+  ov.querySelector('p').textContent = `Score: ${score}`;
+  document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+  ov.style.display = 'flex';
+  beep(200, 0.8, 'sawtooth', 0.4);
+}
+
+document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+</script>
+</body>
+</html>

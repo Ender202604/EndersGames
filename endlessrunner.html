@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Endless Runner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; overflow: hidden; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+h1 { color: #ffff00; font-size: 22px; margin-bottom: 4px; }
+#hud { color: #ffcccc; font-size: 14px; margin-bottom: 6px; display: flex; gap: 16px; }
+#hud span { color: #ffff00; font-weight: bold; }
+canvas { border: 2px solid #ff6666; border-radius: 8px; cursor: pointer; display: block; }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+#overlay h2 { color: #ffff00; font-size: 26px; }
+#overlay p { color: #ffcccc; font-size: 15px; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+.btn:hover { background: #cc0000; }
+#diff-row { display: flex; gap: 10px; }
+.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
+.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🏃 Endless Runner</h1>
+<div id="hud">Distance: <span id="sc">0</span>m &nbsp; Best: <span id="hs">0</span>m</div>
+<canvas id="c" width="480" height="240"></canvas>
+<div id="overlay">
+  <h2>🏃 Endless Runner</h2>
+  <p>Click/tap = jump | Double = double jump</p>
+  <p id="hs-msg" style="color:#ffff00"></p>
+  <div id="diff-row">
+    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy</button>
+    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard</button>
+  </div>
+  <button class="btn" onclick="startGame()">▶ Play</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 480, H = 240;
+const HS_KEY = 'hs_endlessrunner';
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+let diff = 'easy';
+let player, obstacles, score, gameSpeed, running, raf, frame, lastTap;
+
+function beep(freq, dur, type='sine') {
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.connect(g); g.connect(audio.destination);
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.2, audio.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+  o.start(); o.stop(audio.currentTime + dur);
+}
+function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(s) { if (s > getHS()) localStorage.setItem(HS_KEY, s); }
+function setDiff(d) {
+  diff = d;
+  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
+  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+}
+
+const GROUND = H - 40;
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  player = { x: 60, y: GROUND - 30, w: 24, h: 30, vy: 0, jumps: 0, ducking: false };
+  obstacles = []; score = 0; frame = 0; lastTap = 0;
+  gameSpeed = diff==='hard' ? 6 : 4;
+  running = true;
+  loop();
+}
+
+function jump() {
+  if (!running) return;
+  if (player.jumps < 2) {
+    player.vy = -11;
+    player.jumps++;
+    beep(500 + player.jumps*100, 0.1);
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code==='Space'||e.code==='ArrowUp') { e.preventDefault(); jump(); }
+  if (e.code==='ArrowDown') player.ducking = true;
+});
+document.addEventListener('keyup', e => { if (e.code==='ArrowDown') player.ducking = false; });
+canvas.addEventListener('click', jump);
+canvas.addEventListener('touchend', e => { e.preventDefault(); jump(); });
+
+function spawnObstacle() {
+  const types = ['spike','spike','beam'];
+  const type = types[Math.floor(Math.random()*types.length)];
+  if (type === 'spike') {
+    const n = 1 + Math.floor(Math.random()*3);
+    obstacles.push({ type:'spike', x: W+20, w: n*18, h: 30 + n*5, y: GROUND });
+  } else {
+    const beamY = GROUND - 50 - Math.random()*20;
+    obstacles.push({ type:'beam', x: W+20, w: 16, h: 28, y: beamY });
+  }
+}
+
+function loop() {
+  if (!running) return;
+  frame++;
+  gameSpeed = (diff==='hard' ? 6 : 4) + frame / 400;
+  score = Math.floor(frame / 10);
+
+  // Spawn
+  const spawnRate = Math.max(60 - frame/80, 35);
+  if (frame % Math.floor(spawnRate) === 0 && (diff==='easy' ? frame > 60 : frame > 30)) spawnObstacle();
+
+  // Player physics
+  player.vy += 0.6;
+  player.y += player.vy;
+  const ph = player.ducking ? 15 : 30;
+  if (player.y + ph >= GROUND) {
+    player.y = GROUND - ph;
+    player.vy = 0;
+    player.jumps = 0;
+  }
+
+  // Move obstacles
+  for (let i = obstacles.length-1; i>=0; i--) {
+    obstacles[i].x -= gameSpeed;
+    if (obstacles[i].x + obstacles[i].w < 0) obstacles.splice(i, 1);
+  }
+
+  // Collision
+  const pw = player.w, ph2 = player.ducking ? 15 : 30;
+  const px1 = player.x+3, px2 = player.x+pw-3, py1 = player.y, py2 = player.y+ph2;
+  for (const ob of obstacles) {
+    const ox1=ob.x+3, ox2=ob.x+ob.w-3;
+    let oy1, oy2;
+    if (ob.type==='spike') { oy1 = ob.y - ob.h; oy2 = ob.y; }
+    else { oy1 = ob.y; oy2 = ob.y + ob.h; }
+    if (px2>ox1&&px1<ox2&&py2>oy1&&py1<oy2) { endGame(); return; }
+  }
+
+  draw();
+  updateHUD();
+  raf = requestAnimationFrame(loop);
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  // Sky
+  ctx.fillStyle = '#1a0000';
+  ctx.fillRect(0,0,W,H);
+  // Stars
+  ctx.fillStyle = '#ff9999';
+  for (let i=0;i<20;i++) {
+    const sx = (i*73+frame*0.3)%W, sy = (i*37)%GROUND*0.6+5;
+    ctx.fillRect(sx,sy,1,1);
+  }
+  // Ground
+  ctx.fillStyle = '#5a0000';
+  ctx.fillRect(0, GROUND, W, H-GROUND);
+  ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0,GROUND); ctx.lineTo(W,GROUND); ctx.stroke();
+
+  // Obstacles
+  for (const ob of obstacles) {
+    if (ob.type === 'spike') {
+      ctx.fillStyle = '#ff4444';
+      const n = Math.round(ob.w/18);
+      for (let i=0;i<n;i++) {
+        ctx.beginPath();
+        ctx.moveTo(ob.x + i*18, ob.y);
+        ctx.lineTo(ob.x + i*18 + 9, ob.y - ob.h/n*1.5);
+        ctx.lineTo(ob.x + i*18 + 18, ob.y);
+        ctx.closePath();
+        ctx.fill();
+      }
+    } else {
+      ctx.fillStyle = '#cc4400';
+      ctx.fillRect(ob.x, ob.y, ob.w, ob.h);
+      ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 1;
+      ctx.strokeRect(ob.x, ob.y, ob.w, ob.h);
+    }
+  }
+
+  // Player (stick figure running)
+  const pw = player.w, ph = player.ducking ? 15 : 30;
+  ctx.fillStyle = '#ffdd00';
+  ctx.fillRect(player.x, player.y, pw, ph);
+  ctx.fillStyle = '#ff9900';
+  ctx.beginPath();
+  ctx.arc(player.x + pw/2, player.y + 5, 5, 0, Math.PI*2);
+  ctx.fill();
+
+  // Distance marker
+  ctx.fillStyle = '#ffcccc';
+  ctx.font = '12px Arial';
+  ctx.fillText(score + 'm', W-50, 20);
+}
+
+function endGame() {
+  running = false;
+  cancelAnimationFrame(raf);
+  saveHS(score);
+  const ov = document.getElementById('overlay');
+  ov.querySelector('h2').textContent = 'Game Over! 💥';
+  ov.querySelector('p').textContent = `Distance: ${score}m`;
+  document.getElementById('hs-msg').textContent = `Best: ${getHS()}m`;
+  ov.style.display = 'flex';
+  beep(150, 0.5, 'sawtooth');
+}
+
+function updateHUD() {
+  document.getElementById('sc').textContent = score;
+  document.getElementById('hs').textContent = getHS();
+}
+document.getElementById('hs-msg').textContent = `Best: ${getHS()}m`;
+</script>
+</body>
+</html>

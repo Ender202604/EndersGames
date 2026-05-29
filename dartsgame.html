@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Darts Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial, sans-serif; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+h1 { color: #ffff00; font-size: 22px; margin-bottom: 4px; }
+#hud { color: #ffcccc; font-size: 14px; margin-bottom: 6px; display: flex; gap: 16px; }
+#hud span { color: #ffff00; font-weight: bold; }
+#board-wrap { position: relative; cursor: crosshair; }
+canvas { border: 2px solid #ff6666; border-radius: 50%; display: block; }
+#info { color: #ffff00; font-size: 16px; margin-top: 8px; text-align: center; min-height: 24px; }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+#overlay h2 { color: #ffff00; font-size: 26px; }
+#overlay p { color: #ffcccc; font-size: 15px; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+.btn:hover { background: #cc0000; }
+#diff-row { display: flex; gap: 10px; }
+.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
+.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🎯 Darts Game</h1>
+<div id="hud">Darts: <span id="darts">10</span> &nbsp; Score: <span id="sc">0</span> &nbsp; Best: <span id="hs">0</span></div>
+<div id="board-wrap">
+  <canvas id="c" width="300" height="300"></canvas>
+</div>
+<div id="info">Click the dartboard when the crosshair aligns!</div>
+<div id="overlay">
+  <h2>🎯 Darts Game</h2>
+  <p>Click/tap when the moving crosshair aligns with where you want to throw!</p>
+  <p id="hs-msg" style="color:#ffff00"></p>
+  <div id="diff-row">
+    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy</button>
+    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard</button>
+  </div>
+  <button class="btn" onclick="startGame()">▶ Play</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const R = 150, CX = R, CY = R;
+const HS_KEY = 'hs_dartsgame';
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+let diff = 'easy';
+let dartsLeft, totalScore, crossX, crossY, angleX, angleY, speedX, speedY, running, raf, darts_thrown;
+let lastScore = 0;
+
+function beep(freq, dur, type='sine') {
+  try {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.connect(g); g.connect(audio.destination);
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.25, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+    o.start(); o.stop(audio.currentTime + dur);
+  } catch(e) {}
+}
+function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(s) { if (s > getHS()) localStorage.setItem(HS_KEY, s); }
+function setDiff(d) {
+  diff = d;
+  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
+  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+}
+
+// Dartboard scoring: distance from center
+function getScore(dx, dy) {
+  const dist = Math.sqrt(dx*dx+dy*dy);
+  if (dist < 10) return 50; // bullseye
+  if (dist < 25) return 25; // outer bull
+  // Sectors: 20 sectors around board
+  const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 360 + 9) % 360;
+  const sector = Math.floor(angle / 18);
+  const ORDER = [6,13,4,18,1,20,5,12,9,14,11,8,16,7,19,3,17,2,15,10];
+  const val = ORDER[sector % 20];
+  if (dist > R - 10) return 0; // miss
+  if (dist < 55) return val * 3; // triple
+  if (dist < 75) return val;
+  if (dist > R - 25 && dist < R - 10) return val * 2; // double
+  return val;
+}
+
+const BOARD_COLORS = ['#cc0000','#f5f5f5','#cc0000','#f5f5f5'];
+const SECTOR_ORDER = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+
+function drawBoard() {
+  ctx.clearRect(0,0,300,300);
+  // Outer border
+  ctx.fillStyle = '#1a0800'; ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2); ctx.fill();
+  // Sectors
+  for (let i=0;i<20;i++) {
+    const a1 = (i*18 - 99) * Math.PI/180;
+    const a2 = ((i+1)*18 - 99) * Math.PI/180;
+    // Wire area
+    ctx.fillStyle = i%2===0 ? '#cc4400' : '#ffddcc';
+    ctx.beginPath(); ctx.moveTo(CX,CY); ctx.arc(CX,CY,R-2,a1,a2); ctx.closePath(); ctx.fill();
+    // Double ring
+    ctx.fillStyle = i%2===0 ? '#006600' : '#cc0000';
+    ctx.beginPath(); ctx.moveTo(CX,CY); ctx.arc(CX,CY,R-10,a1,a2); ctx.closePath(); ctx.fill();
+    // Main sector
+    ctx.fillStyle = i%2===0 ? '#1a1a00' : '#ffe8cc';
+    ctx.beginPath(); ctx.moveTo(CX,CY); ctx.arc(CX,CY,R-25,a1,a2); ctx.closePath(); ctx.fill();
+    // Triple ring
+    ctx.fillStyle = i%2===0 ? '#006600' : '#cc0000';
+    ctx.beginPath(); ctx.moveTo(CX,CY); ctx.arc(CX,CY,56,a1,a2); ctx.closePath(); ctx.fill();
+    // Inner sector
+    ctx.fillStyle = i%2===0 ? '#1a1a00' : '#ffe8cc';
+    ctx.beginPath(); ctx.moveTo(CX,CY); ctx.arc(CX,CY,40,a1,a2); ctx.closePath(); ctx.fill();
+    // Number
+    const na = (i*18 - 90) * Math.PI/180;
+    const nx = CX + (R-15)*Math.cos(na), ny = CY + (R-15)*Math.sin(na);
+    ctx.fillStyle = 'white'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(SECTOR_ORDER[i], nx, ny);
+  }
+  // Bull rings
+  ctx.fillStyle = '#006600';
+  ctx.beginPath(); ctx.arc(CX,CY,25,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#cc0000';
+  ctx.beginPath(); ctx.arc(CX,CY,10,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'white'; ctx.font = 'bold 8px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('50', CX, CY);
+}
+
+let dartHoles = [];
+
+function drawCrosshair() {
+  const x = CX + crossX, y = CY + crossY;
+  ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x-15,y); ctx.lineTo(x+15,y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x,y-15); ctx.lineTo(x,y+15); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.stroke();
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  dartsLeft = 10; totalScore = 0; darts_thrown = 0; dartHoles = [];
+  const spd = diff==='hard' ? 3.5 : 2;
+  crossX = 0; crossY = 0;
+  angleX = Math.random()*Math.PI*2; angleY = Math.random()*Math.PI*2;
+  speedX = spd * (0.8+Math.random()*0.4);
+  speedY = spd * (0.8+Math.random()*0.4) * (diff==='hard' ? 1.3 : 1);
+  running = true;
+  updateHUD();
+  raf = requestAnimationFrame(loop);
+}
+
+function loop() {
+  if (!running) return;
+  angleX += speedX * 0.03;
+  angleY += speedY * 0.025;
+  crossX = Math.sin(angleX) * (R * 0.85);
+  crossY = Math.cos(angleY) * (R * 0.85);
+  drawBoard();
+  // Draw dart holes
+  for (const h of dartHoles) {
+    ctx.fillStyle = '#ffaaaa'; ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(CX+h.x, CY+h.y, 3, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  }
+  drawCrosshair();
+  raf = requestAnimationFrame(loop);
+}
+
+canvas.addEventListener('click', throwDart);
+canvas.addEventListener('touchend', e => { e.preventDefault(); throwDart(); });
+
+function throwDart() {
+  if (!running) return;
+  const dx = crossX, dy = crossY;
+  const pts = getScore(dx, dy);
+  totalScore += pts;
+  darts_thrown++;
+  lastScore = pts;
+  dartHoles.push({x: dx, y: dy});
+  dartsLeft--;
+  let msg = '';
+  if (pts === 50) { msg = 'BULLSEYE! 🎯 +50'; beep(900, 0.3); }
+  else if (pts === 25) { msg = 'Outer Bull! +25'; beep(750, 0.2); }
+  else if (pts === 0) { msg = 'Miss! 😬'; beep(150, 0.3, 'sawtooth'); }
+  else if (pts > 40) { msg = `TRIPLE ${pts/3}! Triple! +${pts}`; beep(700, 0.2); }
+  else { msg = `Scored ${pts} points!`; beep(400+pts*2, 0.15); }
+  document.getElementById('info').textContent = msg;
+  updateHUD();
+  if (dartsLeft <= 0) {
+    setTimeout(endGame, 800);
+  }
+}
+
+function endGame() {
+  running = false;
+  cancelAnimationFrame(raf);
+  saveHS(totalScore);
+  const ov = document.getElementById('overlay');
+  ov.querySelector('h2').textContent = '🎯 Game Over!';
+  ov.querySelector('p').textContent = `Final Score: ${totalScore} (avg: ${(totalScore/10).toFixed(1)}/dart)`;
+  document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+  ov.style.display = 'flex';
+}
+
+function updateHUD() {
+  document.getElementById('darts').textContent = dartsLeft;
+  document.getElementById('sc').textContent = totalScore;
+  document.getElementById('hs').textContent = getHS();
+}
+document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+</script>
+</body>
+</html>

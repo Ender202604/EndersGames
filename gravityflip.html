@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Gravity Flip</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; overflow: hidden; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+h1 { color: #ffff00; font-size: 22px; margin-bottom: 4px; }
+#hud { color: #ffcccc; font-size: 14px; margin-bottom: 6px; display: flex; gap: 16px; }
+#hud span { color: #ffff00; font-weight: bold; }
+canvas { border: 2px solid #ff6666; border-radius: 8px; cursor: pointer; display: block; }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+#overlay h2 { color: #ffff00; font-size: 26px; }
+#overlay p { color: #ffcccc; font-size: 15px; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+.btn:hover { background: #cc0000; }
+#diff-row { display: flex; gap: 10px; }
+.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
+.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>💫 Gravity Flip</h1>
+<div id="hud">Distance: <span id="sc">0</span>m &nbsp; Best: <span id="hs">0</span>m</div>
+<canvas id="c" width="480" height="280"></canvas>
+<div id="overlay">
+  <h2>💫 Gravity Flip</h2>
+  <p>Click/tap to flip gravity! Avoid spikes on ceiling and floor!</p>
+  <p id="hs-msg" style="color:#ffff00"></p>
+  <div id="diff-row">
+    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy</button>
+    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard</button>
+  </div>
+  <button class="btn" onclick="startGame()">▶ Play</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 480, H = 280;
+const HS_KEY = 'hs_gravityflip';
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+let diff = 'easy';
+let player, spikes, score, gameSpeed, running, raf, frame, gravDir;
+const SPIKE_H = 20;
+
+function beep(freq, dur, type='sine') {
+  try {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.connect(g); g.connect(audio.destination);
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.25, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+    o.start(); o.stop(audio.currentTime + dur);
+  } catch(e) {}
+}
+function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(s) { if (s > getHS()) localStorage.setItem(HS_KEY, s); }
+function setDiff(d) {
+  diff = d;
+  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
+  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  player = { x: 60, y: H/2, w: 20, h: 20, vy: 0 };
+  spikes = []; score = 0; frame = 0; gravDir = 1;
+  gameSpeed = diff==='hard' ? 5 : 3.5;
+  running = true;
+  updateHUD();
+  raf = requestAnimationFrame(loop);
+}
+
+function flipGravity() {
+  if (!running) return;
+  gravDir *= -1;
+  player.vy = gravDir * -6;
+  beep(400 + (gravDir===1?0:200), 0.1);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code==='Space'||e.code==='ArrowUp'||e.code==='ArrowDown') { e.preventDefault(); flipGravity(); }
+});
+canvas.addEventListener('click', flipGravity);
+canvas.addEventListener('touchend', e => { e.preventDefault(); flipGravity(); });
+
+function spawnSpike(side) {
+  // side: 0=floor, 1=ceiling, 2=both
+  const gap = diff==='hard' ? 100 + Math.random()*80 : 120 + Math.random()*100;
+  const x = W + Math.random()*30;
+  if (side === 0 || side === 2) {
+    spikes.push({ x, type: 'floor', w: 18 + Math.random()*14 });
+  }
+  if (side === 1 || side === 2) {
+    spikes.push({ x: x + (side===2 ? 0 : 0), type: 'ceil', w: 18 + Math.random()*14 });
+  }
+}
+
+function loop() {
+  if (!running) return;
+  frame++;
+  gameSpeed = (diff==='hard' ? 5 : 3.5) + frame / 500;
+  score = Math.floor(frame / 8);
+
+  // Spawn
+  const spawnRate = diff==='hard' ? 80 : 110;
+  if (frame % spawnRate === 0 && frame > 60) {
+    const r = Math.random();
+    spawnSpike(r < 0.35 ? 0 : r < 0.7 ? 1 : 2);
+  }
+
+  // Physics
+  const GRAV = 0.55;
+  player.vy += gravDir * GRAV;
+  player.y += player.vy;
+
+  // Clamp
+  if (player.y + player.h >= H) {
+    player.y = H - player.h;
+    player.vy = 0;
+  }
+  if (player.y <= 0) {
+    player.y = 0;
+    player.vy = 0;
+  }
+
+  // Move spikes
+  for (let i=spikes.length-1;i>=0;i--) {
+    spikes[i].x -= gameSpeed;
+    if (spikes[i].x + spikes[i].w < 0) { spikes.splice(i,1); continue; }
+    // Collision
+    const sp = spikes[i];
+    const sx = sp.x, sw = sp.w;
+    const px1=player.x+2,px2=player.x+player.w-2,py1=player.y+2,py2=player.y+player.h-2;
+    let sy1, sy2;
+    if (sp.type==='floor') { sy1 = H-SPIKE_H; sy2 = H; }
+    else { sy1 = 0; sy2 = SPIKE_H; }
+    if (px2>sx&&px1<sx+sw&&py2>sy1&&py1<sy2) { endGame(); return; }
+  }
+
+  draw();
+  updateHUD();
+  raf = requestAnimationFrame(loop);
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  // Background
+  const grd = ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0,'#200030'); grd.addColorStop(1,'#1a0000');
+  ctx.fillStyle=grd; ctx.fillRect(0,0,W,H);
+  // Moving bg lines
+  ctx.strokeStyle = 'rgba(100,0,50,0.3)'; ctx.lineWidth=1;
+  for (let i=0;i<8;i++) {
+    const lx = (W - (frame*gameSpeed*0.3 + i*W/8) % W);
+    ctx.beginPath(); ctx.moveTo(lx,0); ctx.lineTo(lx,H); ctx.stroke();
+  }
+  // Spikes
+  for (const sp of spikes) {
+    const n = Math.max(1, Math.floor(sp.w/12));
+    for (let i=0;i<n;i++) {
+      ctx.fillStyle = '#ff2222';
+      ctx.beginPath();
+      if (sp.type==='floor') {
+        ctx.moveTo(sp.x+i*12, H);
+        ctx.lineTo(sp.x+i*12+6, H-SPIKE_H);
+        ctx.lineTo(sp.x+i*12+12, H);
+      } else {
+        ctx.moveTo(sp.x+i*12, 0);
+        ctx.lineTo(sp.x+i*12+6, SPIKE_H);
+        ctx.lineTo(sp.x+i*12+12, 0);
+      }
+      ctx.closePath(); ctx.fill();
+    }
+  }
+  // Floor/ceiling
+  ctx.fillStyle = '#5a0000';
+  ctx.fillRect(0, H-4, W, 4);
+  ctx.fillRect(0, 0, W, 4);
+
+  // Player
+  const px = player.x, py = player.y, pw = player.w, ph = player.h;
+  // Body
+  ctx.fillStyle = gravDir===1 ? '#ffdd00' : '#00ddff';
+  ctx.fillRect(px, py, pw, ph);
+  // Arrow showing gravity dir
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath();
+  if (gravDir===1) { // pointing down
+    ctx.moveTo(px+pw/2-4, py+6); ctx.lineTo(px+pw/2+4, py+6);
+    ctx.lineTo(px+pw/2, py+ph-4); ctx.closePath();
+  } else {
+    ctx.moveTo(px+pw/2-4, py+ph-6); ctx.lineTo(px+pw/2+4, py+ph-6);
+    ctx.lineTo(px+pw/2, py+4); ctx.closePath();
+  }
+  ctx.fill();
+}
+
+function endGame() {
+  running = false;
+  cancelAnimationFrame(raf);
+  saveHS(score);
+  const ov = document.getElementById('overlay');
+  ov.querySelector('h2').textContent = 'Spiked! 💥';
+  ov.querySelector('p').textContent = `Distance: ${score}m`;
+  document.getElementById('hs-msg').textContent = `Best: ${getHS()}m`;
+  ov.style.display = 'flex';
+  beep(150, 0.5, 'sawtooth');
+}
+
+function updateHUD() {
+  document.getElementById('sc').textContent = score;
+  document.getElementById('hs').textContent = getHS();
+}
+document.getElementById('hs-msg').textContent = `Best: ${getHS()}m`;
+</script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Color Flood</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial, sans-serif; padding: 10px; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+h1 { color: #ffff00; font-size: 22px; margin-bottom: 4px; }
+#hud { color: #ffcccc; font-size: 14px; margin-bottom: 8px; display: flex; gap: 16px; }
+#hud span { color: #ffff00; font-weight: bold; }
+#grid-wrap { border: 2px solid #ff6666; border-radius: 8px; overflow: hidden; display: inline-block; }
+#color-btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+.color-btn { width: 44px; height: 44px; border-radius: 8px; border: 3px solid transparent; cursor: pointer; transition: transform 0.1s; }
+.color-btn:active { transform: scale(0.9); }
+.color-btn.selected { border-color: white; transform: scale(1.1); }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+#overlay h2 { color: #ffff00; font-size: 26px; }
+#overlay p { color: #ffcccc; font-size: 15px; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+.btn:hover { background: #cc0000; }
+#diff-row { display: flex; gap: 10px; }
+.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
+.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🌊 Color Flood</h1>
+<div id="hud">Moves: <span id="mv">0</span>/<span id="maxmv">30</span> &nbsp; Score: <span id="sc">0</span> &nbsp; Best: <span id="hs">0</span></div>
+<div id="grid-wrap"><canvas id="c"></canvas></div>
+<div id="color-btns"></div>
+<div id="overlay">
+  <h2>🌊 Color Flood</h2>
+  <p>Flood the entire grid with one color!</p>
+  <p id="hs-msg" style="color:#ffff00"></p>
+  <div id="diff-row">
+    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy (8x8, 30)</button>
+    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard (6x6, 20)</button>
+  </div>
+  <button class="btn" onclick="startGame()">▶ Play</button>
+</div>
+<script>
+const COLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c'];
+const HS_KEY = 'hs_colorflood';
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+let diff = 'easy', grid = [], SIZE = 8, MAX_MOVES = 30, moves = 0, score = 0;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function beep(freq, dur) {
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.connect(g); g.connect(audio.destination);
+  o.frequency.value = freq; o.type = 'sine';
+  g.gain.setValueAtTime(0.25, audio.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+  o.start(); o.stop(audio.currentTime + dur);
+}
+function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(s) { if (s > getHS()) localStorage.setItem(HS_KEY, s); }
+
+function setDiff(d) {
+  diff = d;
+  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
+  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+}
+
+function startGame() {
+  SIZE = diff==='hard' ? 6 : 8;
+  MAX_MOVES = diff==='hard' ? 20 : 30;
+  const CELL = Math.min(320/SIZE, 52);
+  canvas.width = SIZE*CELL; canvas.height = SIZE*CELL;
+  grid = [];
+  for (let r=0;r<SIZE;r++) { grid[r]=[]; for (let c=0;c<SIZE;c++) grid[r][c]=Math.floor(Math.random()*6); }
+  moves = 0; score = 0;
+  document.getElementById('maxmv').textContent = MAX_MOVES;
+  document.getElementById('overlay').style.display = 'none';
+  buildColorBtns();
+  drawGrid();
+  updateHUD();
+}
+
+function buildColorBtns() {
+  const div = document.getElementById('color-btns');
+  div.innerHTML = '';
+  COLORS.forEach((c,i) => {
+    const btn = document.createElement('button');
+    btn.className = 'color-btn';
+    btn.style.background = c;
+    btn.onclick = () => doFlood(i);
+    div.appendChild(btn);
+  });
+}
+
+function drawGrid() {
+  const CELL = canvas.width / SIZE;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) {
+    ctx.fillStyle = COLORS[grid[r][c]];
+    ctx.fillRect(c*CELL, r*CELL, CELL-1, CELL-1);
+  }
+  // highlight top-left
+  ctx.strokeStyle = 'white'; ctx.lineWidth = 3;
+  ctx.strokeRect(1, 1, CELL-3, CELL-3);
+}
+
+function flood(target, replacement, r, c, visited) {
+  if (r<0||r>=SIZE||c<0||c>=SIZE||visited[r][c]||grid[r][c]!==target) return;
+  visited[r][c] = true;
+  grid[r][c] = replacement;
+  flood(target, replacement, r+1, c, visited);
+  flood(target, replacement, r-1, c, visited);
+  flood(target, replacement, r, c+1, visited);
+  flood(target, replacement, r, c-1, visited);
+}
+
+function doFlood(colorIdx) {
+  if (moves >= MAX_MOVES) return;
+  const cur = grid[0][0];
+  if (cur === colorIdx) return;
+  const visited = Array.from({length:SIZE}, ()=>new Array(SIZE).fill(false));
+  flood(cur, colorIdx, 0, 0, visited);
+  moves++;
+  beep(400 + colorIdx*80, 0.1);
+  drawGrid();
+  updateHUD();
+  checkWin();
+}
+
+function allSame() {
+  const c = grid[0][0];
+  return grid.every(r => r.every(v => v === c));
+}
+
+function checkWin() {
+  if (allSame()) {
+    score = MAX_MOVES - moves + 1;
+    saveHS(score);
+    setTimeout(() => showEnd('You Win! 🎉', score), 200);
+  } else if (moves >= MAX_MOVES) {
+    setTimeout(() => showEnd('Out of Moves!', 0), 200);
+  }
+}
+
+function showEnd(msg, sc) {
+  const ov = document.getElementById('overlay');
+  ov.querySelector('h2').textContent = msg;
+  ov.querySelector('p').textContent = `Score: ${sc} (moves left × 1)`;
+  document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+  ov.style.display = 'flex';
+}
+
+function updateHUD() {
+  document.getElementById('mv').textContent = moves;
+  document.getElementById('sc').textContent = score;
+  document.getElementById('hs').textContent = getHS();
+}
+
+document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+</script>
+</body>
+</html>

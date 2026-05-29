@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Cookie Clicker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial, sans-serif; padding: 8px; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+h1 { color: #ffff00; font-size: 22px; margin-bottom: 4px; }
+#stats { color: #ffcccc; font-size: 13px; margin-bottom: 8px; text-align: center; }
+#stats .big { color: #ffff00; font-size: 20px; font-weight: bold; }
+#game { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+#cookie-area { display: flex; flex-direction: column; align-items: center; }
+#cookie { font-size: 100px; cursor: pointer; user-select: none; -webkit-user-select: none;
+  transition: transform 0.08s; display: block; line-height: 1; }
+#cookie:active { transform: scale(0.9); }
+#cps { color: #ffcccc; font-size: 13px; margin-top: 4px; }
+#shop { background: darkred; border: 2px solid #ff6666; border-radius: 10px; padding: 10px; min-width: 220px; }
+#shop h3 { color: #ffff00; font-size: 14px; margin-bottom: 8px; }
+.upgrade { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: pointer;
+  background: #2a0000; border: 1.5px solid #ff6666; border-radius: 6px; padding: 6px 8px; }
+.upgrade:hover { background: #3a0000; border-color: yellow; }
+.upgrade.disabled { opacity: 0.4; cursor: default; }
+.up-icon { font-size: 24px; }
+.up-info { flex: 1; }
+.up-name { color: #ffff00; font-size: 13px; font-weight: bold; }
+.up-desc { color: #ffcccc; font-size: 11px; }
+.up-cost { color: #ffff00; font-size: 12px; font-weight: bold; }
+.up-owned { color: #ffaaaa; font-size: 11px; }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+#overlay h2 { color: #ffff00; font-size: 26px; }
+#overlay p { color: #ffcccc; font-size: 15px; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+.btn:hover { background: #cc0000; }
+#diff-row { display: flex; gap: 10px; }
+.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
+.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+.float-txt { position: fixed; pointer-events: none; color: #ffff00; font-size: 18px; font-weight: bold; transition: none; z-index: 50; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🍪 Cookie Clicker</h1>
+<div id="stats">
+  <div class="big" id="total-disp">0 cookies</div>
+  <div id="cps-disp">0 per second | Best CPS: <span id="hs-disp">0</span></div>
+</div>
+<div id="game">
+  <div id="cookie-area">
+    <span id="cookie">🍪</span>
+    <div id="cps">Click the cookie!</div>
+  </div>
+  <div id="shop">
+    <h3>🛒 Shop</h3>
+    <div id="upgrades"></div>
+  </div>
+</div>
+<div id="overlay">
+  <h2>🍪 Cookie Clicker</h2>
+  <p>Click the cookie to earn cookies! Buy upgrades to earn more!</p>
+  <p id="hs-msg" style="color:#ffff00"></p>
+  <div id="diff-row">
+    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy</button>
+    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard (2x cost)</button>
+  </div>
+  <button class="btn" onclick="startGame()">▶ Play</button>
+</div>
+<script>
+const HS_KEY = 'hs_cookieclicker';
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+let diff = 'easy', cookies = 0, cps = 0, bestCPS = 0, gameInterval, running = false;
+
+const BASE_UPGRADES = [
+  { name:'Cursor', icon:'👆', desc:'Auto-clicks for you', baseCost:15, baseCPS:0.1, owned:0 },
+  { name:'Grandma', icon:'👵', desc:'Bakes more cookies', baseCost:100, baseCPS:0.5, owned:0 },
+  { name:'Farm', icon:'🌾', desc:'Grows cookie plants', baseCost:500, baseCPS:2, owned:0 },
+  { name:'Factory', icon:'🏭', desc:'Mass produces cookies', baseCost:2000, baseCPS:8, owned:0 }
+];
+let upgrades;
+
+function beep(freq, dur) {
+  try {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.connect(g); g.connect(audio.destination);
+    o.frequency.value = freq; o.type = 'sine';
+    g.gain.setValueAtTime(0.15, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+    o.start(); o.stop(audio.currentTime + dur);
+  } catch(e) {}
+}
+
+function getHS() { return parseFloat(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(v) { if (v > getHS()) localStorage.setItem(HS_KEY, v.toFixed(1)); }
+
+function setDiff(d) {
+  diff = d;
+  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
+  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+}
+
+function getCost(up) {
+  const base = up.baseCost * (diff==='hard' ? 2 : 1);
+  return Math.floor(base * Math.pow(1.15, up.owned));
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  cookies = 0; cps = 0; bestCPS = 0;
+  upgrades = BASE_UPGRADES.map(u => ({...u, owned: 0}));
+  running = true;
+  renderShop();
+  clearInterval(gameInterval);
+  gameInterval = setInterval(tick, 100);
+  updateStats();
+}
+
+function tick() {
+  cookies += cps / 10;
+  updateStats();
+  if (cps > bestCPS) {
+    bestCPS = cps;
+    saveHS(bestCPS);
+  }
+}
+
+document.getElementById('cookie').addEventListener('click', clickCookie);
+document.getElementById('cookie').addEventListener('touchend', e => { e.preventDefault(); clickCookie(e.changedTouches[0]); });
+
+function clickCookie(e) {
+  if (!running) return;
+  const gain = 1 + Math.floor(cps * 0.1);
+  cookies += gain;
+  beep(500 + Math.random()*200, 0.05);
+  updateStats();
+  renderShop();
+  // Float text
+  if (e) {
+    const el = document.createElement('div');
+    el.className = 'float-txt';
+    el.textContent = '+' + gain;
+    el.style.left = (e.clientX||200) + 'px';
+    el.style.top = (e.clientY||200) + 'px';
+    document.body.appendChild(el);
+    let y = parseFloat(el.style.top), op = 1;
+    const anim = setInterval(() => {
+      y -= 2; op -= 0.05;
+      el.style.top = y + 'px';
+      el.style.opacity = op;
+      if (op <= 0) { clearInterval(anim); el.remove(); }
+    }, 30);
+  }
+}
+
+function buyUpgrade(i) {
+  if (!running) return;
+  const up = upgrades[i];
+  const cost = getCost(up);
+  if (cookies < cost) return;
+  cookies -= cost;
+  up.owned++;
+  recalcCPS();
+  beep(600, 0.15);
+  updateStats();
+  renderShop();
+}
+
+function recalcCPS() {
+  cps = upgrades.reduce((s,u) => s + u.baseCPS * u.owned, 0);
+}
+
+function renderShop() {
+  const div = document.getElementById('upgrades');
+  div.innerHTML = '';
+  upgrades.forEach((up, i) => {
+    const cost = getCost(up);
+    const canAfford = cookies >= cost;
+    const el = document.createElement('div');
+    el.className = 'upgrade' + (canAfford ? '' : ' disabled');
+    el.innerHTML = `
+      <div class="up-icon">${up.icon}</div>
+      <div class="up-info">
+        <div class="up-name">${up.name}</div>
+        <div class="up-desc">${up.desc}</div>
+        <div class="up-cost">💰 ${fmtNum(cost)}</div>
+      </div>
+      <div class="up-owned">×${up.owned}</div>`;
+    if (canAfford) el.onclick = () => buyUpgrade(i);
+    div.appendChild(el);
+  });
+}
+
+function fmtNum(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(1)+'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return Math.floor(n).toString();
+}
+
+function updateStats() {
+  document.getElementById('total-disp').textContent = fmtNum(cookies) + ' cookies';
+  document.getElementById('cps-disp').innerHTML = `${cps.toFixed(1)}/sec | Best: <span id="hs-disp">${getHS()}</span>/sec`;
+  document.getElementById('hs').textContent = getHS();
+}
+
+document.getElementById('hs-msg').textContent = `Best: ${getHS()}/sec`;
+</script>
+</body>
+</html>

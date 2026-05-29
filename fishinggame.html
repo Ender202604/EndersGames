@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Fishing Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial, sans-serif; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+h1 { color: #ffff00; font-size: 22px; margin-bottom: 4px; }
+#hud { color: #ffcccc; font-size: 14px; margin-bottom: 6px; display: flex; gap: 16px; }
+#hud span { color: #ffff00; font-weight: bold; }
+canvas { border: 2px solid #ff6666; border-radius: 8px; cursor: pointer; display: block; }
+#msg { color: #ffff00; font-size: 18px; height: 28px; margin-top: 6px; text-align: center; }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+#overlay h2 { color: #ffff00; font-size: 26px; }
+#overlay p { color: #ffcccc; font-size: 15px; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+.btn:hover { background: #cc0000; }
+#diff-row { display: flex; gap: 10px; }
+.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
+.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🎣 Fishing Game</h1>
+<div id="hud">Score: <span id="sc">0</span> &nbsp; Time: <span id="tm">60</span>s &nbsp; Best: <span id="hs">0</span></div>
+<canvas id="c" width="360" height="320"></canvas>
+<div id="msg">Click to cast your line!</div>
+<div id="overlay">
+  <h2>🎣 Fishing Game</h2>
+  <p>Cast → wait for bite → click at the right moment!</p>
+  <p id="hs-msg" style="color:#ffff00"></p>
+  <div id="diff-row">
+    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy</button>
+    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard</button>
+  </div>
+  <button class="btn" onclick="startGame()">▶ Play</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 360, H = 320;
+const HS_KEY = 'hs_fishinggame';
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+let diff = 'easy';
+let state, score, timeLeft, timer, indicator, indicatorDir, biteZone, lineY, nibbleTimer, raf, running;
+const FISH = [
+  { name:'Minnow', pts:5, emoji:'🐟', color:'#88ccff' },
+  { name:'Bass', pts:15, emoji:'🐠', color:'#ff8844' },
+  { name:'Tuna', pts:25, emoji:'🐡', color:'#ffcc44' },
+  { name:'Swordfish', pts:50, emoji:'⚔️', color:'#ff4444' }
+];
+
+function beep(freq, dur, type='sine') {
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.connect(g); g.connect(audio.destination);
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.25, audio.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+  o.start(); o.stop(audio.currentTime + dur);
+}
+function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(s) { if (s > getHS()) localStorage.setItem(HS_KEY, s); }
+function setDiff(d) {
+  diff = d;
+  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
+  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+}
+
+// States: 'idle', 'casting', 'waiting', 'biting', 'reeling'
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  score = 0; timeLeft = 60; state = 'idle'; indicator = 0; indicatorDir = 1;
+  lineY = 0; running = true;
+  updateHUD();
+  timer = setInterval(() => {
+    timeLeft--;
+    updateHUD();
+    if (timeLeft <= 0) endGame();
+  }, 1000);
+  raf = requestAnimationFrame(gameLoop);
+}
+
+canvas.addEventListener('click', handleClick);
+canvas.addEventListener('touchend', e => { e.preventDefault(); handleClick(); });
+
+function handleClick() {
+  if (!running) return;
+  if (state === 'idle') {
+    // Cast line
+    state = 'casting';
+    lineY = 100;
+    setMsg('Line cast! Waiting for a bite...');
+    beep(300, 0.2);
+    nibbleTimer = setTimeout(() => {
+      state = 'biting';
+      indicator = 50;
+      biteZone = { min: diff==='hard' ? 38 : 30, max: diff==='hard' ? 62 : 70 };
+      setMsg('🎣 BITE! Click now!');
+      beep(800, 0.3, 'square');
+    }, 1500 + Math.random() * 2500);
+  } else if (state === 'biting') {
+    // Check indicator
+    const inZone = indicator >= biteZone.min && indicator <= biteZone.max;
+    clearTimeout(nibbleTimer);
+    if (inZone) {
+      const fish = FISH[Math.floor(Math.random()*FISH.length)];
+      score += fish.pts;
+      setMsg(`Caught ${fish.emoji} ${fish.name}! +${fish.pts} pts!`);
+      beep(600, 0.3); setTimeout(() => beep(800, 0.2), 150);
+    } else {
+      setMsg('Too early/late! Fish got away! 😢');
+      beep(200, 0.4, 'sawtooth');
+    }
+    state = 'reeling';
+    updateHUD();
+    setTimeout(() => { state = 'idle'; setMsg('Click to cast your line!'); lineY = 0; }, 1500);
+  }
+}
+
+function gameLoop() {
+  if (!running) return;
+  if (state === 'biting') {
+    indicator += indicatorDir * (diff==='hard' ? 3.5 : 2.5);
+    if (indicator >= 100 || indicator <= 0) {
+      indicatorDir *= -1;
+      indicator = Math.max(0, Math.min(100, indicator));
+      if (state === 'biting' && indicator <= 0) {
+        // Missed
+        clearTimeout(nibbleTimer);
+        state = 'idle'; setMsg('The fish escaped! Click to cast again.');
+        beep(200, 0.4, 'sawtooth');
+      }
+    }
+  }
+  draw();
+  raf = requestAnimationFrame(gameLoop);
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  // Water
+  ctx.fillStyle = '#001440';
+  ctx.fillRect(0, 100, W, H-100);
+  // Water shimmer
+  ctx.strokeStyle = 'rgba(0,120,255,0.3)'; ctx.lineWidth = 1;
+  for (let i=0;i<5;i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, 110+i*20 + Math.sin(Date.now()/1000+i)*3);
+    ctx.lineTo(W, 115+i*20 + Math.cos(Date.now()/1000+i)*3);
+    ctx.stroke();
+  }
+  // Shore/ground
+  ctx.fillStyle = '#3a1a00';
+  ctx.fillRect(0, 0, W, 100);
+  // Dock
+  ctx.fillStyle = '#4a2000';
+  ctx.fillRect(120, 70, 80, 30);
+  ctx.fillStyle = '#5a3000';
+  ctx.fillRect(115, 65, 90, 10);
+  // Fisherman
+  ctx.fillStyle = '#ffaa44';
+  ctx.beginPath(); ctx.arc(200, 55, 12, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#cc4400';
+  ctx.fillRect(188, 67, 24, 25);
+  // Rod
+  ctx.strokeStyle = '#aa6600'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(200, 50); ctx.lineTo(240, 30); ctx.stroke();
+  // Line
+  if (state !== 'idle') {
+    ctx.strokeStyle = '#aaaaff'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(240, 30); ctx.lineTo(240, lineY + 90); ctx.stroke();
+    // Hook
+    ctx.strokeStyle = '#cccccc'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(240, lineY + 100, 5, 0, Math.PI*2); ctx.stroke();
+    // Fish bubbles
+    if (state === 'waiting') {
+      ctx.fillStyle = 'rgba(150,200,255,0.6)';
+      for (let i=0;i<3;i++) {
+        ctx.beginPath();
+        ctx.arc(230+i*8, 170 + Math.sin(Date.now()/500+i)*5, 3, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+  }
+  // Indicator bar (when biting)
+  if (state === 'biting') {
+    const barX = 20, barY = H-50, barW = W-40, barH = 24;
+    ctx.fillStyle = '#330000'; ctx.fillRect(barX, barY, barW, barH);
+    ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 2; ctx.strokeRect(barX, barY, barW, barH);
+    // Zone
+    const zx = barX + biteZone.min/100*barW;
+    const zw = (biteZone.max - biteZone.min)/100*barW;
+    ctx.fillStyle = '#00cc44'; ctx.fillRect(zx, barY, zw, barH);
+    // Indicator
+    const ix = barX + indicator/100*barW;
+    ctx.fillStyle = '#ffff00';
+    ctx.fillRect(ix-3, barY-3, 6, barH+6);
+    ctx.fillStyle = '#ffff00'; ctx.font = '11px Arial'; ctx.fillText('CATCH ZONE', barX+5, barY+16);
+  }
+  // Fish underwater (decorative)
+  ctx.font = '20px serif';
+  const fishEmojis = ['🐟','🐠','🦈'];
+  for (let i=0;i<3;i++) {
+    const fx = (i*150 + (Date.now()/20*(i%2?1:-1))) % (W+60) - 30;
+    ctx.fillText(fishEmojis[i], fx, 160 + Math.sin(Date.now()/800+i)*15);
+  }
+}
+
+function setMsg(t) { document.getElementById('msg').textContent = t; }
+
+function endGame() {
+  running = false;
+  clearInterval(timer);
+  cancelAnimationFrame(raf);
+  clearTimeout(nibbleTimer);
+  saveHS(score);
+  const ov = document.getElementById('overlay');
+  ov.querySelector('h2').textContent = "Time's Up! 🎣";
+  ov.querySelector('p').textContent = `Score: ${score} pts`;
+  document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+  ov.style.display = 'flex';
+}
+
+function updateHUD() {
+  document.getElementById('sc').textContent = score;
+  document.getElementById('tm').textContent = timeLeft;
+  document.getElementById('hs').textContent = getHS();
+}
+document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+</script>
+</body>
+</html>

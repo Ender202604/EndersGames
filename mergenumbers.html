@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Merge Numbers</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial, sans-serif; padding: 10px; touch-action: none; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+h1 { color: #ffff00; font-size: 22px; margin-bottom: 4px; }
+#hud { color: #ffcccc; font-size: 14px; margin-bottom: 8px; display: flex; gap: 16px; }
+#hud span { color: #ffff00; font-weight: bold; }
+#board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; background: darkred; border: 2px solid #ff6666; border-radius: 12px; padding: 10px; width: 320px; }
+.cell { width: 68px; height: 68px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; background: #2a0000; color: #ffcccc; border: 1.5px solid #ff6666; transition: transform 0.1s; }
+.cell.v2 { background:#5a0000; color:#ffddcc; }
+.cell.v4 { background:#7a0000; color:#ffddaa; }
+.cell.v8 { background:#aa2200; color:#ffeeaa; }
+.cell.v16 { background:#cc3300; color:#fff0aa; }
+.cell.v32 { background:#dd4400; color:#fffaaa; }
+.cell.v64 { background:#ee6600; color:#ffffc0; }
+.cell.v128 { background:#ff8800; color:#ffffff; }
+.cell.v256 { background:#ffaa00; color:#ffffff; }
+.cell.v512 { background:#ffcc00; color:#1a0000; font-size:18px; }
+.cell.v1024 { background:#ffee00; color:#1a0000; font-size:15px; }
+.cell.v2048 { background:#ffffff; color:#1a0000; font-size:14px; }
+#msg { color: #ffff00; font-size: 15px; margin-top: 8px; text-align: center; min-height: 22px; }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+#overlay h2 { color: #ffff00; font-size: 26px; }
+#overlay p { color: #ffcccc; font-size: 15px; text-align: center; max-width: 320px; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+.btn:hover { background: #cc0000; }
+#diff-row { display: flex; gap: 10px; }
+.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
+.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🔢 Merge Numbers</h1>
+<div id="hud">Score: <span id="sc">0</span> &nbsp; Best: <span id="hs">0</span> &nbsp; Goal: <span id="goal">512</span></div>
+<div id="board"></div>
+<div id="msg">Use arrow keys or swipe to merge!</div>
+<div id="overlay">
+  <h2>🔢 Merge Numbers</h2>
+  <p>Slide rows/columns to merge matching numbers! Reach 512 (Easy) or 1024 (Hard)!</p>
+  <p>Arrow keys or swipe to play.</p>
+  <p id="hs-msg" style="color:#ffff00"></p>
+  <div id="diff-row">
+    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy (512)</button>
+    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard (1024)</button>
+  </div>
+  <button class="btn" onclick="startGame()">▶ Play</button>
+</div>
+<script>
+const HS_KEY = 'hs_mergenumbers';
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+let diff = 'easy', grid, score, running;
+const GOAL_EASY = 512, GOAL_HARD = 1024;
+
+function beep(freq, dur) {
+  try {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.connect(g); g.connect(audio.destination);
+    o.frequency.value = freq; o.type = 'sine';
+    g.gain.setValueAtTime(0.2, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+    o.start(); o.stop(audio.currentTime + dur);
+  } catch(e) {}
+}
+function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(s) { if (s > getHS()) localStorage.setItem(HS_KEY, s); }
+function setDiff(d) {
+  diff = d;
+  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
+  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+  document.getElementById('goal').textContent = d==='hard' ? GOAL_HARD : GOAL_EASY;
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  grid = Array.from({length:4}, () => new Array(4).fill(0));
+  score = 0; running = true;
+  addRandom(); addRandom();
+  renderBoard();
+  updateHUD();
+  document.getElementById('goal').textContent = diff==='hard' ? GOAL_HARD : GOAL_EASY;
+}
+
+function addRandom() {
+  const empty = [];
+  for (let r=0;r<4;r++) for (let c=0;c<4;c++) if (grid[r][c]===0) empty.push([r,c]);
+  if (empty.length===0) return;
+  const [r,c] = empty[Math.floor(Math.random()*empty.length)];
+  grid[r][c] = Math.random() < 0.85 ? 2 : 4;
+}
+
+function renderBoard() {
+  const bd = document.getElementById('board');
+  bd.innerHTML = '';
+  for (let r=0;r<4;r++) for (let c=0;c<4;c++) {
+    const cell = document.createElement('div');
+    const v = grid[r][c];
+    cell.className = 'cell' + (v ? ' v'+v : '');
+    cell.textContent = v || '';
+    bd.appendChild(cell);
+  }
+}
+
+// Slide a row/column - merge matching adjacent cells
+function slideRow(row, dir) {
+  // dir: 1=right, -1=left
+  let arr = row.filter(v => v !== 0);
+  if (dir === 1) arr = arr.reverse();
+  let merged = false;
+  let gain = 0;
+  for (let i=0;i<arr.length-1;i++) {
+    if (arr[i] === arr[i+1]) {
+      arr[i] *= 2;
+      gain += arr[i];
+      arr.splice(i+1, 1);
+      i++;
+    }
+  }
+  if (dir === 1) arr = arr.reverse();
+  while (arr.length < 4) dir===1 ? arr.unshift(0) : arr.push(0);
+  return { arr, gain };
+}
+
+function slideCol(colIdx, dir) {
+  // dir: 1=down, -1=up
+  let arr = [];
+  for (let r=0;r<4;r++) arr.push(grid[r][colIdx]);
+  const { arr: newArr, gain } = slideRow(arr, dir);
+  for (let r=0;r<4;r++) grid[r][colIdx] = newArr[r];
+  return gain;
+}
+
+function move(direction) {
+  if (!running) return;
+  const prev = JSON.stringify(grid);
+  let totalGain = 0;
+  if (direction === 'left') {
+    for (let r=0;r<4;r++) { const {arr,gain} = slideRow(grid[r], -1); grid[r]=arr; totalGain+=gain; }
+  } else if (direction === 'right') {
+    for (let r=0;r<4;r++) { const {arr,gain} = slideRow(grid[r], 1); grid[r]=arr; totalGain+=gain; }
+  } else if (direction === 'up') {
+    for (let c=0;c<4;c++) totalGain += slideCol(c, -1);
+  } else if (direction === 'down') {
+    for (let c=0;c<4;c++) totalGain += slideCol(c, 1);
+  }
+  if (JSON.stringify(grid) !== prev) {
+    score += totalGain;
+    if (totalGain > 0) beep(300 + Math.log2(totalGain)*30, 0.1);
+    addRandom();
+    renderBoard();
+    updateHUD();
+    checkEnd();
+  }
+}
+
+function getMax() {
+  return Math.max(...grid.flat());
+}
+
+function checkEnd() {
+  const goal = diff==='hard' ? GOAL_HARD : GOAL_EASY;
+  const max = getMax();
+  saveHS(max);
+  if (max >= goal) {
+    document.getElementById('msg').textContent = '🎉 Goal reached!';
+    setTimeout(() => endGame(true), 400);
+    return;
+  }
+  // Check if no moves possible
+  if (grid.flat().every(v=>v!==0)) {
+    let canMove = false;
+    for (let r=0;r<4;r++) for (let c=0;c<4;c++) {
+      if (c<3 && grid[r][c]===grid[r][c+1]) canMove=true;
+      if (r<3 && grid[r][c]===grid[r+1][c]) canMove=true;
+    }
+    if (!canMove) setTimeout(() => endGame(false), 300);
+  }
+}
+
+function endGame(won) {
+  running = false;
+  const max = getMax();
+  const ov = document.getElementById('overlay');
+  ov.querySelector('h2').textContent = won ? '🎉 You Won!' : '❌ Board Full!';
+  ov.querySelector('p').textContent = `Highest tile: ${max} | Score: ${score}`;
+  document.getElementById('hs-msg').textContent = `Best tile: ${getHS()}`;
+  ov.style.display = 'flex';
+  if (won) beep(700, 0.3);
+  else beep(200, 0.5, 'sawtooth');
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (!running) return;
+  const map = { ArrowLeft:'left', ArrowRight:'right', ArrowUp:'up', ArrowDown:'down' };
+  if (map[e.key]) { e.preventDefault(); move(map[e.key]); }
+});
+
+// Touch swipe
+let touchStart = null;
+document.addEventListener('touchstart', e => { touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY}; });
+document.addEventListener('touchend', e => {
+  if (!touchStart || !running) return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  touchStart = null;
+  if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+  if (Math.abs(dx) > Math.abs(dy)) move(dx>0 ? 'right' : 'left');
+  else move(dy>0 ? 'down' : 'up');
+});
+
+function updateHUD() {
+  document.getElementById('sc').textContent = score;
+  document.getElementById('hs').textContent = getHS();
+}
+document.getElementById('hs-msg').textContent = `Best tile: ${getHS()}`;
+</script>
+</body>
+</html>
