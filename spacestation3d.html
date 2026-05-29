@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Station 3D — ISS Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:'Courier New',monospace; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(100,220,255,0.8); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 6px #00aaff; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(0,5,15,0.9); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:1px solid rgba(0,180,255,0.25); }
+#loc { color:#66ddff; font-size:13px; min-width:160px; }
+#clock-el { color:#aaddff; font-size:13px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.65); padding:8px 20px; border-radius:12px; color:white; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(0,5,20,0.92); padding:8px 20px; border-radius:12px; color:#66ddff; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(0,200,255,0.5); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(0,3,12,0.97); border:2px solid rgba(0,180,255,0.5); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#66ddff; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-choices { display:flex; flex-direction:column; gap:7px; }
+.dbtn { font-size:14px; padding:9px 13px; background:rgba(0,10,30,0.9); border:1px solid rgba(0,180,255,0.3); border-radius:9px; color:white; cursor:pointer; text-align:left; transition:background 0.15s; }
+.dbtn:hover { background:rgba(0,50,100,0.9); }
+.dbtn.correct { background:rgba(20,150,70,0.9) !important; border-color:#5c5; }
+.dbtn.wrong   { background:rgba(170,30,30,0.9) !important; border-color:#c55; }
+#inv { position:fixed; top:38px; right:10px; background:rgba(0,5,15,0.85); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(0,180,255,0.28); }
+#inv-title { color:#66ddff; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(0,5,20,0.96); color:#66ddff; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(0,200,255,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#0066cc; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#0099ff; }
+.sbtn.sec { background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.28); border-radius:8px; color:white; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(255,255,255,0.18); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(0,100,200,0.35); border:2px solid #66ddff; border-radius:50%; color:#66ddff; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">Airlock</span>
+  <span id="clock-el">Mission: 0:00</span>
+  <span id="score-el">Score: 0</span>
+</div>
+<div id="hud">WASD move · Mouse look · E interact · Shift sprint</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <div id="dlg-choices"></div>
+</div>
+<div id="inv">
+  <div id="inv-title">Cargo</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Empty</div>
+</div>
+<div id="toast"></div>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🚀</div>
+  <div class="st" style="color:#66ddff">SPACE STATION 3D</div>
+  <div class="sb">Welcome to ISS Horizon — humanity\'s most advanced space station, orbiting Earth at 400km altitude.<br><br>Explore four modules. Meet the crew (and one special visitor). Answer space trivia to earn points.<br><br><span style="color:#66ddff">Collect data chips and oxygen tanks. Science requires exploration!</span></div>
+  <button class="sbtn" onclick="beginGame()">Board the Station</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up · Shift to sprint</small>
+</div>
+<div class="screen" id="scr-win">
+  <div class="se">🛸</div>
+  <div class="st" style="color:#66ddff">Mission Complete!</div>
+  <div class="sb" id="win-body">All modules explored!</div>
+  <div id="win-score" style="font-size:24px;color:#FFD700;font-weight:bold;margin:6px 0;"></div>
+  <button class="sbtn" onclick="location.reload()">New Mission</button>
+  <a class="sbtn sec" href="index.html">Home</a>
+</div>
+<div id="lock-screen" onclick="lockPointer()">
+  <p>Click to look around</p>
+  <small>WASD · Mouse · E to interact</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene=new THREE.Scene();
+scene.background=new THREE.Color(0x000005);
+scene.fog=new THREE.Fog(0x000005,14,50);
+
+var camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,200);
+camera.position.set(0,1.7,0);
+
+var yaw=Math.PI,pitch=0,locked=false,gameOn=false,dlgOpen=false;
+var elapsed=0,score=0;
+var nearNPC=null,nearPickup=null;
+var keys={},triggered={};
+var inventory=[],npcTalked={},quizUsed={};
+
+function lm(hex){return new THREE.MeshLambertMaterial({color:hex});}
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,seg,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||12),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function sph(r,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.SphereGeometry(r,16,12),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function pl(x,y,z,col,i,d){
+  var l=new THREE.PointLight(col,i,d||18);
+  l.position.set(x,y,z); scene.add(l); return l;
+}
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(0,3,12,0.9)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(0,180,255,0.55)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#66ddff'; ctx.font='bold 19px Courier New';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-5,x2:5,z1:-5,z2:8,name:"Airlock",col:"#66ddff"},
+  {x1:-5,x2:5,z1:8,z2:24,name:"Command Bridge",col:"#44bbff"},
+  {x1:7,x2:20,z1:5,z2:20,name:"Science Lab",col:"#33aaff"},
+  {x1:-20,x2:-7,z1:5,z2:20,name:"Engine Room",col:"#2299ee"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.2&&x<a.x2-0.2&&z>a.z1+0.2&&z<a.z2-0.2) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,col,x,y,z,pts,desc){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.1),lm(col));
+  g.add(glow);
+  var lbl=label(name,'#66ddff'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,pts:pts,desc:desc,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,col,x,y,z,dialogTree){
+  var g=new THREE.Group();
+  var suit=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.25,1.2,8),lm(col));
+  suit.position.y=0.6; g.add(suit);
+  var helmet=new THREE.Mesh(new THREE.SphereGeometry(0.26,12,10),lm(0xaaddff));
+  helmet.position.y=1.45; g.add(helmet);
+  var visor=new THREE.Mesh(new THREE.SphereGeometry(0.2,12,10),lm(0x224466));
+  visor.position.set(0.05,1.46,0.15); g.add(visor);
+  var lbl=label(name,'#66ddff'); lbl.position.set(0,2.1,0); g.add(lbl);
+  g.position.set(x,0,z); scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,0,z),name:name,dialog:dialogTree,talked:false});
+}
+
+var blinkLights=[];
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0x888888,1.8));
+
+  var metal=lm(0x3a4a5a);
+  var darkMetal=lm(0x1e2a38);
+  var brightMetal=lm(0x5a6a7a);
+  var panel=lm(0x2a3848);
+  var floor=lm(0x202830);
+  var ceiling=lm(0x182028);
+  var blueGlow=lm(0x0044aa);
+  var redLight=lm(0xaa2200);
+  var greenLight=lm(0x22aa44);
+  var yellow=lm(0xddcc00);
+  var white=lm(0xddddee);
+  var black=lm(0x060a10);
+
+  // ── AIRLOCK ───────────────────────────────
+  box(10,0.15,13,floor,0,-0.08,1.5);
+  box(10,0.1,13,ceiling,0,3.5,1.5);
+  box(0.15,3.65,13,metal,-5,1.75,1.5);
+  box(0.15,3.65,13,metal,5,1.75,1.5);
+  box(10,3.65,0.15,darkMetal,0,1.75,-5);
+  // Airlock door frame
+  box(3.5,3.65,0.15,metal,-3.25,1.75,8);
+  box(3.5,3.65,0.15,metal,3.25,1.75,8);
+  box(10,0.8,0.15,metal,0,3.3,8);
+  // Door panels with rivets
+  box(2.9,3.0,0.1,darkMetal,0,1.65,-4.88);
+  for(var rx=-1;rx<=1;rx+=1){
+    for(var ry2=0;ry2<=2;ry2+=1){
+      box(0.06,0.06,0.06,brightMetal,rx*1.0,0.8+ry2*1.0,-4.82);
+    }
+  }
+  // Control panels on walls
+  box(0.1,1.0,1.5,panel,-4.88,1.5,0);
+  for(var bp=0;bp<6;bp++){
+    var bpx=bp%3, bpy=Math.floor(bp/3);
+    var bcol=bp%3===0?redLight:(bp%3===1?greenLight:yellow);
+    box(0.06,0.12,0.12,bcol,-4.82,1.1+bpy*0.4,-0.4+bpx*0.4);
+  }
+  box(0.1,1.0,1.5,panel,4.88,1.5,0);
+  // Circular window (porthole) - show stars
+  cyl(0.4,0.4,0.12,20,brightMetal,-4.88,2.2,3);
+  var porthole=new THREE.Mesh(new THREE.CircleGeometry(0.32,20),black);
+  porthole.position.set(-4.82,2.2,3); scene.add(porthole);
+  // Stars inside porthole (tiny spheres far away)
+  for(var si=0;si<8;si++){
+    sph(0.02,white,-6+si*0.08,2.2+Math.sin(si)*0.1,3+Math.cos(si)*0.2);
+  }
+  cyl(0.4,0.4,0.12,20,brightMetal,4.88,2.2,3);
+  var porthole2=new THREE.Mesh(new THREE.CircleGeometry(0.32,20),black);
+  porthole2.position.set(4.82,2.2,3); scene.add(porthole2);
+
+  // Blinking warning lights
+  var bl1=box(0.2,0.2,0.2,redLight,0,3.4,2);
+  var bl2=box(0.2,0.2,0.2,redLight,0,3.4,6);
+  blinkLights.push({mesh:bl1,phase:0},{mesh:bl2,phase:Math.PI});
+  pl(0,2.5,1.5,0x4488ff,2.0,14);
+  pl(0,2.5,5,0x2266cc,1.5,12);
+
+  // ── COMMAND BRIDGE ────────────────────────
+  box(10,0.15,16,lm(0x181e28),0,-0.08,16);
+  box(10,0.1,16,ceiling,0,3.8,16);
+  box(0.15,3.95,16,metal,-5,1.95,16);
+  box(0.15,3.95,16,metal,5,1.95,16);
+  box(10,3.95,0.15,darkMetal,0,1.95,24);
+
+  // Main screen on front wall
+  box(8,2.5,0.1,darkMetal,0,2.3,23.88);
+  box(7.5,2.0,0.06,blueGlow,0,2.35,23.94);
+  box(0.5,2.5,0.1,brightMetal,3.75,2.3,23.88);
+  box(0.5,2.5,0.1,brightMetal,-3.75,2.3,23.88);
+  pl(0,2.5,23,0x0044ff,2.0,15);
+
+  // Captain\'s chair
+  box(0.8,0.5,0.8,lm(0x223344),0,0.33,20);
+  box(0.8,1.2,0.1,lm(0x1a2a3a),0,0.98,20.45);
+  box(0.7,0.1,0.7,lm(0x334455),0,0.6,20);
+  cyl(0.04,0.04,0.55,5,darkMetal,-0.3,0.27,19.65);
+  cyl(0.04,0.04,0.55,5,darkMetal,0.3,0.27,19.65);
+  cyl(0.04,0.04,0.55,5,darkMetal,-0.3,0.27,20.35);
+  cyl(0.04,0.04,0.55,5,darkMetal,0.3,0.27,20.35);
+
+  // Console banks
+  box(8,0.1,1.5,panel,0,0.9,12);
+  for(var cx=-3.5;cx<=3.5;cx+=0.5){
+    box(0.1,0.3,0.35,lm(Math.random()>0.5?0x0088ff:0x00cc44),cx,1.1,12);
+  }
+  pl(0,2.5,16,0x3366ff,2.5,18);
+  pl(0,2.5,20,0x2255cc,2.0,15);
+
+  // Corridor side openings
+  box(0.15,3.95,5,metal,5,1.95,8.5);
+  box(0.15,3.95,5,metal,5,1.95,20.5);
+  box(2.0,0.9,0.15,metal,5,3.5,14.5);
+  box(0.15,3.95,5,metal,-5,1.95,8.5);
+  box(0.15,3.95,5,metal,-5,1.95,20.5);
+  box(2.0,0.9,0.15,metal,-5,3.5,14.5);
+
+  // ── SCIENCE LAB ──────────────────────────
+  box(13,0.15,15,lm(0x1a2030),13.5,-0.08,12.5);
+  box(13,0.1,15,ceiling,13.5,3.8,12.5);
+  box(13,3.95,0.15,metal,13.5,1.95,5);
+  box(13,3.95,0.15,metal,13.5,1.95,20);
+  box(0.15,3.95,15,metal,20,1.95,12.5);
+
+  // Lab benches
+  box(4,0.1,0.8,brightMetal,8.5,0.9,6);
+  box(4,0.1,0.8,brightMetal,8.5,0.9,10);
+  box(4,0.1,0.8,brightMetal,18,0.9,6);
+  box(4,0.1,0.8,brightMetal,18,0.9,10);
+  // Equipment: microscopes, flasks
+  sph(0.15,lm(0x88aacc),8.5,1.12,6);
+  cyl(0.08,0.12,0.3,8,lm(0x66aacc),9.5,1.1,6);
+  cyl(0.05,0.08,0.45,8,lm(0xaaccff),10,1.2,6);
+  sph(0.18,lm(0x44cc88),18,1.15,10);
+  box(0.4,0.5,0.3,lm(0x334455),17,1.05,6);
+
+  // Specimen tanks (glowing)
+  box(1.2,1.5,0.8,lm(0x001122),13.5,0.83,18);
+  var tankGlass=new THREE.MeshLambertMaterial({color:0x0088cc,transparent:true,opacity:0.35});
+  box(1.0,1.4,0.6,tankGlass,13.5,0.83,18);
+  pl(13.5,1.5,18,0x00aaff,2.0,8);
+
+  // Large circular window (space view)
+  cyl(0.7,0.7,0.15,20,brightMetal,19.88,2.0,12.5);
+  var spaceWin=new THREE.Mesh(new THREE.CircleGeometry(0.6,20),black);
+  spaceWin.position.set(19.82,2.0,12.5); scene.add(spaceWin);
+  pl(13.5,2.5,12.5,0x2255aa,2.5,18);
+  pl(18,2.0,7,0x1133aa,1.5,12);
+
+  // ── ENGINE ROOM ──────────────────────────
+  box(13,0.15,15,lm(0x151a20),-13.5,-0.08,12.5);
+  box(13,0.1,15,ceiling,-13.5,3.8,12.5);
+  box(13,3.95,0.15,metal,-13.5,1.95,5);
+  box(13,3.95,0.15,metal,-13.5,1.95,20);
+  box(0.15,3.95,15,metal,-20,1.95,12.5);
+
+  // Main reactor (central cylinder)
+  cyl(0.8,0.8,2.8,16,lm(0x2a3848),-13.5,1.5,12.5);
+  cyl(0.6,0.6,3.0,16,new THREE.MeshLambertMaterial({color:0x0066ff,transparent:true,opacity:0.4}),-13.5,1.6,12.5);
+  pl(-13.5,2.0,12.5,0x0088ff,3.0,12);
+
+  // Pipes along walls
+  for(var py=5;py<=20;py+=1.5){
+    cyl(0.1,0.1,0.3,8,brightMetal,-19.88,1.5,py);
+    cyl(0.1,0.1,0.3,8,brightMetal,-19.88,2.5,py);
+  }
+  cyl(0.08,0.08,15,8,metal,-19.5,1.5,12.5); // horizontal pipe
+  cyl(0.08,0.08,15,8,metal,-19.5,2.5,12.5);
+
+  // Engine pods
+  box(1.5,1.2,1.5,darkMetal,-10,0.68,7);
+  cyl(0.3,0.4,1.2,8,metal,-10,0.68,7);
+  box(1.5,1.2,1.5,darkMetal,-17,0.68,7);
+  cyl(0.3,0.4,1.2,8,metal,-17,0.68,7);
+  box(1.5,1.2,1.5,darkMetal,-10,0.68,18);
+  cyl(0.3,0.4,1.2,8,metal,-10,0.68,18);
+  box(1.5,1.2,1.5,darkMetal,-17,0.68,18);
+  cyl(0.3,0.4,1.2,8,metal,-17,0.68,18);
+
+  // Engine glow lights
+  pl(-10,1.5,7,0xff4400,1.5,10);
+  pl(-17,1.5,7,0xff6600,1.5,10);
+  pl(-10,1.5,18,0xff4400,1.5,10);
+  pl(-17,1.5,18,0xff6600,1.5,10);
+
+  // Warning light blink
+  var bl3=box(0.2,0.2,0.2,redLight,-13.5,3.7,8);
+  var bl4=box(0.2,0.2,0.2,redLight,-13.5,3.7,17);
+  blinkLights.push({mesh:bl3,phase:Math.PI/2},{mesh:bl4,phase:Math.PI*1.5});
+
+  // Pickups
+  addPickup('Data Chip',0x00ff88,-2,0.5,4,50,'Encrypted research data — priceless!');
+  addPickup('O2 Tank',0x88ddff,13.5,0.5,15,60,'Emergency oxygen supply. Very important in space!');
+  addPickup('Data Chip',0x00ff44,3,0.5,16,50,'More research data from the science lab!');
+  addPickup('Alien Sample',0xaa44ff,-13.5,0.5,9,75,'An extraterrestrial material sample. Remarkable!');
+
+  // NPCs
+  addNPC('Commander Chen',0xeeeeee,2,0,5,buildDialog_commander());
+  addNPC('Dr. Amara',0xaaddff,-2,0,19,buildDialog_scientist());
+  addNPC('Engineer Kowalski',0xee8833,13.5,0,14,buildDialog_engineer());
+  addNPC('Xarion (Alien)',0x88ff88,-13.5,0,14,buildDialog_alien());
+}
+
+function buildDialog_commander(){
+  return [
+    {id:'greet',txt:"Commander Chen here. Welcome aboard ISS Horizon. We\'re orbiting at 400km altitude, doing 17,500 mph. Ready for your space knowledge assessment, recruit?",
+     choices:[
+       {t:"Ask about the ISS",next:'quiz1'},
+       {t:"Ask about space travel",next:'quiz2'},
+       {t:"At ease, Commander",next:null}
+     ]},
+    {id:'quiz1',txt:"How long does it take the ISS to orbit Earth once?",
+     choices:[
+       {t:"24 hours",next:'wrong1',correct:false},
+       {t:"About 90 minutes",next:'right1',correct:true},
+       {t:"12 hours",next:'wrong1',correct:false},
+       {t:"48 hours",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"Correct! About 90 minutes — the ISS completes 16 orbits per day. +25 points!",pts:25,
+     choices:[{t:"Ask about space travel",next:'quiz2'},{t:"Dismissed",next:null}]},
+    {id:'wrong1',txt:"The ISS orbits every ~90 minutes, completing 16 orbits per day. One sunrise every 90 minutes!",
+     choices:[{t:"Ask about space travel",next:'quiz2'},{t:"Dismissed",next:null}]},
+    {id:'quiz2',txt:"Who was the first human to travel to space?",
+     choices:[
+       {t:"Neil Armstrong",next:'wrong2',correct:false},
+       {t:"Yuri Gagarin",next:'right2',correct:true},
+       {t:"Alan Shepard",next:'wrong2',correct:false},
+       {t:"John Glenn",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"Yuri Gagarin! April 12, 1961 — Vostok 1. He orbited Earth once in 108 minutes. +25 points!",pts:25,
+     choices:[{t:"One more question",next:'quiz3'},{t:"Dismissed",next:null}]},
+    {id:'wrong2',txt:"Yuri Gagarin, Soviet cosmonaut, April 12, 1961. He completed one orbit in 108 minutes.",
+     choices:[{t:"One more question",next:'quiz3'},{t:"Dismissed",next:null}]},
+    {id:'quiz3',txt:"How many people have walked on the Moon?",
+     choices:[
+       {t:"6",next:'wrong3',correct:false},
+       {t:"12",next:'right3',correct:true},
+       {t:"24",next:'wrong3',correct:false},
+       {t:"3",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"12 astronauts! Six Apollo missions, 2 per mission, from Apollo 11 (1969) to Apollo 17 (1972). +30 points!",pts:30,
+     choices:[{t:"Dismissed",next:null}]},
+    {id:'wrong3',txt:"12 people walked on the Moon — 2 per mission across 6 Apollo missions, 1969-1972.",
+     choices:[{t:"Dismissed",next:null}]}
+  ];
+}
+
+function buildDialog_scientist(){
+  return [
+    {id:'greet',txt:"Oh! You startled me. Dr. Amara, astrophysics. I\'ve been tracking an anomaly in the Kuiper Belt for weeks. Fascinating stuff! Mind if I quiz you while I run these calculations?",
+     choices:[
+       {t:"Ask about stars",next:'quiz1'},
+       {t:"Ask about planets",next:'quiz2'},
+       {t:"Not now, Doctor",next:null}
+     ]},
+    {id:'quiz1',txt:"What is the closest star to our Solar System?",
+     choices:[
+       {t:"Sirius",next:'wrong1',correct:false},
+       {t:"Proxima Centauri",next:'right1',correct:true},
+       {t:"Betelgeuse",next:'wrong1',correct:false},
+       {t:"Vega",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"Proxima Centauri — 4.24 light-years away! It would take 80,000 years to reach by current spacecraft. +30 points!",pts:30,
+     choices:[{t:"Ask about planets",next:'quiz2'},{t:"Back to work",next:null}]},
+    {id:'wrong1',txt:"Proxima Centauri, 4.24 light-years away. Part of the Alpha Centauri system. Very close in cosmic terms!",
+     choices:[{t:"Ask about planets",next:'quiz2'},{t:"Back to work",next:null}]},
+    {id:'quiz2',txt:"Which planet has the most moons in our Solar System?",
+     choices:[
+       {t:"Jupiter",next:'wrong2',correct:false},
+       {t:"Saturn",next:'right2',correct:true},
+       {t:"Uranus",next:'wrong2',correct:false},
+       {t:"Neptune",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"Saturn! With 146 confirmed moons as of 2023, edging out Jupiter\'s 95! +30 points!",pts:30,
+     choices:[{t:"Final question",next:'quiz3'},{t:"Back to work",next:null}]},
+    {id:'wrong2',txt:"Saturn now leads with 146 moons (as of 2023)! Jupiter has 95. Numbers keep going up as we find smaller moons.",
+     choices:[{t:"Final question",next:'quiz3'},{t:"Back to work",next:null}]},
+    {id:'quiz3',txt:"What is a light-year?",
+     choices:[
+       {t:"The time light takes to travel 1 year",next:'wrong3',correct:false},
+       {t:"The distance light travels in 1 year",next:'right3',correct:true},
+       {t:"A unit of brightness",next:'wrong3',correct:false},
+       {t:"The age of a star in years",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"Distance! About 9.46 trillion kilometers. Light travels at 299,792 km/s. +25 points!",pts:25,
+     choices:[{t:"Back to work",next:null}]},
+    {id:'wrong3',txt:"A light-year is DISTANCE — how far light travels in one year: about 9.46 trillion kilometers!",
+     choices:[{t:"Back to work",next:null}]}
+  ];
+}
+
+function buildDialog_engineer(){
+  return [
+    {id:'greet',txt:"*wipes hands on jumpsuit* Name\'s Kowalski. I keep this tin can in the sky. You break it, I fix it. Simple. But I like a good trivia challenge. Fire away!",
+     choices:[
+       {t:"Ask about rockets",next:'quiz1'},
+       {t:"Ask about satellites",next:'quiz2'},
+       {t:"Don\'t let me interrupt",next:null}
+     ]},
+    {id:'quiz1',txt:"What fuel do most modern rocket engines use?",
+     choices:[
+       {t:"Gasoline and air",next:'wrong1',correct:false},
+       {t:"Liquid hydrogen and liquid oxygen",next:'right1',correct:true},
+       {t:"Solid gunpowder",next:'wrong1',correct:false},
+       {t:"Nuclear fuel only",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"Liquid hydrogen and LOX (liquid oxygen)! Most efficient chemical propellant we have. +25 points!",pts:25,
+     choices:[{t:"Ask about satellites",next:'quiz2'},{t:"Back to work",next:null}]},
+    {id:'wrong1',txt:"Most powerful rockets use liquid hydrogen + liquid oxygen (LOX). Some use kerosene+LOX like SpaceX Falcon 9.",
+     choices:[{t:"Ask about satellites",next:'quiz2'},{t:"Back to work",next:null}]},
+    {id:'quiz2',txt:"What was the first artificial satellite launched into orbit?",
+     choices:[
+       {t:"Explorer 1",next:'wrong2',correct:false},
+       {t:"Sputnik 1",next:'right2',correct:true},
+       {t:"Vanguard 1",next:'wrong2',correct:false},
+       {t:"Telstar",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"Sputnik 1! USSR, October 4, 1957. It beeped. That beep changed the world. +30 points!",pts:30,
+     choices:[{t:"One more",next:'quiz3'},{t:"Back to work",next:null}]},
+    {id:'wrong2',txt:"Sputnik 1, October 4, 1957 — launched by the Soviet Union. Its radio beeps were tracked worldwide.",
+     choices:[{t:"One more",next:'quiz3'},{t:"Back to work",next:null}]},
+    {id:'quiz3',txt:"What does EVA stand for in spaceflight?",
+     choices:[
+       {t:"Extreme Vehicle Assessment",next:'wrong3',correct:false},
+       {t:"Extra-Vehicular Activity",next:'right3',correct:true},
+       {t:"Emergency Vacuum Alert",next:'wrong3',correct:false},
+       {t:"External Vent Apparatus",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"Extra-Vehicular Activity — a spacewalk! ISS astronauts do EVAs to maintain the exterior. +25 points!",pts:25,
+     choices:[{t:"Back to work",next:null}]},
+    {id:'wrong3',txt:"EVA = Extra-Vehicular Activity, more commonly known as a spacewalk. Dangerous but necessary!",
+     choices:[{t:"Back to work",next:null}]}
+  ];
+}
+
+function buildDialog_alien(){
+  return [
+    {id:'greet',txt:"*strange clicking sounds* Greetings, carbon-based unit. I am Xarion of the Kepler-452 system. I have been observing your species for 847 of your years. Your trivia games amuse us greatly. Shall we play?",
+     choices:[
+       {t:"Ask about the universe",next:'quiz1'},
+       {t:"Ask about black holes",next:'quiz2'},
+       {t:"Back away slowly",next:null}
+     ]},
+    {id:'quiz1',txt:"What is the approximate age of the Universe?",
+     choices:[
+       {t:"4.5 billion years",next:'wrong1',correct:false},
+       {t:"13.8 billion years",next:'right1',correct:true},
+       {t:"100 billion years",next:'wrong1',correct:false},
+       {t:"6,000 years",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"Correct! 13.8 billion years — measured via cosmic microwave background radiation. Your species\' instruments are... adequate. +35 points!",pts:35,
+     choices:[{t:"Ask about black holes",next:'quiz2'},{t:"Farewell",next:null}]},
+    {id:'wrong1',txt:"13.8 billion years — your scientists calculated this from the cosmic microwave background. Impressive for a young species.",
+     choices:[{t:"Ask about black holes",next:'quiz2'},{t:"Farewell",next:null}]},
+    {id:'quiz2',txt:"What is the event horizon of a black hole?",
+     choices:[
+       {t:"The black hole\'s surface",next:'wrong2',correct:false},
+       {t:"The point of no return — beyond which nothing can escape",next:'right2',correct:true},
+       {t:"The orbit of matter around it",next:'wrong2',correct:false},
+       {t:"The area where time stops completely",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"Correct! Even your limited physics grasps this. Beyond the event horizon, not even light escapes. +35 points!",pts:35,
+     choices:[{t:"Final question",next:'quiz3'},{t:"Farewell",next:null}]},
+    {id:'wrong2',txt:"The event horizon is the boundary — a point of no return. Inside it, escape velocity exceeds the speed of light.",
+     choices:[{t:"Final question",next:'quiz3'},{t:"Farewell",next:null}]},
+    {id:'quiz3',txt:"What percentage of the universe is ordinary matter (atoms)?",
+     choices:[
+       {t:"99%",next:'wrong3',correct:false},
+       {t:"50%",next:'wrong3',correct:false},
+       {t:"About 5%",next:'right3',correct:true},
+       {t:"25%",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"Only 5%! Dark matter is 27%, dark energy 68%. Your species barely perceives most of existence. Fascinating. +40 points!",pts:40,
+     choices:[{t:"Farewell",next:null}]},
+    {id:'wrong3',txt:"Only 5% of the universe is ordinary matter! 27% is dark matter, 68% is dark energy. The rest... we know.",
+     choices:[{t:"Farewell",next:null}]}
+  ];
+}
+
+var dlgNPC=null,dlgNodeId=null;
+
+function openDialog(npc){
+  dlgNPC=npc; dlgNodeId='greet'; dlgOpen=true;
+  renderDialog();
+  document.getElementById('dialog').style.display='block';
+  if(document.pointerLockElement) document.exitPointerLock();
+  locked=false;
+  document.getElementById('lock-screen').style.display='none';
+}
+
+function renderDialog(){
+  var tree=dlgNPC.dialog,node=null;
+  for(var i=0;i<tree.length;i++) if(tree[i].id===dlgNodeId){node=tree[i];break;}
+  if(!node){closeDialog();return;}
+  document.getElementById('dlg-name').textContent=dlgNPC.name;
+  document.getElementById('dlg-text').textContent=node.txt;
+  if(node.pts) addScore(node.pts);
+  var cc=document.getElementById('dlg-choices');
+  cc.innerHTML='';
+  node.choices.forEach(function(ch){
+    var b=document.createElement('button');
+    b.className='dbtn'; b.textContent=ch.t;
+    b.onclick=function(){
+      if(ch.correct===true){b.classList.add('correct');setTimeout(function(){go(ch.next);},700);}
+      else if(ch.correct===false){b.classList.add('wrong');setTimeout(function(){go(ch.next);},700);}
+      else{go(ch.next);}
+    };
+    cc.appendChild(b);
+  });
+}
+
+function go(nextId){
+  if(!nextId){closeDialog();return;}
+  dlgNodeId=nextId; renderDialog();
+}
+
+function closeDialog(){
+  dlgOpen=false; dlgNPC=null;
+  document.getElementById('dialog').style.display='none';
+  setTimeout(function(){if(gameOn) lockPointer();},300);
+}
+
+function addScore(pts){
+  score+=pts;
+  document.getElementById('score-el').textContent='Score: '+score;
+  showToast('+'+pts+' points!');
+}
+
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  clearTimeout(window._toastTimer);
+  window._toastTimer=setTimeout(function(){t.style.display='none';},2200);
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Empty';return;}
+  el.textContent=inventory.join('\n');
+}
+
+window.addEventListener('keydown',function(e){
+  keys[e.code]=true;
+  if(!gameOn||dlgOpen) return;
+  if(e.code==='KeyE'){
+    if(nearNPC) openDialog(nearNPC);
+    else if(nearPickup) collectPickup(nearPickup);
+  }
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+window.addEventListener('keyup',function(e){keys[e.code]=false;});
+
+document.addEventListener('mousemove',function(e){
+  if(!locked) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-Math.PI/2.4,Math.min(Math.PI/2.4,pitch));
+});
+
+function lockPointer(){
+  document.getElementById('lock-screen').style.display='none';
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=!!document.pointerLockElement;
+  if(!locked&&gameOn&&!dlgOpen) document.getElementById('lock-screen').style.display='flex';
+});
+
+document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();if(nearNPC)openDialog(nearNPC);else if(nearPickup)collectPickup(nearPickup);});
+document.getElementById('e-btn').addEventListener('mousedown',function(){if(nearNPC)openDialog(nearNPC);else if(nearPickup)collectPickup(nearPickup);});
+
+function setupMobile(){
+  var isMobile=('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bindBtn(id,code){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();keys[code]=true;});
+    el.addEventListener('touchend',function(e){e.preventDefault();keys[code]=false;});
+    el.addEventListener('mousedown',function(){keys[code]=true;});
+    el.addEventListener('mouseup',function(){keys[code]=false;});
+  }
+  bindBtn('m-up','KeyW'); bindBtn('m-dn','KeyS');
+  bindBtn('m-left','KeyA'); bindBtn('m-right','KeyD');
+  var lastTX=null,lastTY=null;
+  renderer.domElement.addEventListener('touchstart',function(e){
+    if(e.touches.length===1){lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;}
+  },{passive:true});
+  renderer.domElement.addEventListener('touchmove',function(e){
+    if(e.touches.length===1&&lastTX!==null){
+      var dx=e.touches[0].clientX-lastTX,dy=e.touches[0].clientY-lastTY;
+      yaw-=dx*0.005; pitch-=dy*0.005;
+      pitch=Math.max(-Math.PI/2.4,Math.min(Math.PI/2.4,pitch));
+      lastTX=e.touches[0].clientX; lastTY=e.touches[0].clientY;
+    }
+  },{passive:true});
+}
+setupMobile();
+
+function collectPickup(p){
+  if(p.collected) return;
+  p.collected=true; scene.remove(p.g);
+  inventory.push(p.name);
+  addScore(p.pts);
+  showToast('Collected: '+p.name+' — '+p.desc);
+  updateInv();
+  nearPickup=null;
+  document.getElementById('interact').style.display='none';
+  document.getElementById('e-btn').style.display='none';
+  checkWin();
+}
+
+function checkWin(){
+  var allCollected=pickups.every(function(p){return p.collected;});
+  if(allCollected&&score>=200){
+    setTimeout(function(){
+      var ws=document.getElementById('scr-win');
+      ws.querySelector('.sb').textContent='You explored all four modules of ISS Horizon, collected all critical cargo, and completed your crew interviews — including the alien guest. Mission accomplished, Commander!';
+      document.getElementById('win-score').textContent='Final Score: '+score+' points';
+      ws.classList.add('show');
+    },1000);
+  }
+}
+
+var clock=new THREE.Clock();
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  buildWorld();
+  gameOn=true;
+  camera.position.set(0,1.7,2);
+  yaw=Math.PI;
+  lockPointer();
+  animate();
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn||dlgOpen){renderer.render(scene,camera);return;}
+  var dt=Math.min(clock.getDelta(),0.05);
+  elapsed+=dt;
+  var mins=Math.floor(elapsed/60),secs=Math.floor(elapsed%60);
+  document.getElementById('clock-el').textContent='Mission: '+mins+':'+(secs<10?'0':'')+secs;
+
+  // Blink lights
+  blinkLights.forEach(function(bl){
+    var on=Math.sin(elapsed*3+bl.phase)>0;
+    bl.mesh.material.color.setHex(on?0xff2200:0x220000);
+  });
+
+  var spd=(keys['ShiftLeft']||keys['ShiftRight'])?7:4;
+  var dx=0,dz=0;
+  if(keys['KeyW']) dz=-1;
+  if(keys['KeyS']) dz=1;
+  if(keys['KeyA']) dx=-1;
+  if(keys['KeyD']) dx=1;
+  if(dx||dz){
+    var len=Math.sqrt(dx*dx+dz*dz); dx/=len; dz/=len;
+    var nx=camera.position.x+(Math.sin(yaw)*dz*spd*dt+Math.cos(yaw)*dx*spd*dt);
+    var nz=camera.position.z+(Math.cos(yaw)*(-dz)*spd*dt+Math.sin(yaw)*(-dx)*spd*dt);
+    if(nx>-19.8&&nx<19.8) camera.position.x=nx;
+    if(nz>-4.8&&nz<23.8) camera.position.z=nz;
+  }
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  nearNPC=null; nearPickup=null;
+  var cx=camera.position.x,cz=camera.position.z;
+  npcs.forEach(function(n){
+    var d=Math.hypot(cx-n.pos.x,cz-n.pos.z);
+    if(d<2.5) nearNPC=n;
+    n.g.children.forEach(function(c){if(c.isSprite) c.lookAt(camera.position);});
+  });
+  pickups.forEach(function(p){
+    if(!p.collected){
+      var d=Math.hypot(cx-p.pos.x,cz-p.pos.z);
+      if(d<2.0) nearPickup=p;
+      p.g.rotation.y+=dt*2;
+      p.g.children.forEach(function(c){if(c.isSprite) c.lookAt(camera.position);});
+    }
+  });
+
+  var interact=document.getElementById('interact'),ebtn=document.getElementById('e-btn');
+  if(nearNPC){
+    interact.textContent='[E] Talk to '+nearNPC.name;
+    interact.style.display='block'; ebtn.style.display='flex';
+  } else if(nearPickup){
+    interact.textContent='[E] Collect '+nearPickup.name;
+    interact.style.display='block'; ebtn.style.display='flex';
+  } else {
+    interact.style.display='none'; ebtn.style.display='none';
+  }
+
+  var z=getZone(cx,cz);
+  if(z) document.getElementById('loc').textContent=z.name;
+
+  renderer.render(scene,camera);
+}
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

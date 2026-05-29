@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wild West 3D — Frontier Town Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,200,100,0.8); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(20,10,0,0.88); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:1px solid rgba(200,140,50,0.25); }
+#loc { color:#ffcc66; font-size:13px; min-width:160px; }
+#clock-el { color:#ffddaa; font-size:13px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.65); padding:8px 20px; border-radius:12px; color:white; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(20,8,0,0.92); padding:8px 20px; border-radius:12px; color:#ffcc66; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(220,160,50,0.55); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(15,5,0,0.97); border:2px solid rgba(200,140,50,0.55); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#ffcc66; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-choices { display:flex; flex-direction:column; gap:7px; }
+.dbtn { font-size:14px; padding:9px 13px; background:rgba(30,12,0,0.9); border:1px solid rgba(200,140,50,0.3); border-radius:9px; color:white; cursor:pointer; text-align:left; transition:background 0.15s; }
+.dbtn:hover { background:rgba(80,40,0,0.9); }
+.dbtn.correct { background:rgba(20,150,70,0.9) !important; border-color:#5c5; }
+.dbtn.wrong   { background:rgba(170,30,30,0.9) !important; border-color:#c55; }
+#inv { position:fixed; top:38px; right:10px; background:rgba(20,8,0,0.85); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(200,140,50,0.28); }
+#inv-title { color:#ffcc66; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(15,5,0,0.96); color:#ffcc66; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(220,160,50,0.55); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#b87020; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#ffaa44; }
+.sbtn.sec { background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.28); border-radius:8px; color:white; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(255,255,255,0.18); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(180,110,20,0.35); border:2px solid #ffcc66; border-radius:50%; color:#ffcc66; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">The Saloon</span>
+  <span id="clock-el">High Noon: 0:00</span>
+  <span id="score-el">Score: 0</span>
+</div>
+<div id="hud">WASD move · Mouse look · E interact · Shift sprint</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <div id="dlg-choices"></div>
+</div>
+<div id="inv">
+  <div id="inv-title">Saddlebag</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Empty</div>
+</div>
+<div id="toast"></div>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🤠</div>
+  <div class="st" style="color:#ffcc66">WILD WEST 3D</div>
+  <div class="sb">Welcome to Dusty Gulch — a frontier town in 1882. The sun beats down, the saloon piano plays, and trouble is always just around the corner.<br><br>Explore four buildings. Meet the colorful locals. Answer Wild West trivia to earn points.<br><br><span style="color:#ffcc66">Collect gold nuggets and sheriff stars to prove your frontier spirit!</span></div>
+  <button class="sbtn" onclick="beginGame()">Ride Into Town</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up · Shift to sprint</small>
+</div>
+<div class="screen" id="scr-win">
+  <div class="se">⭐</div>
+  <div class="st" style="color:#ffcc66">Town Explored!</div>
+  <div class="sb" id="win-body">You conquered the frontier!</div>
+  <div id="win-score" style="font-size:24px;color:#FFD700;font-weight:bold;margin:6px 0;"></div>
+  <button class="sbtn" onclick="location.reload()">Ride Again</button>
+  <a class="sbtn sec" href="index.html">Home</a>
+</div>
+<div id="lock-screen" onclick="lockPointer()">
+  <p>Click to look around</p>
+  <small>WASD · Mouse · E to interact</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene=new THREE.Scene();
+scene.background=new THREE.Color(0x3a2800);
+scene.fog=new THREE.Fog(0x3a2800,16,50);
+
+var camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,200);
+camera.position.set(0,1.7,0);
+
+var yaw=Math.PI,pitch=0,locked=false,gameOn=false,dlgOpen=false;
+var elapsed=0,score=0;
+var nearNPC=null,nearPickup=null;
+var keys={},triggered={};
+var inventory=[],npcTalked={},quizUsed={};
+
+function lm(hex){return new THREE.MeshLambertMaterial({color:hex});}
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,seg,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||12),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function sph(r,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function pl(x,y,z,col,i,d){
+  var l=new THREE.PointLight(col,i,d||18);
+  l.position.set(x,y,z); scene.add(l); return l;
+}
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(15,5,0,0.92)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(200,140,50,0.55)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffcc66'; ctx.font='bold 19px Georgia';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-5,x2:5,z1:-5,z2:9,name:"The Saloon",col:"#ffcc66"},
+  {x1:-5,x2:5,z1:9,z2:24,name:"Main Street",col:"#ffaa44"},
+  {x1:7,x2:20,z1:5,z2:20,name:"Sheriff\'s Office",col:"#ff8844"},
+  {x1:-20,x2:-7,z1:5,z2:20,name:"The Stables",col:"#cc7733"},
+  {x1:-6,x2:6,z1:24,z2:38,name:"The Bank",col:"#FFD700"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.2&&x<a.x2-0.2&&z>a.z1+0.2&&z<a.z2-0.2) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,col,x,y,z,pts,desc){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,8),lm(col));
+  g.add(glow);
+  var lbl=label(name,'#FFD700'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,pts:pts,desc:desc,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,col,x,y,z,dialogTree){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,1.2,8),lm(col));
+  body.position.y=0.6; g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.22,8,8),lm(0xd4a070));
+  head.position.y=1.42; g.add(head);
+  // Hat
+  cyl(0.22,0.25,0.25,8,lm(0x2a1800),x,1.72,z);
+  cyl(0.28,0.28,0.06,8,lm(0x2a1800),x,1.58,z);
+  var lbl=label(name,'#ffcc66'); lbl.position.set(0,2.1,0); g.add(lbl);
+  g.position.set(x,0,z); scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,0,z),name:name,dialog:dialogTree,talked:false});
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0x888888,1.8));
+
+  var wood=lm(0x8B5020);
+  var darkWood=lm(0x5a2e10);
+  var plank=lm(0x7a4418);
+  var dirtFloor=lm(0x8B6520);
+  var hay=lm(0xd4a040);
+  var redWood=lm(0x6B2010);
+  var stone=lm(0x888070);
+  var ironBar=lm(0x404040);
+  var gold=lm(0xFFD700);
+  var lantern=lm(0xffcc44);
+  var wanted=lm(0xddcc88);
+  var wantedRed=lm(0xcc3322);
+  var barrel=lm(0x6B3A10);
+  var barrelTop=lm(0x8B5520);
+  var sky=lm(0x8B6020);
+
+  // Dusty outdoor floor (main street area between buildings)
+  box(40,0.1,50,lm(0x9a7030),0,-0.1,17);
+  // Sky back wall (horizon)
+  box(60,15,0.1,sky,0,7,40);
+  box(0.1,15,50,sky,30,7,15);
+  box(0.1,15,50,sky,-30,7,15);
+
+  // ── SALOON ────────────────────────────────
+  box(10,0.15,14,plank,0,-0.08,2);
+  box(10,0.1,14,lm(0x5a2e10),0,4.1,2);
+  box(0.15,4.25,14,wood,-5,2.1,2);
+  box(0.15,4.25,14,wood,5,2.1,2);
+  box(10,4.25,0.15,darkWood,0,2.1,-5);
+  // Saloon front (with swinging door gap)
+  box(3.2,4.25,0.15,wood,-3.4,2.1,9);
+  box(3.2,4.25,0.15,wood,3.4,2.1,9);
+  box(10,1.1,0.15,wood,0,3.7,9);
+  // Swinging saloon doors (half-height)
+  box(1.4,1.3,0.08,plank,-0.7,0.8,9.04);
+  box(1.4,1.3,0.08,plank,0.7,0.8,9.04);
+  // Saloon sign
+  box(4,0.6,0.15,lm(0xc88000),0,4.55,9);
+  box(3.8,0.4,0.08,lm(0x2a1000),0,4.55,9.1);
+  // Bar counter
+  box(6,0.95,0.9,darkWood,0,0.5,-3);
+  box(6,0.12,1.0,plank,0,0.97,-3);
+  // Bar stools
+  for(var bs=-2;bs<=2;bs+=1){
+    cyl(0.14,0.18,0.75,8,lm(0x5a3010),bs,0.38,2);
+    box(0.32,0.08,0.32,plank,bs,0.76,2);
+  }
+  // Bottles on bar shelf
+  box(5,0.08,0.25,darkWood,0,2.0,-4.7);
+  for(var bo=-2.2;bo<=2.2;bo+=0.4){
+    cyl(0.05,0.07,0.38,6,lm(Math.random()>0.5?0x226622:0x885522),bo,2.22,-4.7);
+  }
+  // Piano in corner
+  box(1.3,1.0,0.7,darkWood,-3.8,0.52,0);
+  box(1.3,0.12,0.5,plank,-3.8,1.06,0.1);
+  for(var pk=-3.4;pk>=-4.2;pk-=0.075){
+    box(0.06,0.08,0.4,lm(0xeeeedd),pk,1.08,0.3);
+  }
+  // Poker table
+  box(1.8,0.8,1.2,darkWood,3,0.42,4);
+  box(1.7,0.08,1.1,lm(0x228822),3,0.85,4);
+  // Hanging lanterns
+  cyl(0.08,0.1,0.25,8,lm(0xaaaaaa),0,3.8,2);
+  sph(0.16,lantern,0,3.6,2);
+  pl(0,3.2,2,0xffcc44,2.5,14);
+  cyl(0.08,0.1,0.25,8,lm(0xaaaaaa),-3,3.8,5);
+  sph(0.16,lantern,-3,3.6,5);
+  pl(-3,3.2,5,0xffaa22,2.0,12);
+  cyl(0.08,0.1,0.25,8,lm(0xaaaaaa),3,3.8,5);
+  sph(0.16,lantern,3,3.6,5);
+  pl(3,3.2,5,0xffbb33,2.0,12);
+
+  // Barrels in saloon corners
+  cyl(0.28,0.32,0.7,8,barrel,-4.5,0.38,-2);
+  cyl(0.28,0.32,0.7,8,barrel,-4.5,0.38,-3);
+  cyl(0.3,0.28,0.06,8,barrelTop,-4.5,0.74,-2);
+  cyl(0.3,0.28,0.06,8,barrelTop,-4.5,0.74,-3);
+
+  // ── MAIN STREET ──────────────────────────
+  // Boardwalk planks
+  box(10,0.2,1.0,plank,0,-0.01,9.5);
+  box(10,0.2,1.0,plank,0,-0.01,23.5);
+  // Hitching posts
+  cyl(0.06,0.08,1.6,6,darkWood,-3,0.82,10.5);
+  cyl(0.06,0.08,1.6,6,darkWood,3,0.82,10.5);
+  box(6.5,0.06,0.06,darkWood,0,1.5,10.5);
+  cyl(0.06,0.08,1.6,6,darkWood,-3,0.82,22.5);
+  cyl(0.06,0.08,1.6,6,darkWood,3,0.82,22.5);
+  box(6.5,0.06,0.06,darkWood,0,1.5,22.5);
+  // Trough
+  box(2.5,0.3,0.6,darkWood,0,0.18,11.5);
+  box(2.3,0.12,0.4,lm(0x2244cc),0,0.38,11.5);
+  // Tumbleweed spheres
+  sph(0.3,lm(0xaa8840),4,0.32,14);
+  sph(0.25,lm(0x998830),-4.5,0.28,17);
+
+  // ── SHERIFF\'S OFFICE ─────────────────────
+  box(13,0.15,15,lm(0x7a5030),13.5,-0.08,12.5);
+  box(13,0.1,15,lm(0x5a3010),13.5,4.1,12.5);
+  box(13,4.25,0.15,wood,13.5,2.1,5);
+  box(13,4.25,0.15,wood,13.5,2.1,20);
+  box(0.15,4.25,15,wood,20,2.1,12.5);
+  // Sheriff\'s desk
+  box(2.0,0.85,1.2,darkWood,16,0.45,12);
+  box(2.0,0.1,1.2,plank,16,0.9,12);
+  // Jail cell bars
+  for(var jb=0;jb<5;jb++){
+    cyl(0.06,0.06,2.8,6,ironBar,8+jb*0.5,1.45,17.5);
+  }
+  box(2.5,0.1,0.15,ironBar,9,2.9,17.5);
+  box(0.1,2.8,0.15,ironBar,8,1.45,17.5);
+  box(0.1,2.8,0.15,ironBar,10,1.45,17.5);
+  box(2.5,0.1,0.15,ironBar,9,0.1,17.5);
+  // Wanted posters
+  box(0.06,0.9,0.65,wanted,19.88,2.2,8);
+  box(0.04,0.7,0.5,wantedRed,19.88,2.2,8);
+  box(0.06,0.9,0.65,wanted,19.88,2.2,13);
+  box(0.04,0.7,0.5,lm(0x334488),19.88,2.2,13);
+  box(0.06,0.9,0.65,wanted,19.88,2.2,18);
+  box(0.04,0.7,0.5,wantedRed,19.88,2.2,18);
+  // Gun rack
+  box(1.5,1.5,0.15,darkWood,19.88,2.0,10);
+  for(var gr=0;gr<3;gr++){
+    box(0.06,1.2,0.06,ironBar,19.78,2.0,9.4+gr*0.35);
+  }
+  // Star badge on desk
+  box(0.15,0.15,0.06,lm(0xFFD700),16,0.97,11.5);
+  // Lantern
+  cyl(0.08,0.1,0.25,8,lm(0xaaaaaa),13.5,3.8,12.5);
+  sph(0.16,lantern,13.5,3.6,12.5);
+  pl(13.5,3.2,12.5,0xffcc44,2.5,16);
+  pl(16,2.0,12,0xffaa22,2.0,12);
+
+  // Corridor openings
+  box(0.15,4.25,5,wood,5,2.1,8.5);
+  box(0.15,4.25,5,wood,5,2.1,20.5);
+  box(2.5,1.0,0.15,wood,5,3.75,14.5);
+  box(0.15,4.25,5,wood,-5,2.1,8.5);
+  box(0.15,4.25,5,wood,-5,2.1,20.5);
+  box(2.5,1.0,0.15,wood,-5,3.75,14.5);
+
+  // ── STABLES ──────────────────────────────
+  box(13,0.15,15,lm(0x7a6030),-13.5,-0.08,12.5);
+  box(13,0.2,15,hay,-13.5,0.14,12.5); // hay floor
+  box(13,0.1,15,lm(0x4a2a08),-13.5,4.1,12.5);
+  box(13,4.25,0.15,wood,-13.5,2.1,5);
+  box(13,4.25,0.15,wood,-13.5,2.1,20);
+  box(0.15,4.25,15,wood,-20,2.1,12.5);
+  // Horse stalls
+  box(3.5,2.0,0.15,darkWood,-10,1.05,11);
+  box(3.5,2.0,0.15,darkWood,-10,1.05,14);
+  box(0.15,2.0,3.0,darkWood,-11.75,1.05,12.5);
+  box(3.5,2.0,0.15,darkWood,-16.5,1.05,11);
+  box(3.5,2.0,0.15,darkWood,-16.5,1.05,14);
+  box(0.15,2.0,3.0,darkWood,-14.75,1.05,12.5);
+  // Saddles on walls
+  box(0.06,0.5,0.9,lm(0x8B4010),-19.88,2.0,8);
+  box(0.06,0.5,0.9,lm(0x7B3008),-19.88,2.0,11);
+  box(0.06,0.5,0.9,lm(0x9B4818),-19.88,2.0,17);
+  // Haybales
+  box(1.0,0.8,0.8,hay,-17,0.42,6.5);
+  box(1.0,0.8,0.8,lm(0xc89020),-16,0.42,6.5);
+  box(1.0,0.8,0.8,hay,-17.5,1.22,6.5);
+  // Rope coils
+  cyl(0.25,0.25,0.12,12,lm(0xc8a040),-12,0.14,7);
+  cyl(0.2,0.2,0.08,12,lm(0xb89030),-11,0.12,8);
+  // Lanterns in stables
+  cyl(0.08,0.1,0.25,8,lm(0xaaaaaa),-10,3.8,8);
+  sph(0.16,lantern,-10,3.6,8);
+  pl(-10,3.2,8,0xffaa33,2.0,12);
+  cyl(0.08,0.1,0.25,8,lm(0xaaaaaa),-17,3.8,17);
+  sph(0.16,lantern,-17,3.6,17);
+  pl(-17,3.2,17,0xffbb44,2.0,12);
+  pl(-13.5,2.5,12.5,0xffcc55,2.0,16);
+
+  // Barrels in stables
+  cyl(0.28,0.32,0.7,8,barrel,-18.5,0.38,16.5);
+  cyl(0.28,0.32,0.7,8,barrel,-18.5,0.38,18);
+  cyl(0.3,0.28,0.06,8,barrelTop,-18.5,0.74,16.5);
+
+  // ── BANK ──────────────────────────────────
+  box(12,0.15,14,lm(0x8a7050),0,-0.08,31);
+  box(12,0.1,14,lm(0x5a3818),0,4.8,31);
+  box(12,4.95,0.15,stone,0,2.45,24);
+  box(12,4.95,0.15,stone,0,2.45,38);
+  box(0.15,4.95,14,stone,6,2.45,31);
+  box(0.15,4.95,14,stone,-6,2.45,31);
+  // Bank teller counter
+  box(8,1.2,0.8,stone,0,0.62,35);
+  box(8,0.12,0.9,lm(0xaaa090),0,1.26,35);
+  // Iron safe
+  box(1.6,1.5,1.2,ironBar,4.5,0.78,37.5);
+  box(1.4,1.3,0.15,lm(0x225588),4.5,0.78,36.88);
+  cyl(0.15,0.15,0.08,8,lm(0xddddcc),4.5,0.78,36.8);
+  // Gold stacks
+  box(0.8,0.35,0.5,gold,-3,0.28,37);
+  box(0.8,0.35,0.5,gold,-3,0.28,37.6);
+  box(0.8,0.35,0.5,gold,-3.8,0.28,37.3);
+  for(var gn=0;gn<6;gn++){
+    sph(0.1,gold,-2+gn*0.18,0.28,37.2);
+  }
+  // Bank windows (stone arches)
+  box(1.6,2.0,0.15,stone,3,2.2,23.88);
+  box(1.6,2.0,0.15,stone,-3,2.2,23.88);
+  box(1.2,1.6,0.1,lm(0x8899aa),3,2.2,23.98);
+  box(1.2,1.6,0.1,lm(0x8899aa),-3,2.2,23.98);
+  // Wall lanterns bank
+  cyl(0.08,0.1,0.25,8,lm(0xaaaaaa),5.5,3.5,30);
+  sph(0.16,lantern,5.5,3.3,30);
+  pl(5.5,3.0,30,0xffdd88,2.0,12);
+  cyl(0.08,0.1,0.25,8,lm(0xaaaaaa),-5.5,3.5,30);
+  sph(0.16,lantern,-5.5,3.3,30);
+  pl(-5.5,3.0,30,0xffdd88,2.0,12);
+  pl(0,3.0,35,0xffcc66,2.5,16);
+
+  // Bank front openings
+  box(3.5,4.95,0.15,stone,-4.25,2.45,24);
+  box(3.5,4.95,0.15,stone,4.25,2.45,24);
+  box(12,0.8,0.15,stone,0,4.55,24);
+
+  // Pickups
+  addPickup('Gold Nugget',0xFFD700,3,0.35,5,55,'Pure gold — you\'re rich!');
+  addPickup('Sheriff Star',0xffddaa,14,0.35,9,65,'A genuine deputy\'s star badge!');
+  addPickup('Gold Nugget',0xFFAA00,-13.5,0.35,9,55,'Another nugget from the old mine!');
+  addPickup('Wanted Poster',0xddcc88,0,0.35,33,60,'A wanted poster — 500 dollar reward!');
+
+  // NPCs
+  addNPC('Sheriff Wade',0x334488,14,0,13,buildDialog_sheriff());
+  addNPC('Bartender Jake',0x884422,0,0,4,buildDialog_bartender());
+  addNPC('Outlaw Red',0xaa2222,-13.5,0,13,buildDialog_outlaw());
+  addNPC('Prospector Pete',0xaa8822,2,0,33,buildDialog_prospector());
+}
+
+function buildDialog_sheriff(){
+  return [
+    {id:'greet',txt:"Howdy, stranger. I\'m Sheriff Wade. I keep the peace in Dusty Gulch. We\'ve had some trouble lately with outlaws. You look smart enough — let me test you on frontier law.",
+     choices:[
+       {t:"Ask about the Wild West",next:'quiz1'},
+       {t:"Ask about famous outlaws",next:'quiz2'},
+       {t:"Keep moving, Sheriff",next:null}
+     ]},
+    {id:'quiz1',txt:"What year did the famous OK Corral gunfight take place?",
+     choices:[
+       {t:"1876",next:'wrong1',correct:false},
+       {t:"1881",next:'right1',correct:true},
+       {t:"1869",next:'wrong1',correct:false},
+       {t:"1890",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"October 26, 1881! The Earps and Doc Holliday vs the Cowboys. 30 seconds that defined the West. +30 points!",pts:30,
+     choices:[{t:"Ask about outlaws",next:'quiz2'},{t:"Much obliged",next:null}]},
+    {id:'wrong1',txt:"October 26, 1881. Wyatt, Virgil, Morgan Earp and Doc Holliday against the Clanton-McLaury gang.",
+     choices:[{t:"Ask about outlaws",next:'quiz2'},{t:"Much obliged",next:null}]},
+    {id:'quiz2',txt:"Who was known as 'Billy the Kid\'?",
+     choices:[
+       {t:"Jesse James",next:'wrong2',correct:false},
+       {t:"Henry McCarty / William Bonney",next:'right2',correct:true},
+       {t:"Cole Younger",next:'wrong2',correct:false},
+       {t:"John Wesley Hardin",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"Henry McCarty, alias William H. Bonney — Billy the Kid! Shot dead at 21 by Sheriff Pat Garrett. +25 points!",pts:25,
+     choices:[{t:"One more question",next:'quiz3'},{t:"Much obliged",next:null}]},
+    {id:'wrong2',txt:"Billy the Kid — real name Henry McCarty, alias Bonney. Died age 21 in 1881, same year as the OK Corral!",
+     choices:[{t:"One more question",next:'quiz3'},{t:"Much obliged",next:null}]},
+    {id:'quiz3',txt:"What was the name of the famous cattle trail from Texas to Kansas?",
+     choices:[
+       {t:"Oregon Trail",next:'wrong3',correct:false},
+       {t:"Chisholm Trail",next:'right3',correct:true},
+       {t:"Santa Fe Trail",next:'wrong3',correct:false},
+       {t:"Butterfield Trail",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"The Chisholm Trail! Ran from south Texas to Abilene, Kansas — millions of cattle drove that route. +30 points!",pts:30,
+     choices:[{t:"Much obliged",next:null}]},
+    {id:'wrong3',txt:"The Chisholm Trail, established 1867 — the main cattle drive route from Texas to Kansas railheads.",
+     choices:[{t:"Much obliged",next:null}]}
+  ];
+}
+
+function buildDialog_bartender(){
+  return [
+    {id:'greet',txt:"Welcome to the Lucky Strike Saloon, partner! Name\'s Jake. I\'ve been pourin\' drinks since 1868. Pull up a stool — I know all the good stories AND all the hard questions.",
+     choices:[
+       {t:"Ask about saloon life",next:'quiz1'},
+       {t:"Ask about the Gold Rush",next:'quiz2'},
+       {t:"Just passing through",next:null}
+     ]},
+    {id:'quiz1',txt:"What was a common term for a frontier town that appeared quickly during a boom?",
+     choices:[
+       {t:"Ghost town",next:'wrong1',correct:false},
+       {t:"Boomtown",next:'right1',correct:true},
+       {t:"Frontier post",next:'wrong1',correct:false},
+       {t:"Cow town",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"Boomtown! Appeared overnight when gold or cattle money arrived, then became ghost towns just as fast. +25 points!",pts:25,
+     choices:[{t:"Ask about Gold Rush",next:'quiz2'},{t:"Take care",next:null}]},
+    {id:'wrong1',txt:"A boomtown — sprang up fast around mining strikes or cattle drives, and often died just as quick.",
+     choices:[{t:"Ask about Gold Rush",next:'quiz2'},{t:"Take care",next:null}]},
+    {id:'quiz2',txt:"When did the California Gold Rush begin?",
+     choices:[
+       {t:"1848",next:'right2',correct:true},
+       {t:"1860",next:'wrong2',correct:false},
+       {t:"1835",next:'wrong2',correct:false},
+       {t:"1875",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"January 24, 1848 — James Marshall found gold at Sutter\'s Mill. California went wild! +25 points!",pts:25,
+     choices:[{t:"One last round",next:'quiz3'},{t:"Take care",next:null}]},
+    {id:'wrong2',txt:"January 24, 1848 at Sutter\'s Mill on the American River. By 1849, 300,000 prospectors flooded California.",
+     choices:[{t:"One last round",next:'quiz3'},{t:"Take care",next:null}]},
+    {id:'quiz3',txt:"What was 'Boot Hill'?",
+     choices:[
+       {t:"A hill used for target practice",next:'wrong3',correct:false},
+       {t:"A frontier graveyard for those who died with their boots on",next:'right3',correct:true},
+       {t:"A type of riding boot store",next:'wrong3',correct:false},
+       {t:"A type of terrain feature",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"Boot Hill — where gunslingers and criminals were buried! Died violently = died with boots on. +30 points!",pts:30,
+     choices:[{t:"Take care",next:null}]},
+    {id:'wrong3',txt:"Boot Hill was a frontier graveyard — named because most residents died violently, with their boots on.",
+     choices:[{t:"Take care",next:null}]}
+  ];
+}
+
+function buildDialog_outlaw(){
+  return [
+    {id:'greet',txt:"*spits* Well, well. A greenhorn. I\'m Red McGee — most wanted man in three territories. Don\'t try nothin\'. But I\'ll give ya a fair shake at some questions. Maybe.",
+     choices:[
+       {t:"Ask about train robberies",next:'quiz1'},
+       {t:"Ask about Jesse James",next:'quiz2'},
+       {t:"Back off slowly",next:null}
+     ]},
+    {id:'quiz1',txt:"Who was the most famous train robber of the Old West?",
+     choices:[
+       {t:"Butch Cassidy",next:'right1',correct:true},
+       {t:"John Dillinger",next:'wrong1',correct:false},
+       {t:"Al Capone",next:'wrong1',correct:false},
+       {t:"Pretty Boy Floyd",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"Butch Cassidy — real name Robert Leroy Parker! The Wild Bunch robbed banks AND trains across the West. +30 points!",pts:30,
+     choices:[{t:"Ask about Jesse James",next:'quiz2'},{t:"Keep moving",next:null}]},
+    {id:'wrong1',txt:"Butch Cassidy, leader of the Wild Bunch. He and the Sundance Kid eventually fled to South America.",
+     choices:[{t:"Ask about Jesse James",next:'quiz2'},{t:"Keep moving",next:null}]},
+    {id:'quiz2',txt:"How did Jesse James die?",
+     choices:[
+       {t:"Shot by a lawman in a gunfight",next:'wrong2',correct:false},
+       {t:"Shot in the back by Robert Ford, a gang member",next:'right2',correct:true},
+       {t:"Hanged by a judge",next:'wrong2',correct:false},
+       {t:"Died in a train robbery",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"Shot by Robert Ford — a coward who shot him in the back for the reward money. April 3, 1882. +25 points!",pts:25,
+     choices:[{t:"One last question",next:'quiz3'},{t:"Keep moving",next:null}]},
+    {id:'wrong2',txt:"Robert Ford shot Jesse James in the back of the head on April 3, 1882 — for the reward money. Treachery!",
+     choices:[{t:"One last question",next:'quiz3'},{t:"Keep moving",next:null}]},
+    {id:'quiz3',txt:"What did cowboys use barbed wire for?",
+     choices:[
+       {t:"To trap outlaws",next:'wrong3',correct:false},
+       {t:"To fence in cattle and define land ownership",next:'right3',correct:true},
+       {t:"To reinforce wagon wheels",next:'wrong3',correct:false},
+       {t:"For making weapons",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"Fence in cattle — and it ended the open range era. Cowboys HATED barbed wire. Ended their free-roaming life. +25 points!",pts:25,
+     choices:[{t:"Keep moving",next:null}]},
+    {id:'wrong3',txt:"Barbed wire fenced off the open range from 1874 onward — effectively ending the era of the great cattle drives.",
+     choices:[{t:"Keep moving",next:null}]}
+  ];
+}
+
+function buildDialog_prospector(){
+  return [
+    {id:'greet',txt:"*panning for gold* Yeehaw! Name\'s Prospector Pete! Been pannin\' these streams for twenty years. Found some good color in my day! Care to test your gold rush knowledge?",
+     choices:[
+       {t:"Ask about mining",next:'quiz1'},
+       {t:"Ask about Manifest Destiny",next:'quiz2'},
+       {t:"Good luck with your pandin\'",next:null}
+     ]},
+    {id:'quiz1',txt:"What is 'fool\'s gold'?",
+     choices:[
+       {t:"Painted rocks",next:'wrong1',correct:false},
+       {t:"Iron pyrite — a mineral that resembles gold",next:'right1',correct:true},
+       {t:"Yellow quartz",next:'wrong1',correct:false},
+       {t:"Copper ore",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"Iron pyrite! Glitters like gold but worthless. Many greenhorns were fooled. +25 points, partner!",pts:25,
+     choices:[{t:"Ask about Manifest Destiny",next:'quiz2'},{t:"Good luck",next:null}]},
+    {id:'wrong1',txt:"Iron pyrite — it catches the light just like gold but has no value. Many a broken dream started with pyrite!",
+     choices:[{t:"Ask about Manifest Destiny",next:'quiz2'},{t:"Good luck",next:null}]},
+    {id:'quiz2',txt:"What did 'Manifest Destiny' mean to 19th-century Americans?",
+     choices:[
+       {t:"The right to gold mining",next:'wrong2',correct:false},
+       {t:"The belief that the US was destined to expand across the continent",next:'right2',correct:true},
+       {t:"A treaty with Native Americans",next:'wrong2',correct:false},
+       {t:"A railroad building program",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"God-given right to stretch from sea to shining sea! Drove westward expansion — for better and worse. +30 points!",pts:30,
+     choices:[{t:"One last question",next:'quiz3'},{t:"Good luck",next:null}]},
+    {id:'wrong2',txt:"Manifest Destiny was the belief that America was divinely ordained to expand from the Atlantic to the Pacific.",
+     choices:[{t:"One last question",next:'quiz3'},{t:"Good luck",next:null}]},
+    {id:'quiz3',txt:"When was the first transcontinental railroad completed in the USA?",
+     choices:[
+       {t:"1849",next:'wrong3',correct:false},
+       {t:"1869",next:'right3',correct:true},
+       {t:"1880",next:'wrong3',correct:false},
+       {t:"1902",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"May 10, 1869 at Promontory Summit, Utah! The golden spike joined the Union Pacific and Central Pacific. +35 points!",pts:35,
+     choices:[{t:"Good luck",next:null}]},
+    {id:'wrong3',txt:"May 10, 1869 — the golden spike ceremony at Promontory Summit, Utah, joining the two railroads.",
+     choices:[{t:"Good luck",next:null}]}
+  ];
+}
+
+var dlgNPC=null,dlgNodeId=null;
+
+function openDialog(npc){
+  dlgNPC=npc; dlgNodeId='greet'; dlgOpen=true;
+  renderDialog();
+  document.getElementById('dialog').style.display='block';
+  if(document.pointerLockElement) document.exitPointerLock();
+  locked=false;
+  document.getElementById('lock-screen').style.display='none';
+}
+
+function renderDialog(){
+  var tree=dlgNPC.dialog,node=null;
+  for(var i=0;i<tree.length;i++) if(tree[i].id===dlgNodeId){node=tree[i];break;}
+  if(!node){closeDialog();return;}
+  document.getElementById('dlg-name').textContent=dlgNPC.name;
+  document.getElementById('dlg-text').textContent=node.txt;
+  if(node.pts) addScore(node.pts);
+  var cc=document.getElementById('dlg-choices');
+  cc.innerHTML='';
+  node.choices.forEach(function(ch){
+    var b=document.createElement('button');
+    b.className='dbtn'; b.textContent=ch.t;
+    b.onclick=function(){
+      if(ch.correct===true){b.classList.add('correct');setTimeout(function(){go(ch.next);},700);}
+      else if(ch.correct===false){b.classList.add('wrong');setTimeout(function(){go(ch.next);},700);}
+      else{go(ch.next);}
+    };
+    cc.appendChild(b);
+  });
+}
+
+function go(nextId){
+  if(!nextId){closeDialog();return;}
+  dlgNodeId=nextId; renderDialog();
+}
+
+function closeDialog(){
+  dlgOpen=false; dlgNPC=null;
+  document.getElementById('dialog').style.display='none';
+  setTimeout(function(){if(gameOn) lockPointer();},300);
+}
+
+function addScore(pts){
+  score+=pts;
+  document.getElementById('score-el').textContent='Score: '+score;
+  showToast('+'+pts+' points!');
+}
+
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  clearTimeout(window._toastTimer);
+  window._toastTimer=setTimeout(function(){t.style.display='none';},2200);
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Empty';return;}
+  el.textContent=inventory.join('\n');
+}
+
+window.addEventListener('keydown',function(e){
+  keys[e.code]=true;
+  if(!gameOn||dlgOpen) return;
+  if(e.code==='KeyE'){
+    if(nearNPC) openDialog(nearNPC);
+    else if(nearPickup) collectPickup(nearPickup);
+  }
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+window.addEventListener('keyup',function(e){keys[e.code]=false;});
+
+document.addEventListener('mousemove',function(e){
+  if(!locked) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-Math.PI/2.4,Math.min(Math.PI/2.4,pitch));
+});
+
+function lockPointer(){
+  document.getElementById('lock-screen').style.display='none';
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=!!document.pointerLockElement;
+  if(!locked&&gameOn&&!dlgOpen) document.getElementById('lock-screen').style.display='flex';
+});
+
+document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();if(nearNPC)openDialog(nearNPC);else if(nearPickup)collectPickup(nearPickup);});
+document.getElementById('e-btn').addEventListener('mousedown',function(){if(nearNPC)openDialog(nearNPC);else if(nearPickup)collectPickup(nearPickup);});
+
+function setupMobile(){
+  var isMobile=('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bindBtn(id,code){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();keys[code]=true;});
+    el.addEventListener('touchend',function(e){e.preventDefault();keys[code]=false;});
+    el.addEventListener('mousedown',function(){keys[code]=true;});
+    el.addEventListener('mouseup',function(){keys[code]=false;});
+  }
+  bindBtn('m-up','KeyW'); bindBtn('m-dn','KeyS');
+  bindBtn('m-left','KeyA'); bindBtn('m-right','KeyD');
+  var lastTX=null,lastTY=null;
+  renderer.domElement.addEventListener('touchstart',function(e){
+    if(e.touches.length===1){lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;}
+  },{passive:true});
+  renderer.domElement.addEventListener('touchmove',function(e){
+    if(e.touches.length===1&&lastTX!==null){
+      var dx=e.touches[0].clientX-lastTX,dy=e.touches[0].clientY-lastTY;
+      yaw-=dx*0.005; pitch-=dy*0.005;
+      pitch=Math.max(-Math.PI/2.4,Math.min(Math.PI/2.4,pitch));
+      lastTX=e.touches[0].clientX; lastTY=e.touches[0].clientY;
+    }
+  },{passive:true});
+}
+setupMobile();
+
+function collectPickup(p){
+  if(p.collected) return;
+  p.collected=true; scene.remove(p.g);
+  inventory.push(p.name);
+  addScore(p.pts);
+  showToast('Found: '+p.name+' — '+p.desc);
+  updateInv();
+  nearPickup=null;
+  document.getElementById('interact').style.display='none';
+  document.getElementById('e-btn').style.display='none';
+  checkWin();
+}
+
+function checkWin(){
+  var allCollected=pickups.every(function(p){return p.collected;});
+  if(allCollected&&score>=200){
+    setTimeout(function(){
+      var ws=document.getElementById('scr-win');
+      ws.querySelector('.sb').textContent='You rode through all four buildings of Dusty Gulch, collected all frontier treasures, and proved yourself the wisest cowpoke in the territory. They\'ll be talkin\' about you in these parts for years!';
+      document.getElementById('win-score').textContent='Final Score: '+score+' points';
+      ws.classList.add('show');
+    },1000);
+  }
+}
+
+var clock=new THREE.Clock();
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  buildWorld();
+  gameOn=true;
+  camera.position.set(0,1.7,2);
+  yaw=Math.PI;
+  lockPointer();
+  animate();
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn||dlgOpen){renderer.render(scene,camera);return;}
+  var dt=Math.min(clock.getDelta(),0.05);
+  elapsed+=dt;
+  var mins=Math.floor(elapsed/60),secs=Math.floor(elapsed%60);
+  document.getElementById('clock-el').textContent='High Noon: '+mins+':'+(secs<10?'0':'')+secs;
+
+  var spd=(keys['ShiftLeft']||keys['ShiftRight'])?7:4;
+  var dx=0,dz=0;
+  if(keys['KeyW']) dz=-1;
+  if(keys['KeyS']) dz=1;
+  if(keys['KeyA']) dx=-1;
+  if(keys['KeyD']) dx=1;
+  if(dx||dz){
+    var len=Math.sqrt(dx*dx+dz*dz); dx/=len; dz/=len;
+    var nx=camera.position.x+(Math.sin(yaw)*dz*spd*dt+Math.cos(yaw)*dx*spd*dt);
+    var nz=camera.position.z+(Math.cos(yaw)*(-dz)*spd*dt+Math.sin(yaw)*(-dx)*spd*dt);
+    if(nx>-19.8&&nx<19.8) camera.position.x=nx;
+    if(nz>-4.8&&nz<37.8) camera.position.z=nz;
+  }
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  nearNPC=null; nearPickup=null;
+  var cx=camera.position.x,cz=camera.position.z;
+  npcs.forEach(function(n){
+    var d=Math.hypot(cx-n.pos.x,cz-n.pos.z);
+    if(d<2.5) nearNPC=n;
+    n.g.children.forEach(function(c){if(c.isSprite) c.lookAt(camera.position);});
+  });
+  pickups.forEach(function(p){
+    if(!p.collected){
+      var d=Math.hypot(cx-p.pos.x,cz-p.pos.z);
+      if(d<2.0) nearPickup=p;
+      p.g.rotation.y+=dt*1.8;
+      p.g.children.forEach(function(c){if(c.isSprite) c.lookAt(camera.position);});
+    }
+  });
+
+  var interact=document.getElementById('interact'),ebtn=document.getElementById('e-btn');
+  if(nearNPC){
+    interact.textContent='[E] Talk to '+nearNPC.name;
+    interact.style.display='block'; ebtn.style.display='flex';
+  } else if(nearPickup){
+    interact.textContent='[E] Pick up '+nearPickup.name;
+    interact.style.display='block'; ebtn.style.display='flex';
+  } else {
+    interact.style.display='none'; ebtn.style.display='none';
+  }
+
+  var z=getZone(cx,cz);
+  if(z) document.getElementById('loc').textContent=z.name;
+
+  renderer.render(scene,camera);
+}
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

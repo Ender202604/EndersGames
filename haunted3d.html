@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Haunted Mansion 3D — Ghost Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(200,180,255,0.8); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 6px #8866ff; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(10,0,20,0.88); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:1px solid rgba(150,100,220,0.25); }
+#loc { color:#cc99ff; font-size:13px; min-width:160px; }
+#clock-el { color:#ddbbff; font-size:13px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.65); padding:8px 20px; border-radius:12px; color:white; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(10,0,20,0.92); padding:8px 20px; border-radius:12px; color:#cc99ff; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(180,120,255,0.5); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(8,0,18,0.97); border:2px solid rgba(150,100,220,0.55); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#cc99ff; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-choices { display:flex; flex-direction:column; gap:7px; }
+.dbtn { font-size:14px; padding:9px 13px; background:rgba(20,0,40,0.9); border:1px solid rgba(150,100,220,0.3); border-radius:9px; color:white; cursor:pointer; text-align:left; transition:background 0.15s; }
+.dbtn:hover { background:rgba(60,0,100,0.9); }
+.dbtn.correct { background:rgba(20,150,70,0.9) !important; border-color:#5c5; }
+.dbtn.wrong   { background:rgba(170,30,30,0.9) !important; border-color:#c55; }
+#inv { position:fixed; top:38px; right:10px; background:rgba(10,0,20,0.82); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(150,100,220,0.28); }
+#inv-title { color:#cc99ff; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(10,0,20,0.95); color:#cc99ff; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(180,120,255,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#7733cc; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#aa55ff; }
+.sbtn.sec { background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.28); border-radius:8px; color:white; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(255,255,255,0.18); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(120,60,200,0.35); border:2px solid #cc99ff; border-radius:50%; color:#cc99ff; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">The Foyer</span>
+  <span id="clock-el">⏱ 0:00</span>
+  <span id="score-el">Score: 0</span>
+</div>
+<div id="hud">WASD move · Mouse look · E interact · Shift sprint</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <div id="dlg-choices"></div>
+</div>
+<div id="inv">
+  <div id="inv-title">Inventory</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Empty</div>
+</div>
+<div id="toast"></div>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">👻</div>
+  <div class="st" style="color:#cc99ff">HAUNTED MANSION 3D</div>
+  <div class="sb">Welcome to Blackmoor Manor — abandoned for 200 years, now teeming with restless spirits.<br><br>Explore four eerie rooms. Converse with the ghostly inhabitants. Answer spooky trivia to earn points.<br><br><span style="color:#cc99ff">Collect ghost orbs and skeleton keys to unlock the mansion\'s deepest secrets...</span></div>
+  <button class="sbtn" onclick="beginGame()">Enter the Mansion</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up · Shift to sprint</small>
+</div>
+<div class="screen" id="scr-win">
+  <div class="se">🕯️</div>
+  <div class="st" style="color:#cc99ff">Mansion Explored!</div>
+  <div class="sb" id="win-body">You have survived all four haunted rooms!</div>
+  <div id="win-score" style="font-size:24px;color:#FFD700;font-weight:bold;margin:6px 0;"></div>
+  <button class="sbtn" onclick="location.reload()">Haunt Again</button>
+  <a class="sbtn sec" href="index.html">Home</a>
+</div>
+<div id="lock-screen" onclick="lockPointer()">
+  <p>Click to look around</p>
+  <small>WASD · Mouse · E to interact</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050008);
+scene.fog = new THREE.Fog(0x050008, 12, 40);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0,1.7,0);
+
+var yaw=Math.PI, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var elapsed=0, score=0;
+var nearNPC=null, nearPickup=null;
+var keys={}, triggered={};
+var inventory=[], npcTalked={}, quizUsed={};
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,seg,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||12),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function sph(r,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function pl(x,y,z,col,i,d){
+  var l=new THREE.PointLight(col,i,d||18);
+  l.position.set(x,y,z); scene.add(l); return l;
+}
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(8,0,18,0.9)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(150,100,220,0.55)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#cc99ff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-5,x2:5,z1:-5,z2:8,name:"The Foyer",col:"#cc99ff"},
+  {x1:-5,x2:5,z1:8,z2:24,name:"The Ballroom",col:"#aa77ee"},
+  {x1:7,x2:19,z1:5,z2:20,name:"The Library",col:"#9966cc"},
+  {x1:-19,x2:-7,z1:5,z2:20,name:"The Crypt",col:"#772299"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.2&&x<a.x2-0.2&&z>a.z1+0.2&&z<a.z2-0.2) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,col,x,y,z,pts,desc){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,8),lm(col));
+  g.add(glow);
+  var lbl=label(name,'#cc99ff'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,pts:pts,desc:desc,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,col,x,y,z,dialogTree){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,1.2,8),lm(col));
+  body.position.y=0.6; g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.22,8,8),lm(0xccbbff));
+  head.position.y=1.42; g.add(head);
+  var lbl=label(name,'#cc99ff'); lbl.position.set(0,2.0,0); g.add(lbl);
+  g.position.set(x,0,z); scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,0,z),name:name,dialog:dialogTree,talked:false});
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0x888888,1.8));
+
+  var wall=lm(0x2a1a3a);
+  var darkWall=lm(0x1a0a2a);
+  var floor=lm(0x1e1228);
+  var ceiling=lm(0x0e0818);
+  var wood=lm(0x3a2010);
+  var purple=lm(0x440066);
+  var candle=lm(0xffee88);
+  var bone=lm(0xddd8c0);
+  var grey=lm(0x404050);
+  var darkGrey=lm(0x252535);
+  var moss=lm(0x224422);
+  var cobweb=lm(0xbbbbcc);
+  var red=lm(0x660022);
+
+  // ── FOYER ─────────────────────────────────
+  box(10,0.15,13,floor,0,-0.08,1.5);
+  box(10,0.1,13,ceiling,0,4.2,1.5);
+  box(0.15,4.4,13,wall,-5,2.1,1.5);
+  box(0.15,4.4,13,wall,5,2.1,1.5);
+  box(10,4.4,0.15,darkWall,0,2.1,-5);
+  box(3.5,4.4,0.15,wall,-3.25,2.1,8);
+  box(3.5,4.4,0.15,wall,3.25,2.1,8);
+  box(10,0.9,0.15,wall,0,3.85,8);
+
+  // Cobwebs (thin cylinders in corners)
+  cyl(0.01,0.01,3.5,4,cobweb,-4.6,3.0,-4.6);
+  cyl(0.01,0.01,3.5,4,cobweb,4.6,3.0,-4.6);
+  cyl(0.01,0.01,2.8,4,cobweb,-4.6,3.5,7.5);
+
+  // Candelabra pair at entrance
+  cyl(0.04,0.06,1.4,8,grey,-3.5,0.72,6.5);
+  box(0.5,0.06,0.5,grey,-3.5,1.45,6.5);
+  for(var cc=-3.7;cc<=-3.3;cc+=0.2){
+    cyl(0.03,0.03,0.3,5,lm(0xeeeeee),cc,1.62,6.5);
+    cyl(0.05,0.05,0.08,5,candle,cc,1.78,6.5);
+  }
+  pl(-3.5,2.0,6.5,0xffaa44,1.5,10);
+  cyl(0.04,0.06,1.4,8,grey,3.5,0.72,6.5);
+  box(0.5,0.06,0.5,grey,3.5,1.45,6.5);
+  for(var cc2=3.3;cc2<=3.7;cc2+=0.2){
+    cyl(0.03,0.03,0.3,5,lm(0xeeeeee),cc2,1.62,6.5);
+    cyl(0.05,0.05,0.08,5,candle,cc2,1.78,6.5);
+  }
+  pl(3.5,2.0,6.5,0xffaa44,1.5,10);
+
+  // Portrait frames
+  box(0.08,1.5,1.1,lm(0x6b4010),-4.88,2.5,-2);
+  box(0.04,1.3,0.9,red,-4.88,2.5,-2);
+  box(0.08,1.5,1.1,lm(0x6b4010),4.88,2.5,-2);
+  box(0.04,1.3,0.9,lm(0x1a3355),4.88,2.5,-2);
+
+  // Entry chandelier
+  sph(0.25,grey,0,3.8,2);
+  for(var ca=0;ca<6;ca++){
+    var ang=ca*Math.PI/3;
+    cyl(0.015,0.015,0.8,5,lm(0xccccaa),Math.sin(ang)*0.6,3.4,2+Math.cos(ang)*0.6);
+    sph(0.06,candle,Math.sin(ang)*0.6,3.05,2+Math.cos(ang)*0.6);
+  }
+  pl(0,2.8,2,0xffcc66,2.0,14);
+
+  // ── BALLROOM ─────────────────────────────
+  box(10,0.15,16,lm(0x241830),0,-0.08,16);
+  box(10,0.1,16,ceiling,0,4.7,16);
+  box(0.15,4.8,16,darkWall,-5,2.4,16);
+  box(0.15,4.8,16,darkWall,5,2.4,16);
+  box(10,4.8,0.15,darkWall,0,2.4,24);
+
+  // Dusty dance floor
+  box(8,0.06,12,lm(0x2a1e3a),0,0.04,16);
+
+  // Grand chandelier
+  sph(0.4,grey,0,4.5,16);
+  for(var cb=0;cb<8;cb++){
+    var angb=cb*Math.PI/4;
+    cyl(0.015,0.015,1.0,5,lm(0xbbbbaa),Math.sin(angb)*0.9,4.1,16+Math.cos(angb)*0.9);
+    sph(0.07,candle,Math.sin(angb)*0.9,3.65,16+Math.cos(angb)*0.9);
+  }
+  pl(0,3.5,16,0xffaa55,2.5,18);
+
+  // Ballroom pillars
+  cyl(0.28,0.32,4.8,8,darkGrey,-3.5,2.4,10);
+  cyl(0.28,0.32,4.8,8,darkGrey,3.5,2.4,10);
+  cyl(0.28,0.32,4.8,8,darkGrey,-3.5,2.4,22);
+  cyl(0.28,0.32,4.8,8,darkGrey,3.5,2.4,22);
+
+  // Ghostly decorations: torn drapes
+  box(0.15,4.0,0.06,lm(0x3a2a5a),-4.7,2.2,13);
+  box(0.15,4.0,0.06,lm(0x3a2a5a),-4.7,2.2,19);
+  box(0.15,4.0,0.06,lm(0x2a1a4a),4.7,2.2,13);
+  box(0.15,4.0,0.06,lm(0x2a1a4a),4.7,2.2,19);
+
+  // ── LIBRARY ──────────────────────────────
+  box(12,0.15,15,lm(0x1a1020),13,-0.08,12.5);
+  box(12,0.1,15,ceiling,13,4.2,12.5);
+  box(12,4.4,0.15,darkWall,13,2.2,5);
+  box(12,4.4,0.15,darkWall,13,2.2,20);
+  box(0.15,4.4,15,darkWall,19,2.2,12.5);
+  // Bookshelves along walls
+  for(var bx=8;bx<=18;bx+=2){
+    box(1.8,2.5,0.4,wood,bx,1.35,5.35);
+    // Colorful book spines
+    box(0.15,2.2,0.25,lm(0x882222),bx-0.5,1.5,5.28);
+    box(0.15,2.2,0.25,lm(0x224488),bx,1.5,5.28);
+    box(0.15,2.2,0.25,lm(0x226622),bx+0.5,1.5,5.28);
+  }
+  for(var bx2=8;bx2<=18;bx2+=2){
+    box(1.8,2.5,0.4,wood,bx2,1.35,19.65);
+    box(0.15,2.2,0.25,lm(0x663311),bx2-0.5,1.5,19.72);
+    box(0.15,2.2,0.25,lm(0x334466),bx2,1.5,19.72);
+    box(0.15,2.2,0.25,lm(0x445522),bx2+0.5,1.5,19.72);
+  }
+  // Reading table
+  box(2.5,0.08,1.2,wood,13,0.88,12.5);
+  cyl(0.05,0.05,0.88,6,wood,12,0.44,12);
+  cyl(0.05,0.05,0.88,6,wood,14,0.44,12);
+  cyl(0.05,0.05,0.88,6,wood,12,0.44,13);
+  cyl(0.05,0.05,0.88,6,wood,14,0.44,13);
+  // Open book on table
+  box(0.8,0.04,0.6,lm(0xeeeedd),12.5,0.92,12.5);
+  box(0.8,0.04,0.6,lm(0xeeeedd),13.3,0.92,12.5);
+  pl(13,3.0,12.5,0xffdd99,2.0,14);
+  // Cobwebs in library corners
+  cyl(0.01,0.01,3.0,4,cobweb,18.6,3.2,5.6);
+  cyl(0.01,0.01,3.5,4,cobweb,18.6,3.2,19.4);
+
+  // ── CRYPT ────────────────────────────────
+  box(12,0.15,15,lm(0x120c18),-13,-0.08,12.5);
+  box(12,0.1,15,ceiling,-13,4.2,12.5);
+  box(12,4.4,0.15,darkWall,-13,2.2,5);
+  box(12,4.4,0.15,darkWall,-13,2.2,20);
+  box(0.15,4.4,15,darkWall,-19,2.2,12.5);
+  // Tombs/sarcophagi
+  box(2.2,0.7,0.9,grey,-10.5,0.38,8);
+  box(2.2,0.18,0.9,bone,-10.5,0.78,8);
+  box(2.0,0.7,0.9,grey,-15.5,0.38,8);
+  box(2.0,0.18,0.9,bone,-15.5,0.78,8);
+  box(2.2,0.7,0.9,grey,-10.5,0.38,17);
+  box(2.2,0.18,0.9,bone,-10.5,0.78,17);
+  box(2.0,0.7,0.9,grey,-15.5,0.38,17);
+  box(2.0,0.18,0.9,bone,-15.5,0.78,17);
+  // Skull decorations
+  sph(0.18,bone,-13,0.28,12.5);
+  sph(0.14,bone,-11.5,0.28,12.5);
+  sph(0.14,bone,-14.5,0.28,12.5);
+  // Moss on walls
+  box(0.06,1.2,3.0,moss,-18.88,1.0,10);
+  box(0.06,0.8,2.0,moss,-18.88,0.8,16);
+  // Eerie crypt lights
+  pl(-10.5,2.0,8,0x5500aa,1.8,12);
+  pl(-15.5,2.0,17,0x3300cc,1.5,12);
+  pl(-13,3.5,12.5,0x440088,1.5,16);
+  // Wall torches crypt
+  cyl(0.03,0.05,0.8,6,grey,-18.7,1.5,9);
+  cyl(0.1,0.1,0.12,6,candle,-18.7,1.95,9);
+  pl(-18.7,2.2,9,0xaa66ff,1.5,10);
+  cyl(0.03,0.05,0.8,6,grey,-18.7,1.5,16);
+  cyl(0.1,0.1,0.12,6,candle,-18.7,1.95,16);
+  pl(-18.7,2.2,16,0x9955ff,1.5,10);
+
+  // Corridors (side openings)
+  box(0.15,4.4,5,wall,5,2.2,8);
+  box(0.15,4.4,5,wall,5,2.2,20.5);
+  box(2.0,1.0,0.15,wall,5,3.9,14.5);
+  box(0.15,4.4,5,wall,-5,2.2,8);
+  box(0.15,4.4,5,wall,-5,2.2,20.5);
+  box(2.0,1.0,0.15,wall,-5,3.9,14.5);
+
+  // Pickups
+  addPickup('Ghost Orb',0x88aaff,-2.5,0.35,3,50,'A glowing orb of ghostly energy!');
+  addPickup('Skeleton Key',0xddccaa,13,0.35,8,60,'An ancient key — what does it open?');
+  addPickup('Ghost Orb',0xaabbff,3.5,0.35,18,50,'Another ghost orb — they seem attracted to you!');
+  addPickup('Crypt Key',0xcc9966,-13,0.35,12.5,70,'A heavy iron crypt key. Spooky...');
+
+  // NPCs
+  addNPC('Friendly Ghost',0xaabbff,2,0,5,buildDialog_ghost());
+  addNPC('Butler Reginald',0x334455,-2,0,18,buildDialog_butler());
+  addNPC('Witch Morgana',0x553355,13,0,13,buildDialog_witch());
+  addNPC('Old Skeleton',0xccccaa,-13,0,10,buildDialog_skeleton());
+}
+
+function buildDialog_ghost(){
+  return [
+    {id:'greet',txt:"BOO! Oh — sorry, didn\'t mean to frighten you. I\'m Casper... well, not that Casper. I\'ve been haunting this foyer for 150 years. Want to learn some spooky facts?",
+     choices:[
+       {t:"Ask about Halloween",next:'quiz1'},
+       {t:"Ask about ghosts",next:'quiz2'},
+       {t:"Run away screaming",next:null}
+     ]},
+    {id:'quiz1',txt:"Where did the tradition of Halloween originate?",
+     choices:[
+       {t:"Ancient Rome",next:'wrong1',correct:false},
+       {t:"Celtic festival of Samhain",next:'right1',correct:true},
+       {t:"Medieval England",next:'wrong1',correct:false},
+       {t:"Ancient Egypt",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"Right! Samhain — the Celtic New Year when spirits could walk among the living. +25 points!",pts:25,
+     choices:[{t:"Ask about ghosts",next:'quiz2'},{t:"Goodbye",next:null}]},
+    {id:'wrong1',txt:"It was Samhain — the Celtic harvest festival where the veil between worlds grew thin!",
+     choices:[{t:"Ask about ghosts",next:'quiz2'},{t:"Goodbye",next:null}]},
+    {id:'quiz2',txt:"What is a poltergeist?",
+     choices:[
+       {t:"A friendly ghost",next:'wrong2',correct:false},
+       {t:"A ghost that moves objects and makes noise",next:'right2',correct:true},
+       {t:"A ghost trapped in a mirror",next:'wrong2',correct:false},
+       {t:"A ghost of a witch",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"Yes! Poltergeist means 'noisy ghost' in German — they knock things over and cause mischief. +25 points!",pts:25,
+     choices:[{t:"One more question",next:'quiz3'},{t:"Goodbye",next:null}]},
+    {id:'wrong2',txt:"Poltergeist comes from German meaning 'noisy ghost' — they\'re known for moving objects!",
+     choices:[{t:"One more question",next:'quiz3'},{t:"Goodbye",next:null}]},
+    {id:'quiz3',txt:"What is a 'banshee' in Irish mythology?",
+     choices:[
+       {t:"A female spirit who wails to foretell death",next:'right3',correct:true},
+       {t:"A mischievous goblin",next:'wrong3',correct:false},
+       {t:"A fire spirit",next:'wrong3',correct:false},
+       {t:"A sea monster",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"A banshee! Her wail warns a family of coming death. Very unsettling at 3am, I assure you. +30 points!",pts:30,
+     choices:[{t:"Goodbye",next:null}]},
+    {id:'wrong3',txt:"A banshee is a wailing female spirit from Irish folklore — her cry foretells a death in the family.",
+     choices:[{t:"Goodbye",next:null}]}
+  ];
+}
+
+function buildDialog_butler(){
+  return [
+    {id:'greet',txt:"*clears ghostly throat* Good evening. I am Reginald, butler to Lord Blackmoor for forty years. I have served this house in death as in life. Shall I quiz you on matters of history?",
+     choices:[
+       {t:"Ask about haunted places",next:'quiz1'},
+       {t:"Ask about Victorian era",next:'quiz2'},
+       {t:"Thank you, no",next:null}
+     ]},
+    {id:'quiz1',txt:"Which is considered one of the most haunted castles in England?",
+     choices:[
+       {t:"Windsor Castle",next:'wrong1',correct:false},
+       {t:"Edinburgh Castle",next:'right1',correct:true},
+       {t:"Buckingham Palace",next:'wrong1',correct:false},
+       {t:"Leeds Castle",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"Edinburgh Castle — over 300 years of reported paranormal activity. Quite the competition! +30 points!",pts:30,
+     choices:[{t:"Ask about Victorian era",next:'quiz2'},{t:"Farewell",next:null}]},
+    {id:'wrong1',txt:"Edinburgh Castle, Scotland — consistently ranked among the most haunted places in Europe.",
+     choices:[{t:"Ask about Victorian era",next:'quiz2'},{t:"Farewell",next:null}]},
+    {id:'quiz2',txt:"During the Victorian era, what was a popular social activity involving spirits?",
+     choices:[
+       {t:"Tarot card readings",next:'wrong2',correct:false},
+       {t:"Seances — contacting the dead at a table",next:'right2',correct:true},
+       {t:"Visiting graveyards at midnight",next:'wrong2',correct:false},
+       {t:"Crystal ball gazing",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"Seances! They were enormously fashionable. Even Queen Victoria held them after Prince Albert died. +30 points!",pts:30,
+     choices:[{t:"Final question",next:'quiz3'},{t:"Farewell",next:null}]},
+    {id:'wrong2',txt:"Seances were the fashionable way to contact the dead — even Queen Victoria participated after Albert\'s death.",
+     choices:[{t:"Final question",next:'quiz3'},{t:"Farewell",next:null}]},
+    {id:'quiz3',txt:"What is the name of the study of paranormal phenomena?",
+     choices:[
+       {t:"Cryptozoology",next:'wrong3',correct:false},
+       {t:"Parapsychology",next:'right3',correct:true},
+       {t:"Demonology",next:'wrong3',correct:false},
+       {t:"Thanatology",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"Parapsychology! The scientific investigation of ESP, telekinesis, and hauntings. +25 points!",pts:25,
+     choices:[{t:"Farewell",next:null}]},
+    {id:'wrong3',txt:"Parapsychology is the scientific study of claimed paranormal phenomena — a legitimate field of inquiry.",
+     choices:[{t:"Farewell",next:null}]}
+  ];
+}
+
+function buildDialog_witch(){
+  return [
+    {id:'greet',txt:"*cackles* A visitor! How delightful! I am Morgana — I was accused of witchcraft in 1692 and burned... a terrible misunderstanding. Now I haunt this library forever. Care for a trivia curse?",
+     choices:[
+       {t:"Ask about the Salem trials",next:'quiz1'},
+       {t:"Ask about witchcraft",next:'quiz2'},
+       {t:"Back away from the witch",next:null}
+     ]},
+    {id:'quiz1',txt:"How many people were executed during the Salem Witch Trials in 1692?",
+     choices:[
+       {t:"5",next:'wrong1',correct:false},
+       {t:"19",next:'right1',correct:true},
+       {t:"50",next:'wrong1',correct:false},
+       {t:"100",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"19 people were hanged, and one man was pressed to death. A dark chapter of history. +30 points!",pts:30,
+     choices:[{t:"Ask about witchcraft",next:'quiz2'},{t:"Leave",next:null}]},
+    {id:'wrong1',txt:"19 people were executed — 18 hanged and one pressed with heavy stones. Giles Corey refused to plead.",
+     choices:[{t:"Ask about witchcraft",next:'quiz2'},{t:"Leave",next:null}]},
+    {id:'quiz2',txt:"What does the word 'witch' derive from?",
+     choices:[
+       {t:"Old English 'wicca' meaning wise one",next:'right2',correct:true},
+       {t:"Latin 'maleficus' meaning evil",next:'wrong2',correct:false},
+       {t:"French 'sorciere'",next:'wrong2',correct:false},
+       {t:"Norse 'vala' meaning seer",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"Wicca! Meaning a wise one or bender of things. Not so sinister after all, is it? +25 points!",pts:25,
+     choices:[{t:"One last curse",next:'quiz3'},{t:"Leave",next:null}]},
+    {id:'wrong2',txt:"Witch comes from Old English wicca — meaning a wise one, sorcerer, or one who bends fate.",
+     choices:[{t:"One last curse",next:'quiz3'},{t:"Leave",next:null}]},
+    {id:'quiz3',txt:"What is a familiar in witchcraft tradition?",
+     choices:[
+       {t:"A magic wand",next:'wrong3',correct:false},
+       {t:"A spirit companion in animal form",next:'right3',correct:true},
+       {t:"A spell book",next:'wrong3',correct:false},
+       {t:"A cauldron",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"A familiar! Often a black cat, toad, or raven — a spirit companion who aids the witch. +25 points!",pts:25,
+     choices:[{t:"Leave",next:null}]},
+    {id:'wrong3',txt:"A familiar is an animal spirit companion — commonly a cat, raven, or toad that assists the witch.",
+     choices:[{t:"Leave",next:null}]}
+  ];
+}
+
+function buildDialog_skeleton(){
+  return [
+    {id:'greet',txt:"*bones rattle* Ah... a living one! I am Sir Edmund, knight of this manor. I died of a mysterious ailment in 1748. Now I guard the crypt. Answer my riddles!",
+     choices:[
+       {t:"Ask about death and history",next:'quiz1'},
+       {t:"Ask about the Black Death",next:'quiz2'},
+       {t:"Back away from the skeleton",next:null}
+     ]},
+    {id:'quiz1',txt:"In Dia de los Muertos (Day of the Dead), when is it celebrated?",
+     choices:[
+       {t:"October 31st only",next:'wrong1',correct:false},
+       {t:"November 1-2",next:'right1',correct:true},
+       {t:"December 25th",next:'wrong1',correct:false},
+       {t:"March 21st",next:'wrong1',correct:false}
+     ]},
+    {id:'right1',txt:"November 1-2 — All Saints Day and All Souls Day! A joyful celebration, not mournful. +30 points!",pts:30,
+     choices:[{t:"Ask about Black Death",next:'quiz2'},{t:"Rest in peace",next:null}]},
+    {id:'wrong1',txt:"Dia de los Muertos is November 1-2, coinciding with All Saints and All Souls Day in the Catholic calendar.",
+     choices:[{t:"Ask about Black Death",next:'quiz2'},{t:"Rest in peace",next:null}]},
+    {id:'quiz2',txt:"What percentage of Europe\'s population did the Black Death kill in the 1300s?",
+     choices:[
+       {t:"10%",next:'wrong2',correct:false},
+       {t:"25-30%",next:'wrong2',correct:false},
+       {t:"30-60%",next:'right2',correct:true},
+       {t:"75%",next:'wrong2',correct:false}
+     ]},
+    {id:'right2',txt:"Between 30-60% — some estimates as high as 60%! Over 25 million dead in Europe alone. +35 points!",pts:35,
+     choices:[{t:"Final riddle",next:'quiz3'},{t:"Rest in peace",next:null}]},
+    {id:'wrong2',txt:"The Black Death killed 30-60% of Europe — roughly 25 million people out of 75 million in just 7 years.",
+     choices:[{t:"Final riddle",next:'quiz3'},{t:"Rest in peace",next:null}]},
+    {id:'quiz3',txt:"What is a 'danse macabre'?",
+     choices:[
+       {t:"A French ballroom dance",next:'wrong3',correct:false},
+       {t:"Medieval allegory of Death leading all people to the grave",next:'right3',correct:true},
+       {t:"A type of funeral march",next:'wrong3',correct:false},
+       {t:"A ghost summoning ritual",next:'wrong3',correct:false}
+     ]},
+    {id:'right3',txt:"The Dance of Death! Medieval artwork showing Death (a skeleton) dancing with people of all ranks — reminding us all we die. +30 points!",pts:30,
+     choices:[{t:"Rest in peace",next:null}]},
+    {id:'wrong3',txt:"The Danse Macabre is a medieval allegory — a skeleton leading pope, peasant, and king alike to the grave. All are equal in death.",
+     choices:[{t:"Rest in peace",next:null}]}
+  ];
+}
+
+var dlgNPC=null, dlgNodeId=null;
+
+function openDialog(npc){
+  dlgNPC=npc; dlgNodeId='greet'; dlgOpen=true;
+  renderDialog();
+  document.getElementById('dialog').style.display='block';
+  if(document.pointerLockElement) document.exitPointerLock();
+  locked=false;
+  document.getElementById('lock-screen').style.display='none';
+}
+
+function renderDialog(){
+  var tree=dlgNPC.dialog;
+  var node=null;
+  for(var i=0;i<tree.length;i++) if(tree[i].id===dlgNodeId){node=tree[i];break;}
+  if(!node){closeDialog();return;}
+  document.getElementById('dlg-name').textContent=dlgNPC.name;
+  document.getElementById('dlg-text').textContent=node.txt;
+  if(node.pts) addScore(node.pts);
+  var cc=document.getElementById('dlg-choices');
+  cc.innerHTML='';
+  node.choices.forEach(function(ch){
+    var b=document.createElement('button');
+    b.className='dbtn'; b.textContent=ch.t;
+    b.onclick=function(){
+      if(ch.correct===true){b.classList.add('correct');setTimeout(function(){go(ch.next);},700);}
+      else if(ch.correct===false){b.classList.add('wrong');setTimeout(function(){go(ch.next);},700);}
+      else{go(ch.next);}
+    };
+    cc.appendChild(b);
+  });
+}
+
+function go(nextId){
+  if(!nextId){closeDialog();return;}
+  dlgNodeId=nextId; renderDialog();
+}
+
+function closeDialog(){
+  dlgOpen=false; dlgNPC=null;
+  document.getElementById('dialog').style.display='none';
+  setTimeout(function(){if(gameOn) lockPointer();},300);
+}
+
+function addScore(pts){
+  score+=pts;
+  document.getElementById('score-el').textContent='Score: '+score;
+  showToast('+'+pts+' points!');
+}
+
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  clearTimeout(window._toastTimer);
+  window._toastTimer=setTimeout(function(){t.style.display='none';},2200);
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Empty';return;}
+  el.textContent=inventory.join('\n');
+}
+
+window.addEventListener('keydown',function(e){
+  keys[e.code]=true;
+  if(!gameOn||dlgOpen) return;
+  if(e.code==='KeyE'){
+    if(nearNPC) openDialog(nearNPC);
+    else if(nearPickup) collectPickup(nearPickup);
+  }
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+window.addEventListener('keyup',function(e){keys[e.code]=false;});
+
+document.addEventListener('mousemove',function(e){
+  if(!locked) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-Math.PI/2.4,Math.min(Math.PI/2.4,pitch));
+});
+
+function lockPointer(){
+  document.getElementById('lock-screen').style.display='none';
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=!!document.pointerLockElement;
+  if(!locked&&gameOn&&!dlgOpen) document.getElementById('lock-screen').style.display='flex';
+});
+
+document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();if(nearNPC)openDialog(nearNPC);else if(nearPickup)collectPickup(nearPickup);});
+document.getElementById('e-btn').addEventListener('mousedown',function(){if(nearNPC)openDialog(nearNPC);else if(nearPickup)collectPickup(nearPickup);});
+
+function setupMobile(){
+  var isMobile=('ontouchstart' in window);
+  var pad=document.getElementById('mobile-pad');
+  var ebtn=document.getElementById('e-btn');
+  if(isMobile){pad.style.display='block';ebtn.style.display='flex';}
+  function bindBtn(id,code){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();keys[code]=true;});
+    el.addEventListener('touchend',function(e){e.preventDefault();keys[code]=false;});
+    el.addEventListener('mousedown',function(){keys[code]=true;});
+    el.addEventListener('mouseup',function(){keys[code]=false;});
+  }
+  bindBtn('m-up','KeyW'); bindBtn('m-dn','KeyS');
+  bindBtn('m-left','KeyA'); bindBtn('m-right','KeyD');
+  var lastTX=null,lastTY=null;
+  renderer.domElement.addEventListener('touchstart',function(e){
+    if(e.touches.length===1){lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;}
+  },{passive:true});
+  renderer.domElement.addEventListener('touchmove',function(e){
+    if(e.touches.length===1&&lastTX!==null){
+      var dx=e.touches[0].clientX-lastTX;
+      var dy=e.touches[0].clientY-lastTY;
+      yaw-=dx*0.005; pitch-=dy*0.005;
+      pitch=Math.max(-Math.PI/2.4,Math.min(Math.PI/2.4,pitch));
+      lastTX=e.touches[0].clientX; lastTY=e.touches[0].clientY;
+    }
+  },{passive:true});
+}
+setupMobile();
+
+function collectPickup(p){
+  if(p.collected) return;
+  p.collected=true; scene.remove(p.g);
+  inventory.push(p.name);
+  addScore(p.pts);
+  showToast('Picked up: '+p.name+' — '+p.desc);
+  updateInv();
+  nearPickup=null;
+  document.getElementById('interact').style.display='none';
+  document.getElementById('e-btn').style.display='none';
+  checkWin();
+}
+
+function checkWin(){
+  var allCollected=pickups.every(function(p){return p.collected;});
+  if(allCollected&&score>=200){
+    setTimeout(function(){
+      var ws=document.getElementById('scr-win');
+      ws.querySelector('.sb').textContent='You survived all four haunted chambers of Blackmoor Manor, collected all ghostly artifacts, and answered the riddles of the dead. You may leave... if the front door lets you!';
+      document.getElementById('win-score').textContent='Final Score: '+score+' points';
+      ws.classList.add('show');
+    },1000);
+  }
+}
+
+var clock=new THREE.Clock();
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  buildWorld();
+  gameOn=true;
+  camera.position.set(0,1.7,2);
+  yaw=Math.PI;
+  lockPointer();
+  animate();
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn||dlgOpen){renderer.render(scene,camera);return;}
+  var dt=Math.min(clock.getDelta(),0.05);
+  elapsed+=dt;
+  var mins=Math.floor(elapsed/60);
+  var secs=Math.floor(elapsed%60);
+  document.getElementById('clock-el').textContent='Time: '+mins+':'+(secs<10?'0':'')+secs;
+
+  var spd=(keys['ShiftLeft']||keys['ShiftRight'])?7:4;
+  var dx=0,dz=0;
+  if(keys['KeyW']) dz=-1;
+  if(keys['KeyS']) dz=1;
+  if(keys['KeyA']) dx=-1;
+  if(keys['KeyD']) dx=1;
+  if(dx||dz){
+    var len=Math.sqrt(dx*dx+dz*dz);
+    dx/=len; dz/=len;
+    var nx=camera.position.x+(Math.sin(yaw)*dz*spd*dt+Math.cos(yaw)*dx*spd*dt);
+    var nz=camera.position.z+(Math.cos(yaw)*(-dz)*spd*dt+Math.sin(yaw)*(-dx)*spd*dt);
+    if(nx>-18.8&&nx<18.8) camera.position.x=nx;
+    if(nz>-4.8&&nz<23.8) camera.position.z=nz;
+  }
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  nearNPC=null; nearPickup=null;
+  var cx=camera.position.x,cz=camera.position.z;
+  npcs.forEach(function(n){
+    var d=Math.hypot(cx-n.pos.x,cz-n.pos.z);
+    if(d<2.5) nearNPC=n;
+    n.g.children.forEach(function(c){if(c.isSprite) c.lookAt(camera.position);});
+    // Ghostly bob
+    n.g.position.y=Math.sin(elapsed*1.5+n.pos.x)*0.06;
+  });
+  pickups.forEach(function(p){
+    if(!p.collected){
+      var d=Math.hypot(cx-p.pos.x,cz-p.pos.z);
+      if(d<2.0) nearPickup=p;
+      p.g.rotation.y+=dt*2;
+      p.g.children.forEach(function(c){if(c.isSprite) c.lookAt(camera.position);});
+    }
+  });
+  var interact=document.getElementById('interact');
+  var ebtn=document.getElementById('e-btn');
+  if(nearNPC){
+    interact.textContent='[E] Talk to '+nearNPC.name;
+    interact.style.display='block'; ebtn.style.display='flex';
+  } else if(nearPickup){
+    interact.textContent='[E] Pick up '+nearPickup.name;
+    interact.style.display='block'; ebtn.style.display='flex';
+  } else {
+    interact.style.display='none'; ebtn.style.display='none';
+  }
+
+  var z=getZone(cx,cz);
+  if(z) document.getElementById('loc').textContent=z.name;
+
+  renderer.render(scene,camera);
+}
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
