@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calcudoku - Ender's Game World</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a0000;color:#ffd700;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:10px}
+h1{font-size:1.8em;text-shadow:0 0 20px #ff6600;margin:8px 0}
+.subtitle{color:#ff6600;margin-bottom:8px;font-size:0.85em}
+.nav{width:100%;max-width:600px;margin-bottom:8px}
+.home-btn{background:#3a0000;color:#ffd700;border:1px solid #ff6600;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.9em;text-decoration:none;display:inline-block}
+.top-bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:6px 0}
+.btn{background:#3a0000;color:#ffd700;border:2px solid #ff6600;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:0.85em;font-weight:bold;transition:all 0.2s}
+.btn:hover{background:#ff6600;color:#1a0000}
+.btn.active-mode{background:#993300;border-color:#ff9900}
+.puzzle-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:6px 0}
+.puzzle-btn{background:#2a0000;color:#ff9900;border:1px solid #993300;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.82em}
+.puzzle-btn:hover,.puzzle-btn.active{background:#993300;color:#ffd700}
+.board-wrap{margin:8px auto}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);border:2px solid #ff6600}
+.cell{width:58px;height:58px;border:1px solid #440000;background:#1a0000;position:relative;cursor:pointer;transition:background 0.1s}
+.cell:hover{background:#2a0800}
+.cell.selected{background:#2a1000;border-color:#ff9900}
+.cell.error{background:#3a0000}
+.cell.error .cell-val{color:#ff4444}
+.cell-val{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:1.2em;font-weight:bold;color:#ffd700}
+.cage-label{position:absolute;top:2px;left:3px;font-size:0.6em;color:#ff9900;line-height:1;pointer-events:none;z-index:2}
+.border-top{border-top:2px solid #ff8800 !important}
+.border-right{border-right:2px solid #ff8800 !important}
+.border-bottom{border-bottom:2px solid #ff8800 !important}
+.border-left{border-left:2px solid #ff8800 !important}
+.numpad{display:flex;gap:6px;justify-content:center;margin:8px 0;flex-wrap:wrap}
+.numpad-btn{width:42px;height:42px;background:#2a0000;color:#ffd700;border:2px solid #660000;border-radius:8px;cursor:pointer;font-size:1.1em;font-weight:bold;transition:all 0.2s}
+.numpad-btn:hover{background:#993300;border-color:#ff9900}
+.notes-grid{position:absolute;top:2px;left:0;right:0;bottom:20px;display:grid;grid-template-columns:repeat(3,1fr);align-items:center;justify-items:center;pointer-events:none}
+.notes-grid span{font-size:0.48em;color:#ff9900;line-height:1}
+.msg{font-size:1em;color:#ffd700;margin:6px 0;min-height:22px;text-align:center}
+.win-msg{color:#00ff88;font-size:1.2em;font-weight:bold}
+</style>
+</head>
+<body>
+<div class="nav"><a class="home-btn" href="index.html">&#127968; Home</a></div>
+<h1>&#128260; Calcudoku</h1>
+<div class="subtitle">Fill 1-6 in each row/column. Satisfy cage operations.</div>
+<div class="top-bar">
+  <button class="btn" id="notesBtn" onclick="toggleNotes()">&#9998; Notes Off</button>
+  <button class="btn" onclick="checkAll()">&#10003; Check</button>
+  <button class="btn" onclick="clearBoard()">&#8635; Clear</button>
+  <button class="btn" onclick="revealAll()">&#128065; Reveal</button>
+</div>
+<div class="puzzle-row" id="puzzleRow"></div>
+<div class="board-wrap"><div class="grid" id="grid"></div></div>
+<div class="numpad" id="numpad"></div>
+<div class="msg" id="msg"></div>
+
+<script>
+// Each puzzle: cages = array of {cells:[[r,c],...], target:N, op:"+"/"-"/"*"/"/"}
+// sol = 6x6 array
+var PUZZLES=[
+{name:"Easy",
+ cages:[
+  {cells:[[0,0],[0,1]],target:3,op:"+"},
+  {cells:[[0,2],[0,3]],target:5,op:"+"},
+  {cells:[[0,4],[1,4]],target:2,op:"/"},
+  {cells:[[0,5],[1,5]],target:3,op:"+"},
+  {cells:[[1,0],[2,0]],target:5,op:"+"},
+  {cells:[[1,1],[1,2],[1,3]],target:6,op:"+"},
+  {cells:[[2,1],[2,2]],target:3,op:"-"},
+  {cells:[[2,3],[3,3]],target:3,op:"/"},
+  {cells:[[2,4],[3,4],[3,5]],target:8,op:"+"},
+  {cells:[[3,0],[3,1],[3,2]],target:9,op:"+"},
+  {cells:[[4,0],[5,0]],target:1,op:"-"},
+  {cells:[[4,1],[4,2]],target:5,op:"+"},
+  {cells:[[4,3],[4,4],[4,5]],target:6,op:"+"},
+  {cells:[[5,1],[5,2],[5,3]],target:9,op:"+"},
+  {cells:[[5,4],[5,5]],target:7,op:"+"}
+ ],
+ sol:[
+  [1,2,3,4,5,6],
+  [3,4,5,6,1,2],
+  [2,5,2,3,6,4],
+  [4,1,6,3,2,5],
+  [5,3,1,2,4,6],
+  [6,4,2,5,3,1]
+ ]
+},
+{name:"Medium",
+ cages:[
+  {cells:[[0,0],[1,0],[2,0]],target:6,op:"*"},
+  {cells:[[0,1],[0,2]],target:5,op:"+"},
+  {cells:[[0,3],[0,4],[0,5]],target:9,op:"+"},
+  {cells:[[1,1],[2,1]],target:3,op:"+"},
+  {cells:[[1,2],[1,3]],target:7,op:"+"},
+  {cells:[[1,4],[1,5]],target:2,op:"/"},
+  {cells:[[2,2],[2,3],[2,4]],target:9,op:"+"},
+  {cells:[[2,5],[3,5]],target:4,op:"+"},
+  {cells:[[3,0],[3,1]],target:2,op:"-"},
+  {cells:[[3,2],[3,3],[3,4]],target:8,op:"+"},
+  {cells:[[4,0],[4,1],[4,2]],target:9,op:"+"},
+  {cells:[[4,3],[5,3]],target:3,op:"-"},
+  {cells:[[4,4],[4,5]],target:7,op:"+"},
+  {cells:[[5,0],[5,1],[5,2]],target:8,op:"+"},
+  {cells:[[5,4],[5,5]],target:5,op:"+"}
+ ],
+ sol:[
+  [2,3,4,1,6,5],
+  [1,5,6,3,2,4],
+  [6,2,3,4,5,1],
+  [5,3,1,2,4,6],
+  [4,1,5,6,3,2],
+  [3,6,2,5,1,4]
+ ]
+},
+{name:"Hard",
+ cages:[
+  {cells:[[0,0],[0,1],[0,2]],target:9,op:"+"},
+  {cells:[[0,3],[1,3]],target:5,op:"+"},
+  {cells:[[0,4],[0,5]],target:7,op:"+"},
+  {cells:[[1,0],[2,0]],target:2,op:"/"},
+  {cells:[[1,1],[1,2]],target:7,op:"+"},
+  {cells:[[1,4],[2,4]],target:3,op:"-"},
+  {cells:[[1,5],[2,5]],target:9,op:"+"},
+  {cells:[[2,1],[3,1]],target:4,op:"+"},
+  {cells:[[2,2],[2,3]],target:5,op:"+"},
+  {cells:[[3,0],[4,0],[5,0]],target:6,op:"*"},
+  {cells:[[3,2],[3,3],[3,4],[3,5]],target:13,op:"+"},
+  {cells:[[4,1],[4,2]],target:7,op:"+"},
+  {cells:[[4,3],[5,3]],target:2,op:"/"},
+  {cells:[[4,4],[4,5]],target:5,op:"+"},
+  {cells:[[5,1],[5,2]],target:5,op:"+"},
+  {cells:[[5,4],[5,5]],target:3,op:"+"}
+ ],
+ sol:[
+  [3,4,2,6,1,5],
+  [6,5,2,3,4,1],
+  [1,3,4,2,5,6],
+  [4,1,3,5,6,2],
+  [5,2,5,6,3,1],
+  [2,6,1,3,2,4]
+ ]
+}
+];
+
+var curPuz=0;
+var boardVals=[];
+var boardNotes=[];
+var selected=null;
+var notesMode=false;
+var cageLookup=[];
+
+function loadPuzzle(idx){
+  curPuz=idx;
+  boardVals=[];
+  boardNotes=[];
+  cageLookup=[];
+  for(var r=0;r<6;r++){
+    boardVals.push(new Array(6).fill(0));
+    boardNotes.push([]);
+    cageLookup.push([]);
+    for(var c=0;c<6;c++){boardNotes[r].push([]);cageLookup[r].push(-1);}
+  }
+  var cages=PUZZLES[idx].cages;
+  cages.forEach(function(cage,ci){cage.cells.forEach(function(pos){cageLookup[pos[0]][pos[1]]=ci;});});
+  selected=null;
+  document.querySelectorAll(".puzzle-btn").forEach(function(b,i){b.className="puzzle-btn"+(i===idx?" active":"");});
+  document.getElementById("msg").textContent="";
+  renderGrid();
+}
+
+function getCageBorders(r,c){
+  var ci=cageLookup[r][c];
+  var borders={top:false,right:false,bottom:false,left:false};
+  if(r===0||cageLookup[r-1][c]!==ci)borders.top=true;
+  if(c===5||cageLookup[r][c+1]!==ci)borders.right=true;
+  if(r===5||cageLookup[r+1][c]!==ci)borders.bottom=true;
+  if(c===0||cageLookup[r][c-1]!==ci)borders.left=true;
+  return borders;
+}
+
+function isFirstInCage(r,c){
+  var ci=cageLookup[r][c];
+  var cage=PUZZLES[curPuz].cages[ci];
+  return cage.cells[0][0]===r&&cage.cells[0][1]===c;
+}
+
+function renderGrid(){
+  var g=document.getElementById("grid");
+  g.innerHTML="";
+  var cages=PUZZLES[curPuz].cages;
+  for(var r=0;r<6;r++){
+    for(var c=0;c<6;c++){
+      var cell=document.createElement("div");
+      cell.className="cell";
+      var b=getCageBorders(r,c);
+      if(b.top)cell.classList.add("border-top");
+      if(b.right)cell.classList.add("border-right");
+      if(b.bottom)cell.classList.add("border-bottom");
+      if(b.left)cell.classList.add("border-left");
+      cell.setAttribute("data-r",r);
+      cell.setAttribute("data-c",c);
+      if(isFirstInCage(r,c)){
+        var ci=cageLookup[r][c];
+        var cage=cages[ci];
+        var lbl=document.createElement("div");
+        lbl.className="cage-label";
+        lbl.textContent=cage.target+cage.op;
+        cell.appendChild(lbl);
+      }
+      var valDiv=document.createElement("div");
+      valDiv.className="cell-val";
+      valDiv.setAttribute("data-vr",r);
+      valDiv.setAttribute("data-vc",c);
+      if(boardVals[r][c])valDiv.textContent=boardVals[r][c];
+      cell.appendChild(valDiv);
+      var notesDiv=document.createElement("div");
+      notesDiv.className="notes-grid";
+      notesDiv.setAttribute("data-nr",r);
+      notesDiv.setAttribute("data-nc",c);
+      for(var n=1;n<=6;n++){var ns=document.createElement("span");ns.setAttribute("data-n",n);notesDiv.appendChild(ns);}
+      updateNotesDisplay(notesDiv,r,c);
+      cell.appendChild(notesDiv);
+      (function(row,col){
+        cell.addEventListener("click",function(){selectCell(row,col);});
+      })(r,c);
+      g.appendChild(cell);
+    }
+  }
+}
+
+function updateNotesDisplay(notesDiv,r,c){
+  var marks=boardNotes[r][c];
+  for(var i=0;i<notesDiv.children.length;i++){
+    var span=notesDiv.children[i];
+    var n=parseInt(span.getAttribute("data-n"));
+    span.textContent=marks.indexOf(n)>=0?n:"";
+  }
+}
+
+function selectCell(r,c){
+  document.querySelectorAll(".cell").forEach(function(el){el.classList.remove("selected");});
+  selected={r:r,c:c};
+  var cells=document.querySelectorAll(".cell[data-r='"+r+"'][data-c='"+c+"']");
+  cells.forEach(function(el){el.classList.add("selected");});
+}
+
+function enterValue(v){
+  if(!selected)return;
+  var r=selected.r,c=selected.c;
+  if(v===0){
+    boardVals[r][c]=0;
+    boardNotes[r][c]=[];
+    var vd=document.querySelector(".cell-val[data-vr='"+r+"'][data-vc='"+c+"']");
+    if(vd)vd.textContent="";
+    var nd=document.querySelector(".notes-grid[data-nr='"+r+"'][data-nc='"+c+"']");
+    if(nd)updateNotesDisplay(nd,r,c);
+    clearCellError(r,c);
+    return;
+  }
+  if(notesMode){
+    var marks=boardNotes[r][c];
+    var idx=marks.indexOf(v);
+    if(idx>=0)marks.splice(idx,1);else marks.push(v);
+    marks.sort();
+    var nd2=document.querySelector(".notes-grid[data-nr='"+r+"'][data-nc='"+c+"']");
+    if(nd2)updateNotesDisplay(nd2,r,c);
+    return;
+  }
+  boardVals[r][c]=v;
+  boardNotes[r][c]=[];
+  var vd2=document.querySelector(".cell-val[data-vr='"+r+"'][data-vc='"+c+"']");
+  if(vd2)vd2.textContent=v;
+  var nd3=document.querySelector(".notes-grid[data-nr='"+r+"'][data-nc='"+c+"']");
+  if(nd3)updateNotesDisplay(nd3,r,c);
+  validateCell(r,c);
+}
+
+function clearCellError(r,c){
+  var cell=document.querySelector(".cell[data-r='"+r+"'][data-c='"+c+"']");
+  if(cell)cell.classList.remove("error");
+}
+
+function validateCell(r,c){
+  var v=boardVals[r][c];
+  if(!v)return;
+  var error=false;
+  // check row
+  for(var cc=0;cc<6;cc++){if(cc!==c&&boardVals[r][cc]===v){error=true;break;}}
+  // check col
+  if(!error)for(var rr=0;rr<6;rr++){if(rr!==r&&boardVals[rr][c]===v){error=true;break;}}
+  var cell=document.querySelector(".cell[data-r='"+r+"'][data-c='"+c+"']");
+  if(cell){if(error)cell.classList.add("error");else cell.classList.remove("error");}
+}
+
+function checkAll(){
+  var sol=PUZZLES[curPuz].sol;
+  var allFilled=true;var allCorrect=true;
+  for(var r=0;r<6;r++){
+    for(var c=0;c<6;c++){
+      var v=boardVals[r][c];
+      if(!v){allFilled=false;continue;}
+      if(v!==sol[r][c]){
+        allCorrect=false;
+        var cell=document.querySelector(".cell[data-r='"+r+"'][data-c='"+c+"']");
+        if(cell)cell.classList.add("error");
+      } else {
+        var cell2=document.querySelector(".cell[data-r='"+r+"'][data-c='"+c+"']");
+        if(cell2)cell2.classList.remove("error");
+      }
+    }
+  }
+  if(!allFilled){document.getElementById("msg").textContent="Not all cells filled.";return;}
+  if(allCorrect)document.getElementById("msg").innerHTML='<span class="win-msg">&#127881; Perfect! Calcudoku solved!</span>';
+  else document.getElementById("msg").textContent="Some errors highlighted in red.";
+}
+
+function clearBoard(){
+  for(var r=0;r<6;r++)for(var c=0;c<6;c++){boardVals[r][c]=0;boardNotes[r][c]=[];}
+  document.querySelectorAll(".cell-val").forEach(function(el){el.textContent="";});
+  document.querySelectorAll(".cell").forEach(function(el){el.classList.remove("error");});
+  document.querySelectorAll(".notes-grid").forEach(function(nd){
+    var r=parseInt(nd.getAttribute("data-nr")),c=parseInt(nd.getAttribute("data-nc"));
+    updateNotesDisplay(nd,r,c);
+  });
+  document.getElementById("msg").textContent="";
+}
+
+function revealAll(){
+  var sol=PUZZLES[curPuz].sol;
+  for(var r=0;r<6;r++){
+    for(var c=0;c<6;c++){
+      boardVals[r][c]=sol[r][c];
+      boardNotes[r][c]=[];
+      var vd=document.querySelector(".cell-val[data-vr='"+r+"'][data-vc='"+c+"']");
+      if(vd)vd.textContent=sol[r][c];
+      var nd=document.querySelector(".notes-grid[data-nr='"+r+"'][data-nc='"+c+"']");
+      if(nd)updateNotesDisplay(nd,r,c);
+      var cell=document.querySelector(".cell[data-r='"+r+"'][data-c='"+c+"']");
+      if(cell)cell.classList.remove("error");
+    }
+  }
+  document.getElementById("msg").textContent="Solution revealed.";
+}
+
+function toggleNotes(){
+  notesMode=!notesMode;
+  var btn=document.getElementById("notesBtn");
+  btn.textContent="&#9998; Notes "+(notesMode?"On":"Off");
+  btn.className="btn"+(notesMode?" active-mode":"");
+}
+
+document.addEventListener("keydown",function(e){
+  if(e.key>="1"&&e.key<="6")enterValue(parseInt(e.key));
+  if(e.key==="Backspace"||e.key==="Delete"||e.key==="0")enterValue(0);
+});
+
+function buildNumpad(){
+  var div=document.getElementById("numpad");
+  for(var i=1;i<=6;i++){
+    (function(n){
+      var b=document.createElement("button");
+      b.className="numpad-btn";
+      b.textContent=n;
+      b.addEventListener("click",function(){enterValue(n);});
+      div.appendChild(b);
+    })(i);
+  }
+  var clrBtn=document.createElement("button");
+  clrBtn.className="numpad-btn";
+  clrBtn.textContent="X";
+  clrBtn.style.background="#3a0000";
+  clrBtn.addEventListener("click",function(){enterValue(0);});
+  div.appendChild(clrBtn);
+}
+
+function buildPuzzleRow(){
+  var div=document.getElementById("puzzleRow");
+  PUZZLES.forEach(function(p,i){
+    var b=document.createElement("button");
+    b.className="puzzle-btn"+(i===0?" active":"");
+    b.textContent=p.name;
+    b.addEventListener("click",function(){loadPuzzle(i);});
+    div.appendChild(b);
+  });
+}
+
+buildNumpad();
+buildPuzzleRow();
+loadPuzzle(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Number Link - Ender's Game World</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a0000;color:#ffd700;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:10px}
+h1{font-size:1.8em;text-shadow:0 0 20px #ff6600;margin:8px 0}
+.subtitle{color:#ff6600;margin-bottom:8px;font-size:0.85em}
+.nav{width:100%;max-width:600px;margin-bottom:8px}
+.home-btn{background:#3a0000;color:#ffd700;border:1px solid #ff6600;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.9em;text-decoration:none;display:inline-block}
+.top-bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:6px 0}
+.btn{background:#3a0000;color:#ffd700;border:2px solid #ff6600;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:0.85em;font-weight:bold;transition:all 0.2s}
+.btn:hover{background:#ff6600;color:#1a0000}
+.puzzle-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:6px 0}
+.puzzle-btn{background:#2a0000;color:#ff9900;border:1px solid #993300;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.82em}
+.puzzle-btn:hover,.puzzle-btn.active{background:#993300;color:#ffd700}
+.board-wrap{margin:10px auto;user-select:none}
+canvas{border-radius:10px;touch-action:none;cursor:crosshair}
+.msg{font-size:1em;color:#ffd700;margin:6px 0;min-height:22px;text-align:center}
+.win-msg{color:#00ff88;font-size:1.2em;font-weight:bold}
+.legend{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:6px 0;font-size:0.8em}
+.leg-item{display:flex;align-items:center;gap:4px}
+.leg-dot{width:12px;height:12px;border-radius:50%}
+</style>
+</head>
+<body>
+<div class="nav"><a class="home-btn" href="index.html">&#127968; Home</a></div>
+<h1>&#128279; Number Link</h1>
+<div class="subtitle">Connect matching numbers. Fill every cell. Paths cannot cross.</div>
+<div class="top-bar">
+  <button class="btn" onclick="resetPaths()">&#8635; Clear Paths</button>
+  <button class="btn" onclick="checkWin()">&#10003; Check</button>
+</div>
+<div class="puzzle-row" id="puzzleRow"></div>
+<div class="board-wrap"><canvas id="canvas"></canvas></div>
+<div class="msg" id="msg"></div>
+
+<script>
+var COLORS=["#ff4444","#44aaff","#44ff88","#ffcc00","#ff88ff","#ff8844","#44ffff","#aaff44"];
+
+var PUZZLES=[
+{name:"P1 6x6",size:6,
+ endpoints:[[0,0,1],[0,3,2],[0,5,3],[2,1,4],[2,4,1],[3,0,2],[4,2,3],[5,5,4]],
+ sol:[[1,1,1,2,2,3],[4,4,1,2,3,3],[4,1,1,2,3,4],[2,2,2,2,3,4],[2,3,3,3,3,4],[2,2,2,4,4,4]]
+},
+{name:"P2 6x6",size:6,
+ endpoints:[[0,1,1],[0,4,2],[1,0,3],[1,5,4],[4,0,4],[4,5,3],[5,1,2],[5,4,1]],
+ sol:[[3,1,1,1,2,2],[3,3,4,4,4,4],[3,4,4,4,4,4],[3,4,4,4,4,4],[4,3,3,3,3,3],[4,2,2,2,1,1]]
+},
+{name:"P3 7x7",size:7,
+ endpoints:[[0,0,1],[0,6,2],[1,2,3],[1,4,4],[3,0,5],[3,6,5],[5,2,4],[5,4,3],[6,0,2],[6,6,1]],
+ sol:[[1,1,1,1,1,1,2],[1,3,3,3,4,1,2],[1,3,5,3,4,1,2],[5,5,5,3,4,4,5],[5,4,5,3,4,4,5],[5,4,4,4,4,5,5],[2,2,2,2,2,2,1]]
+},
+{name:"P4 6x6",size:6,
+ endpoints:[[0,0,1],[0,5,1],[2,2,2],[2,3,3],[3,2,3],[3,3,2],[5,0,4],[5,5,4]],
+ sol:[[1,1,1,1,1,1],[4,4,4,4,4,1],[4,2,2,3,4,1],[4,3,3,2,4,1],[4,3,3,2,4,1],[4,4,4,4,4,4]]
+},
+{name:"P5 7x7",size:7,
+ endpoints:[[0,3,1],[1,0,2],[1,6,3],[3,3,4],[5,0,3],[5,6,2],[6,3,1],[2,3,4]],
+ sol:[[2,2,2,1,3,3,3],[2,2,2,1,3,3,3],[2,4,4,4,4,3,3],[2,4,4,4,4,3,3],[2,4,3,3,3,3,3],[3,3,3,3,4,4,2],[3,3,3,1,4,4,2]]
+}
+];
+
+var curPuz=0;
+var CELL=60;
+var paths={};
+var drawing=false;
+var drawColor=0;
+var drawPath=[];
+var endpoints=[];
+var gridSize=6;
+
+var canvas=document.getElementById("canvas");
+var ctx=canvas.getContext("2d");
+
+function loadPuzzle(idx){
+  curPuz=idx;
+  var p=PUZZLES[idx];
+  gridSize=p.size;
+  CELL=Math.min(60,Math.floor(330/gridSize));
+  canvas.width=gridSize*CELL;
+  canvas.height=gridSize*CELL;
+  endpoints=p.endpoints.slice();
+  paths={};
+  for(var i=1;i<=8;i++)paths[i]=[];
+  drawing=false;drawColor=0;drawPath=[];
+  document.querySelectorAll(".puzzle-btn").forEach(function(b,i){b.className="puzzle-btn"+(i===idx?" active":"");});
+  document.getElementById("msg").textContent="";
+  redraw();
+}
+
+function cellAt(x,y){
+  return{r:Math.floor(y/CELL),c:Math.floor(x/CELL)};
+}
+
+function posKey(r,c){return r+","+c;}
+
+function getEndpointColor(r,c){
+  for(var i=0;i<endpoints.length;i++){
+    if(endpoints[i][0]===r&&endpoints[i][1]===c)return endpoints[i][2];
+  }
+  return 0;
+}
+
+function getCellColor(r,c){
+  var k=posKey(r,c);
+  for(var col in paths){
+    var arr=paths[col];
+    for(var i=0;i<arr.length;i++){
+      if(arr[i][0]===r&&arr[i][1]===c)return parseInt(col);
+    }
+  }
+  return 0;
+}
+
+function redraw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // background grid
+  ctx.fillStyle="#1a0000";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle="#330000";
+  ctx.lineWidth=1;
+  for(var r=0;r<=gridSize;r++){ctx.beginPath();ctx.moveTo(0,r*CELL);ctx.lineTo(canvas.width,r*CELL);ctx.stroke();}
+  for(var c=0;c<=gridSize;c++){ctx.beginPath();ctx.moveTo(c*CELL,0);ctx.lineTo(c*CELL,canvas.height);ctx.stroke();}
+  // draw paths
+  for(var col in paths){
+    var arr=paths[col];
+    if(arr.length<2)continue;
+    ctx.strokeStyle=COLORS[parseInt(col)-1];
+    ctx.lineWidth=CELL*0.38;
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+    ctx.beginPath();
+    ctx.moveTo(arr[0][1]*CELL+CELL/2,arr[0][0]*CELL+CELL/2);
+    for(var i=1;i<arr.length;i++)ctx.lineTo(arr[i][1]*CELL+CELL/2,arr[i][0]*CELL+CELL/2);
+    ctx.stroke();
+  }
+  // draw endpoints
+  for(var i=0;i<endpoints.length;i++){
+    var ep=endpoints[i];
+    var r=ep[0],c=ep[1],col=ep[2];
+    var x=c*CELL+CELL/2,y=r*CELL+CELL/2;
+    ctx.fillStyle=COLORS[col-1];
+    ctx.beginPath();
+    ctx.arc(x,y,CELL*0.32,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle="#fff";
+    ctx.font="bold "+(CELL*0.36)+"px sans-serif";
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillText(col,x,y);
+  }
+}
+
+function startDraw(x,y){
+  var pos=cellAt(x,y);
+  var r=pos.r,c=pos.c;
+  if(r<0||r>=gridSize||c<0||c>=gridSize)return;
+  var col=getEndpointColor(r,c);
+  if(!col){
+    col=getCellColor(r,c);
+    if(!col)return;
+  }
+  // clear existing path for this color
+  paths[col]=[];
+  drawColor=col;
+  drawPath=[[r,c]];
+  drawing=true;
+  paths[col]=[[r,c]];
+  redraw();
+}
+
+function continueDraw(x,y){
+  if(!drawing)return;
+  var pos=cellAt(x,y);
+  var r=pos.r,c=pos.c;
+  if(r<0||r>=gridSize||c<0||c>=gridSize)return;
+  var last=drawPath[drawPath.length-1];
+  if(last[0]===r&&last[1]===c)return;
+  // only adjacent
+  var dr=Math.abs(r-last[0]),dc=Math.abs(c-last[1]);
+  if(dr+dc!==1)return;
+  // check if cell already used by another color
+  var existCol=getCellColor(r,c);
+  if(existCol&&existCol!==drawColor){
+    // check if endpoint of that other color
+    var isEp=getEndpointColor(r,c)===existCol;
+    if(!isEp)return;
+  }
+  // check backtrack
+  if(drawPath.length>=2){
+    var prev=drawPath[drawPath.length-2];
+    if(prev[0]===r&&prev[1]===c){
+      drawPath.pop();
+      paths[drawColor]=drawPath.slice();
+      redraw();
+      return;
+    }
+  }
+  // check if cell is in current path (loop prevention)
+  for(var i=0;i<drawPath.length;i++){if(drawPath[i][0]===r&&drawPath[i][1]===c)return;}
+  // if endpoint of same color, finish
+  var epCol=getEndpointColor(r,c);
+  drawPath.push([r,c]);
+  paths[drawColor]=drawPath.slice();
+  redraw();
+  if(epCol===drawColor&&drawPath.length>1){drawing=false;}
+}
+
+function endDraw(){drawing=false;}
+
+canvas.addEventListener("mousedown",function(e){var rect=canvas.getBoundingClientRect();startDraw(e.clientX-rect.left,e.clientY-rect.top);});
+canvas.addEventListener("mousemove",function(e){var rect=canvas.getBoundingClientRect();continueDraw(e.clientX-rect.left,e.clientY-rect.top);});
+canvas.addEventListener("mouseup",endDraw);
+canvas.addEventListener("mouseleave",endDraw);
+canvas.addEventListener("touchstart",function(e){e.preventDefault();var rect=canvas.getBoundingClientRect();var t=e.touches[0];startDraw(t.clientX-rect.left,t.clientY-rect.top);},{passive:false});
+canvas.addEventListener("touchmove",function(e){e.preventDefault();var rect=canvas.getBoundingClientRect();var t=e.touches[0];continueDraw(t.clientX-rect.left,t.clientY-rect.top);},{passive:false});
+canvas.addEventListener("touchend",endDraw);
+
+function resetPaths(){
+  for(var i=1;i<=8;i++)paths[i]=[];
+  drawing=false;drawColor=0;drawPath=[];
+  document.getElementById("msg").textContent="";
+  redraw();
+}
+
+function checkWin(){
+  // all cells covered?
+  var covered=0;
+  var grid=new Array(gridSize*gridSize).fill(0);
+  for(var col in paths){
+    var arr=paths[col];
+    arr.forEach(function(pos){grid[pos[0]*gridSize+pos[1]]=parseInt(col);});
+    covered+=arr.length;
+  }
+  if(covered<gridSize*gridSize){document.getElementById("msg").textContent="Not all cells covered yet!";return;}
+  // all paths connect both endpoints?
+  for(var i=0;i<endpoints.length;i++){
+    var ep=endpoints[i];
+    var col2=ep[2];
+    var arr2=paths[col2];
+    var hasThis=false;
+    for(var j=0;j<arr2.length;j++){if(arr2[j][0]===ep[0]&&arr2[j][1]===ep[1]){hasThis=true;break;}}
+    if(!hasThis){document.getElementById("msg").textContent="Not all numbers connected!";return;}
+  }
+  document.getElementById("msg").innerHTML='<span class="win-msg">&#127881; Solved! All paths connected!</span>';
+}
+
+function buildPuzzleRow(){
+  var div=document.getElementById("puzzleRow");
+  PUZZLES.forEach(function(p,i){
+    var b=document.createElement("button");
+    b.className="puzzle-btn"+(i===0?" active":"");
+    b.textContent=p.name;
+    b.addEventListener("click",function(){loadPuzzle(i);});
+    div.appendChild(b);
+  });
+}
+
+buildPuzzleRow();
+loadPuzzle(0);
+</script>
+</body>
+</html>

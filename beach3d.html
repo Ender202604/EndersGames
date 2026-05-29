@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beach 3D — Beach Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Arial,sans-serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,0.8); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(0,30,60,0.88); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:2px solid rgba(0,200,255,0.3); }
+#loc { color:#ffe08a; font-size:13px; min-width:180px; }
+#score-el { color:#00ffcc; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(0,30,60,0.82); padding:8px 20px; border-radius:12px; color:#aaeeff; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(0,30,60,0.94); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(0,200,255,0.4); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(0,15,30,0.97); border:2px solid rgba(0,200,255,0.4); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#ffe08a; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(0,80,140,0.9); border:1px solid rgba(0,200,255,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(0,140,220,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(0,30,60,0.88); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(0,200,255,0.2); }
+#inv-title { color:#00ffcc; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(0,15,30,0.95); color:#00ffcc; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(0,255,180,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#8B0000; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#cc0000; color:#fff; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(0,15,30,0.85); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(0,200,255,0.3); background:rgba(0,30,60,0.8); color:#aaeeff; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(0,30,60,0.7); border:1px solid rgba(0,200,255,0.3); border-radius:8px; color:#aaeeff; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(0,200,255,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(0,100,180,0.35); border:2px solid #ffe08a; border-radius:50%; color:#ffe08a; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">🏖️ Beach Shore</span>
+  <span id="score-el">🐚 0 items</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Beach Bag</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Empty</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🏖️</div>
+  <div class="st" style="color:#ffe08a">BEACH EXPLORER 3D</div>
+  <div class="sb">Welcome to Sunny Cove Beach! Explore the Beach Shore, Lifeguard Tower, Seafood Shack, Pier, Rock Pools, and Volleyball Court.<br><br>Meet the Lifeguard, Ice Cream Vendor, Surfer, and Fisherman. Collect seashells and starfish!<br><br><span style="color:#00ffcc">Waves, sun, and beach fun await! 🌊</span></div>
+  <button class="sbtn" onclick="beginGame()">🌊 HIT THE BEACH</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up</small>
+</div>
+
+<div id="lock-screen" style="display:none">
+  <p>Click to look around</p>
+  <small>Press Escape to unlock mouse</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x4db8ff);
+scene.fog = new THREE.Fog(0x87d4ff, 15, 65);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+
+var M = {
+  sand:lm(0xf0d080), dsand:lm(0xd4aa55), water:lm(0x1a88cc),
+  wood:lm(0xaa7733), dwood:lm(0x7a5522), white:lm(0xffffff),
+  red:lm(0xff2222), orange:lm(0xff8800), yellow:lm(0xffdd00),
+  blue:lm(0x2266cc), green:lm(0x22aa44), skin:lm(0xFFCBA4),
+  rock:lm(0x778877), grey:lm(0x999999), darkblue:lm(0x0044aa),
+  ltblue:lm(0x88ccff), teal:lm(0x00aabb), coral:lm(0xff6644),
+  tan:lm(0xcc9944), purple:lm(0x9944cc), pink:lm(0xff88bb)
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,10),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,8,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||20); l.position.set(x,y,z); scene.add(l); return l; }
+function cone(r,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.ConeGeometry(r,h,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(0,15,30,0.9)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(0,200,255,0.5)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-12,x2:12, z1:-12,z2:12, name:"Beach Shore",        col:"#ffe08a"},
+  {x1:14, x2:32, z1:-10,z2:10, name:"Lifeguard Tower",    col:"#ff4444"},
+  {x1:-32,x2:-14,z1:-10,z2:10, name:"Seafood Shack",      col:"#ff8800"},
+  {x1:-10,x2:10, z1:14, z2:32, name:"Pier",               col:"#aa8844"},
+  {x1:-10,x2:10, z1:-32,z2:-14,name:"Rock Pools",         col:"#44aaaa"},
+  {x1:14, x2:32, z1:14, z2:32, name:"Volleyball Court",   col:"#ffe08a"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.SphereGeometry(0.15,8,8),lm(0xffee88)); g.add(glow);
+  var lbl=label(icon+' '+name,'#00ffcc'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,bodyCol,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.2,0.3),lm(bodyCol)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.28,8,8),M.skin); head.position.y=0.85; g.add(head);
+  var lbl=label(icon+' '+name,'#ffe08a'); lbl.position.set(0,1.5,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,lines:lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z,mat){
+  var useMat=mat||M.sand;
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),useMat);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x:x,z:z,w:w,d:d});
+  return m;
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0xfff8e0, 3.0));
+  scene.add(new THREE.DirectionalLight(0xfffacc, 2.0));
+
+  // ── GROUND ──
+  box(200,0.1,200,M.sand,0,-0.1,0);
+  // Ocean strip
+  box(200,0.12,40,M.water,0,-0.05,-55);
+
+  // ── BEACH SHORE (center) ──
+  // Invisible boundary walls (low, beach-style)
+  wallBox(0.3,2.5,24,-12,1.25,0,M.dsand);
+  wallBox(0.3,2.5,24, 12,1.25,0,M.dsand);
+  wallBox(24,2.5,0.3,  0,1.25,-12,M.dsand);
+  wallBox(24,2.5,0.3,  0,1.25, 12,M.dsand);
+  // Beach umbrellas
+  cyl(0.05,0.05,2.5,M.dwood,-5,1.25,2); cone(1.5,0.6,M.red,-5,2.8,2);
+  cyl(0.05,0.05,2.5,M.dwood,4,1.25,-3); cone(1.5,0.6,M.blue,4,2.8,-3);
+  cyl(0.05,0.05,2.5,M.dwood,-2,1.25,-8); cone(1.5,0.6,M.yellow,-2,2.8,-8);
+  // Beach towels
+  box(2,0.04,1,M.red,-5,0.05,3); box(2,0.04,1,M.blue,4,0.05,-2);
+  // Sandcastle
+  box(1.5,0.5,1.5,M.dsand,5,0.3,5); box(1.0,0.8,1.0,M.dsand,5,0.75,5);
+  box(0.3,0.5,0.3,M.dsand,4.5,1.25,4.5); box(0.3,0.5,0.3,M.dsand,5.5,1.25,4.5);
+  box(0.3,0.5,0.3,M.dsand,4.5,1.25,5.5); box(0.3,0.5,0.3,M.dsand,5.5,1.25,5.5);
+  // Beach ball
+  sph(0.4,M.red,2,0.45,8); sph(0.38,lm(0xff8800),2,0.45,8);
+  pl(0,5,0,0xfff8cc,2.0,22);
+  addPickup('Seashell','🐚',3,0.2,-5);
+  addPickup('Starfish','⭐',-5,0.2,7);
+  addNPC("Surfer","🏄",0,0.75,8,0xff8800,[
+    "Dude! The waves are totally epic today! Six footers all morning!",
+    "I have been surfing since I was five years old. The ocean is my home.",
+    "Check out the pier to the north - great spot to watch dolphins!",
+    "Pro tip: the best shells wash up by the rock pools to the south!"
+  ]);
+
+  // ── LIFEGUARD TOWER (east) ──
+  wallBox(0.3,5.0,20,12,2.5,0,M.red);
+  wallBox(0.3,5.0,20,32,2.5,0,M.red);
+  wallBox(20,5.0,0.3,22,2.5,-10,M.red);
+  wallBox(20,5.0,0.3,22,2.5, 10,M.red);
+  // Lifeguard tower structure
+  cyl(0.2,0.2,3,M.dwood,19,1.5,-5); cyl(0.2,0.2,3,M.dwood,23,1.5,-5);
+  cyl(0.2,0.2,3,M.dwood,19,1.5,-1); cyl(0.2,0.2,3,M.dwood,23,1.5,-1);
+  box(5.5,0.2,5.5,M.wood,21,3.1,-3);
+  box(5.5,1.5,0.2,M.wood,21,3.9,-5.4);
+  // Flag
+  cyl(0.05,0.05,3,M.dwood,23,4.7,-5.5); box(1.2,0.6,0.05,M.red,24.1,5.7,-5.5);
+  // Beach chairs on tower
+  box(0.8,0.3,0.6,M.red,20,3.3,-4); box(0.8,0.3,0.6,M.red,22,3.3,-4);
+  // Rescue buoys
+  cyl(0.4,0.4,0.15,M.red,25,1.0,4); cyl(0.3,0.3,0.15,M.white,25,1.0,4);
+  cyl(0.4,0.4,0.15,M.red,25,1.0,6);
+  // Ladder
+  box(0.1,3,0.15,M.dwood,18.5,1.5,-3); box(0.1,3,0.15,M.dwood,19.5,1.5,-3);
+  for(var rli=0;rli<5;rli++) box(1.1,0.06,0.15,M.dwood,19,0.4+rli*0.55,-3);
+  pl(22,4.5,-3,0xfff8cc,2.0,20); pl(27,3,7,0xfff8cc,1.5,14);
+  addPickup('Seashell','🐚',26,0.2,4);
+  addPickup('Starfish','⭐',18,0.2,7);
+  addNPC("Lifeguard","🏊",22,3.4,-2,0xff2222,[
+    "Eyes on the water! Oh, hello there! I am Lifeguard Sam.",
+    "No swimming past the red buoys today - the current is strong!",
+    "I have saved 23 swimmers this season. Safety is my top priority!",
+    "The seafood shack on the west side makes amazing fish tacos. Best on the beach!"
+  ]);
+
+  // ── SEAFOOD SHACK (west) ──
+  wallBox(0.3,4.0,20,-14,2.0,0,M.dwood);
+  wallBox(0.3,4.0,20,-32,2.0,0,M.dwood);
+  wallBox(20,4.0,0.3,-23,2.0,-10,M.dwood);
+  wallBox(20,4.0,0.3,-23,2.0, 10,M.dwood);
+  // Shack building
+  box(8,3.5,6,M.dwood,-23,1.85,-6);
+  box(8,0.3,6,lm(0x8B4513),-23,3.8,-6);
+  // Counter
+  box(6,1.0,1.2,M.tan,-23,0.55,-3.5); box(6,0.08,1.2,M.wood,-23,1.05,-3.5);
+  // Awning
+  box(8,0.15,3,M.red,-23,3.8,-3.5);
+  // Fish displays
+  for(var fi=0;fi<4;fi++){
+    box(0.6,0.15,0.4,lm(0x4488aa),-26+fi*2,1.2,-3.8);
+  }
+  // Menus on wall
+  box(0.08,1.0,1.5,lm(0xeeddaa),-27,2.5,-9.5); box(0.08,1.0,1.5,lm(0xeeddaa),-24,2.5,-9.5);
+  // Tables outside
+  box(1.2,0.06,1.2,M.wood,-18,0.85,5); cyl(0.06,0.06,0.85,M.wood,-18,0.44,5);
+  box(1.2,0.06,1.2,M.wood,-17,0.85,-6); cyl(0.06,0.06,0.85,M.wood,-17,0.44,-6);
+  pl(-23,3,-5,0xffcc88,2.0,22); pl(-23,3,5,0xffcc88,1.5,16);
+  addPickup('Seashell','🐚',-18,0.2,4);
+  addPickup('Starfish','⭐',-28,0.2,-4);
+  addNPC("Ice Cream Vendor","🍦",-20,0.75,4,0xffffff,[
+    "Ice cream! Get your cold, yummy ice cream right here!",
+    "Today we have 15 flavors including my specialty: ocean mint chocolate chip!",
+    "This is the best summer job in the world. I am on the beach every single day!",
+    "The fisherman out on the pier is always good for a fish tale or two!"
+  ]);
+
+  // ── PIER (north) ──
+  wallBox(0.3,3.5,18,-10,1.75,23,M.dwood);
+  wallBox(0.3,3.5,18, 10,1.75,23,M.dwood);
+  wallBox(20,3.5,0.3,  0,1.75,14,M.dwood);
+  wallBox(20,3.5,0.3,  0,1.75,32,M.dwood);
+  // Pier deck
+  box(18,0.25,18,M.wood,0,0.18,23);
+  // Pier rails
+  for(var pri=0;pri<10;pri++){
+    cyl(0.05,0.05,1.5,M.dwood,-9+pri*2,1.08,14); cyl(0.05,0.05,1.5,M.dwood,-9+pri*2,1.08,32);
+  }
+  box(18,0.08,0.08,M.dwood,0,1.8,14); box(18,0.08,0.08,M.dwood,0,1.8,32);
+  // Fishing poles
+  for(var fpi=0;fpi<3;fpi++){
+    cyl(0.04,0.02,2.5,M.dwood,-6+fpi*6,1.4,31.5);
+  }
+  // Dock lights
+  box(0.2,0.3,0.2,M.yellow,-8,2.0,15); box(0.2,0.3,0.2,M.yellow,8,2.0,15);
+  box(0.2,0.3,0.2,M.yellow,-8,2.0,31); box(0.2,0.3,0.2,M.yellow,8,2.0,31);
+  pl(-8,2.5,15,0xffcc88,1.5,10); pl(8,2.5,15,0xffcc88,1.5,10);
+  pl(0,4,23,0xfff8cc,2.0,22);
+  addPickup('Seashell','🐚',-5,0.3,17);
+  addPickup('Starfish','⭐',5,0.3,29);
+  addNPC("Fisherman","🎣",2,0.75,30,0x5C3010,[
+    "Morning! The fish are biting real good today. Already caught three big ones!",
+    "I have been fishing this pier for 20 years. Know every current in this bay.",
+    "See that spot between the buoys? That is where the big sea bass like to hide.",
+    "The rock pools south of the beach have amazing sea creatures. Worth exploring!"
+  ]);
+
+  // ── ROCK POOLS (south) ──
+  wallBox(0.3,2.5,18,-10,1.25,-23,M.rock);
+  wallBox(0.3,2.5,18, 10,1.25,-23,M.rock);
+  wallBox(20,2.5,0.3,  0,1.25,-14,M.rock);
+  wallBox(20,2.5,0.3,  0,1.25,-32,M.rock);
+  // Rocks
+  for(var rki=0;rki<20;rki++){
+    var ra=rki/20*Math.PI*2, rd=3+Math.random()*5;
+    box(0.8+Math.random()*0.8,0.3+Math.random()*0.5,0.8+Math.random()*0.8,M.rock,
+      Math.cos(ra)*rd,0.2,Math.sin(ra)*rd-23);
+  }
+  // Tide pools
+  box(3,0.04,3,M.water,-4,0.02,-20); box(3,0.04,2,M.water,4,0.02,-26);
+  box(2,0.04,2,M.water,-3,0.02,-28);
+  // Crabs and starfish decorations
+  box(0.3,0.08,0.2,M.coral,-6,0.05,-25); box(0.3,0.08,0.2,M.coral,3,0.05,-22);
+  sph(0.25,M.coral,-1,0.05,-19); sph(0.2,M.teal,5,0.05,-29);
+  // Seaweed
+  cyl(0.05,0.03,0.8,M.green,-5,0.4,-22); cyl(0.05,0.03,0.6,M.green,3,0.3,-27);
+  pl(0,3,-23,0xaaeeff,2.0,22);
+  addPickup('Seashell','🐚',4,0.2,-17);
+  addPickup('Starfish','⭐',-6,0.2,-27);
+
+  // ── VOLLEYBALL COURT (northeast) ──
+  wallBox(0.3,3.0,18,14,1.5,23,M.sand);
+  wallBox(0.3,3.0,18,32,1.5,23,M.sand);
+  wallBox(18,3.0,0.3,23,1.5,14,M.sand);
+  wallBox(18,3.0,0.3,23,1.5,32,M.sand);
+  // Net poles
+  cyl(0.08,0.08,3,M.grey,23,1.5,18); cyl(0.08,0.08,3,M.grey,23,1.5,28);
+  box(0.06,0.2,10,M.white,23,3.1,23);
+  // Court lines
+  box(18,0.01,0.08,M.white,23,0.07,23); box(0.08,0.01,18,M.white,23,0.07,23);
+  // Volleyball
+  sph(0.3,M.white,19,0.35,20); sph(0.28,M.blue,19,0.35,20);
+  // Bleachers
+  box(6,0.3,0.8,M.dwood,23,0.5,31); box(6,0.6,0.8,M.dwood,23,0.8,31.5);
+  pl(23,4,23,0xfff8cc,2.0,22);
+  addPickup('Seashell','🐚',19,0.2,26);
+  addPickup('Starfish','⭐',27,0.2,17);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+}
+setupMobile();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true;
+      scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name);
+      score++;
+      document.getElementById('score-el').textContent='🐚 '+score+' items';
+      updateInv();
+      showToast('Picked up '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Empty';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+
+  var spd=0.065;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.35&&Math.abs(nz-w.z)<w.d/2+0.35){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='🏖️ '+(z?z.name:'Beach');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.2;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.8;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Pick up '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

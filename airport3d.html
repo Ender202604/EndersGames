@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Airport 3D — Airport Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Arial,sans-serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,0.8); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(8,14,28,0.88); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:2px solid rgba(80,160,255,0.3); }
+#loc { color:#88ccff; font-size:13px; min-width:200px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(8,14,28,0.82); padding:8px 20px; border-radius:12px; color:#aabbcc; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(8,14,28,0.94); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(80,160,255,0.4); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(4,8,16,0.97); border:2px solid rgba(80,160,255,0.4); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#88ccff; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(20,50,100,0.9); border:1px solid rgba(80,160,255,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(40,100,200,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(8,14,28,0.88); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(80,160,255,0.2); }
+#inv-title { color:#FFD700; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(4,8,16,0.95); color:#FFD700; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,200,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#8B0000; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#cc0000; color:#fff; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(4,8,16,0.85); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(80,160,255,0.3); background:rgba(8,14,28,0.8); color:#aabbcc; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(8,14,28,0.7); border:1px solid rgba(80,160,255,0.3); border-radius:8px; color:#aabbcc; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(80,160,255,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(20,60,120,0.35); border:2px solid #88ccff; border-radius:50%; color:#88ccff; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">✈️ Departure Terminal</span>
+  <span id="score-el">🎫 0 items</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Travel Bag</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Empty</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">✈️</div>
+  <div class="st" style="color:#88ccff">AIRPORT EXPLORER 3D</div>
+  <div class="sb">Welcome to Skyport International Airport! Explore the Departure Terminal, Security Checkpoint, Gate B12, Baggage Claim, Airport Restaurant, and Control Tower View.<br><br>Meet the Pilot, Flight Attendant, Security Officer, and Tourist. Collect boarding passes and luggage tags!<br><br><span style="color:#FFD700">Your adventure takes flight! 🛫</span></div>
+  <button class="sbtn" onclick="beginGame()">🛫 ENTER THE AIRPORT</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up</small>
+</div>
+
+<div id="lock-screen" style="display:none">
+  <p>Click to look around</p>
+  <small>Press Escape to unlock mouse</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a2540);
+scene.fog = new THREE.Fog(0x1a2540, 12, 58);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+
+var M = {
+  floor:lm(0xccddee), wall:lm(0xddeeff), grey:lm(0xaabbcc),
+  dgrey:lm(0x556677), blue:lm(0x2255aa), ltblue:lm(0x88aacc),
+  white:lm(0xffffff), yellow:lm(0xffcc00), orange:lm(0xff8800),
+  red:lm(0xff3333), green:lm(0x22aa44), dark:lm(0x223344),
+  metal:lm(0x8899aa), glass:lm(0xaaccee), skin:lm(0xFFCBA4),
+  black:lm(0x111122), teal:lm(0x008899), purple:lm(0x6633aa),
+  silver:lm(0xccddee), gold:lm(0xddaa00), tan:lm(0xbb9966),
+  neon:new THREE.MeshLambertMaterial({color:0x00aaff,emissive:0x003366,emissiveIntensity:0.5})
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,10),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,8,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||20); l.position.set(x,y,z); scene.add(l); return l; }
+function ceil_light(x,z){ pl(x,4.2,z,0xffffff,2.0,18); box(1.2,0.08,0.4,M.white,x,4.32,z); }
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(4,8,16,0.9)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(80,160,255,0.5)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-12,x2:12, z1:-12,z2:12, name:"Departure Terminal",    col:"#88ccff"},
+  {x1:14, x2:32, z1:-10,z2:10, name:"Security Checkpoint",   col:"#ffcc00"},
+  {x1:-32,x2:-14,z1:-10,z2:10, name:"Gate B12",              col:"#88ff88"},
+  {x1:-10,x2:10, z1:14, z2:32, name:"Baggage Claim",         col:"#ffaa44"},
+  {x1:-10,x2:10, z1:-32,z2:-14,name:"Airport Restaurant",    col:"#ff8888"},
+  {x1:14, x2:32, z1:14, z2:32, name:"Control Tower View",    col:"#aaccff"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.15,0.04),lm(0xFFD700)); g.add(glow);
+  var lbl=label(icon+' '+name,'#FFD700'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,bodyCol,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.2,0.3),lm(bodyCol)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.28,8,8),M.skin); head.position.y=0.85; g.add(head);
+  var lbl=label(icon+' '+name,'#88ccff'); lbl.position.set(0,1.5,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,lines:lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z,mat){
+  var useMat=mat||M.wall;
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),useMat);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x:x,z:z,w:w,d:d});
+  return m;
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0xddeeff, 2.5));
+
+  // ── DEPARTURE TERMINAL (center) ──
+  box(24,0.15,24,M.floor,0,-0.08,0);
+  box(24,0.12,24,M.dark,0,4.58,0);
+  wallBox(0.4,4.7,24,-12,2.35,0);
+  wallBox(0.4,4.7,24, 12,2.35,0);
+  wallBox(24,4.7,0.4,  0,2.35,-12);
+  wallBox(24,4.7,0.4,  0,2.35, 12);
+  // Check-in counters
+  for(var ci=0;ci<4;ci++){
+    box(2.5,1.1,1.2,M.dark,-7.5+ci*5,0.56,-9); box(2.5,0.08,1.2,M.ltblue,-7.5+ci*5,1.1,-9);
+    box(0.8,0.6,0.3,M.black,-7.5+ci*5,1.4,-8.6);
+  }
+  // Departure boards
+  box(0.08,2.5,8,M.dark,0,3.2,0); box(0.06,2.3,7.8,M.black,0,3.2,0);
+  // Seats / waiting area
+  for(var si=0;si<3;si++){
+    box(5,0.5,0.8,M.blue,-4+si*4.5,0.4,4);
+    box(5,0.5,0.1,M.blue,-4+si*4.5,0.55,4.4);
+  }
+  // Info kiosk
+  box(1,2,1,M.ltblue,7,1.05,2); box(0.9,0.5,0.9,M.neon,7,2.3,2);
+  // Floor pattern
+  box(22,0.01,0.3,lm(0x8899bb),0,0.09,0); box(0.3,0.01,22,lm(0x8899bb),0,0.09,0);
+  ceil_light(0,0); ceil_light(-6,0); ceil_light(6,0); ceil_light(0,-6); ceil_light(0,6);
+  pl(0,4,0,0x88aaff,2.5,22);
+  addPickup('Boarding Pass','🎫',4,0.5,-5);
+  addPickup('Luggage Tag','🏷️',-4,0.5,6);
+  addNPC("Flight Attendant","👩‍✈️",0,0.75,5,0x224488,[
+    "Good morning! Welcome to Skyport International Airport!",
+    "Flight SK-404 to Paris is now boarding at Gate B12. Have your passport ready!",
+    "I have been a flight attendant for 12 years. I have visited 47 countries!",
+    "If you need help finding anything, check the information kiosk over there."
+  ]);
+
+  // ── SECURITY CHECKPOINT (east) ──
+  box(18,0.15,20,M.grey,23,-0.08,0);
+  box(18,0.12,20,M.dark,23,4.58,0);
+  wallBox(0.4,4.7,20,14,2.35,0);
+  wallBox(0.4,4.7,20,32,2.35,0);
+  wallBox(18,4.7,0.4,23,2.35,-10);
+  wallBox(18,4.7,0.4,23,2.35, 10);
+  // X-ray conveyor belts
+  box(5,0.8,1.5,M.dark,18,0.45,-5); box(4.8,0.1,1.3,M.metal,18,0.85,-5);
+  box(5,0.8,1.5,M.dark,26,0.45,-5); box(4.8,0.1,1.3,M.metal,26,0.85,-5);
+  // Scanner arch
+  box(0.3,3.5,0.3,M.metal,22,1.85,-5); box(0.3,3.5,0.3,M.metal,24,1.85,-5);
+  box(2.3,0.3,0.3,M.metal,23,3.5,-5);
+  // Security bins
+  for(var bi2=0;bi2<4;bi2++){
+    box(0.8,0.15,0.5,M.grey,16+bi2*2,0.95,-5);
+  }
+  // Rope barriers
+  cyl(0.04,0.04,2.0,M.metal,15,1.05,3); cyl(0.04,0.04,2.0,M.metal,19,1.05,3);
+  cyl(0.04,0.04,2.0,M.metal,23,1.05,3); cyl(0.04,0.04,2.0,M.metal,27,1.05,3);
+  box(12,0.04,0.04,M.yellow,21,2.0,3); box(12,0.04,0.04,M.yellow,21,1.5,3);
+  // Sign board
+  box(0.08,1.5,5,M.dark,14.2,3.0,-2);
+  box(0.06,1.3,4.8,lm(0x223355),14.2,3.0,-2);
+  ceil_light(18,-5); ceil_light(28,-5); ceil_light(18,5); ceil_light(28,5); ceil_light(23,0);
+  pl(23,4,0,0xaaccff,2.0,22);
+  addPickup('Boarding Pass','🎫',26,0.5,6);
+  addPickup('Luggage Tag','🏷️',17,0.5,-7);
+  addNPC("Security Officer","💂",23,0.75,7,0x334455,[
+    "Please remove your shoes and belt before going through the scanner.",
+    "All liquids must be in containers of 100ml or less. Airport security rules!",
+    "I have been working at this airport for 8 years. I have seen everything!",
+    "The gate area is just beyond security. Have a safe and pleasant flight!"
+  ]);
+
+  // ── GATE B12 (west) ──
+  box(18,0.15,20,lm(0xeef4ff),-23,-0.08,0);
+  box(18,0.12,20,M.dark,-23,4.58,0);
+  wallBox(0.4,4.7,20,-14,2.35,0);
+  wallBox(0.4,4.7,20,-32,2.35,0);
+  wallBox(18,4.7,0.4,-23,2.35,-10);
+  wallBox(18,4.7,0.4,-23,2.35, 10);
+  // Gate desk
+  box(6,1.1,1.5,M.dark,-23,0.56,-7); box(6,0.08,1.5,M.ltblue,-23,1.1,-7);
+  // Gate sign
+  box(0.08,1.5,3,M.dark,-31.8,3.0,0); box(0.06,1.3,2.8,M.neon,-31.8,3.0,0);
+  // Waiting seats facing window
+  for(var gsi=0;gsi<3;gsi++){
+    box(6,0.5,0.8,M.blue,-22+gsi*0.5,0.4,3+gsi*2);
+    box(6,0.5,0.1,M.blue,-22+gsi*0.5,0.55,3.4+gsi*2);
+  }
+  // Big windows (wall panels lighter color)
+  box(0.1,2.5,10,M.glass,-31.9,2.0,0);
+  // Jetway door
+  box(2.0,2.5,0.2,M.dgrey,-31.8,1.45,5);
+  // Plane nose visible through window area
+  box(0.04,2.0,2.0,lm(0xddeeee),-31.9,2.0,-3);
+  // Charging stations
+  box(1.5,1.0,0.4,M.dark,-18,0.55,8); box(1.5,0.08,0.4,M.grey,-18,1.05,8);
+  ceil_light(-18,-5); ceil_light(-28,-5); ceil_light(-18,5); ceil_light(-28,5); ceil_light(-23,0);
+  pl(-23,4,0,0xaaccff,2.0,22);
+  addPickup('Luggage Tag','🏷️',-20,0.5,5);
+  addPickup('Boarding Pass','🎫',-27,0.5,-4);
+  addNPC("Pilot","👨‍✈️",-23,0.75,-3,0x1a3060,[
+    "Good day! I am Captain Chen, your pilot for flight SK-404 today.",
+    "We will be cruising at 35,000 feet. The flight time is approximately 8 hours.",
+    "The weather looks perfect for flying. Smooth skies all the way to Paris!",
+    "I have been flying commercial jets for 18 years. Over 12,000 hours in the air!"
+  ]);
+
+  // ── BAGGAGE CLAIM (north) ──
+  box(20,0.15,18,lm(0xdde8f0),0,-0.08,23);
+  box(20,0.12,18,M.dark,0,4.58,23);
+  wallBox(20,4.7,0.4, 0,2.35,14);
+  wallBox(20,4.7,0.4, 0,2.35,32);
+  wallBox(0.4,4.7,18,-10,2.35,23);
+  wallBox(0.4,4.7,18, 10,2.35,23);
+  // Baggage carousel (oval belt)
+  box(12,0.6,5,M.dgrey,0,0.35,23); box(10,0.12,3,M.metal,0,0.65,23);
+  // Luggage on belt
+  var lugColors=[0xff4444,0x4488ff,0x44aa44,0xffcc00,0xaa44cc];
+  for(var lug=0;lug<8;lug++){
+    var la=lug/8*Math.PI*2;
+    box(0.7,0.5,0.45,lm(lugColors[lug%5]),Math.cos(la)*4,0.9,23+Math.sin(la)*1.5);
+  }
+  // Carousel number sign
+  box(0.08,1.0,1.5,M.dark,-9.8,2.5,22); box(0.06,0.8,1.3,lm(0xffcc00),-9.8,2.5,22);
+  // Waiting area
+  for(var bsi=0;bsi<2;bsi++){
+    box(6,0.5,0.8,M.blue,-3+bsi*7,0.4,28);
+    box(6,0.5,0.1,M.blue,-3+bsi*7,0.55,28.4);
+  }
+  // Cart of bags
+  box(1.5,0.5,0.8,M.metal,7,0.3,17); box(0.7,0.7,0.6,lm(0xff4444),7,0.7,17); box(0.7,0.5,0.6,lm(0x4488ff),7,1.3,17);
+  ceil_light(-5,18); ceil_light(5,18); ceil_light(-5,28); ceil_light(5,28); ceil_light(0,23);
+  pl(0,4,23,0xaabbcc,2.0,22);
+  addPickup('Luggage Tag','🏷️',-5,0.5,17);
+  addPickup('Boarding Pass','🎫',5,0.5,27);
+  addNPC("Tourist","🧳",4,0.75,27,0xff8800,[
+    "Oh my goodness, that is a LOT of luggage on that belt!",
+    "I am heading home after three weeks in Europe. Visited Paris, Rome, and Amsterdam!",
+    "Pro tip: always tie a colorful ribbon on your bag so you can spot it on the carousel!",
+    "The airport restaurant downstairs has amazing cinnamon rolls. Totally worth it!"
+  ]);
+
+  // ── AIRPORT RESTAURANT (south) ──
+  box(20,0.15,18,lm(0xf5efe8),0,-0.08,-23);
+  box(20,0.12,18,M.dark,0,4.58,-23);
+  wallBox(20,4.7,0.4, 0,2.35,-14);
+  wallBox(20,4.7,0.4, 0,2.35,-32);
+  wallBox(0.4,4.7,18,-10,2.35,-23);
+  wallBox(0.4,4.7,18, 10,2.35,-23);
+  // Restaurant bar/counter
+  box(14,1.1,1.5,M.dark,0,0.56,-29); box(14,0.08,1.5,M.tan,0,1.1,-29);
+  // Bar stools
+  for(var bari=0;bari<7;bari++){
+    cyl(0.06,0.06,0.9,M.metal,-6+bari*2,0.5,-28); cyl(0.3,0.3,0.08,M.grey,-6+bari*2,0.95,-28);
+  }
+  // Tables
+  for(var rti=0;rti<4;rti++){
+    box(1.5,0.08,1.5,M.wood,-6+rti*4,0.85,-20);
+    cyl(0.06,0.06,0.85,M.metal,-6+rti*4,0.44,-20);
+    box(0.6,0.06,0.6,M.grey,-7+rti*4,0.55,-20.8); box(0.6,0.06,0.6,M.grey,-5+rti*4,0.55,-19.2);
+  }
+  // Coffee machine
+  box(0.8,1.5,0.5,M.metal,8,0.8,-29); box(0.6,0.3,0.4,M.dark,8,1.7,-29);
+  // Menu boards
+  box(0.08,1.5,3,M.dark,-9.8,3.0,-29.8); box(0.06,1.3,2.8,lm(0x332200),-9.8,3.0,-29.8);
+  // Food display case
+  box(4,1.0,0.8,M.glass,5,0.55,-28.5); box(3.8,0.08,0.6,M.metal,5,1.05,-28.5);
+  for(var fi=0;fi<3;fi++){
+    box(0.8,0.3,0.5,lm([0xff8844,0xffdd88,0xeeddbb][fi]),3.5+fi*1.0,1.15,-28.5);
+  }
+  ceil_light(-5,-18); ceil_light(5,-18); ceil_light(-5,-28); ceil_light(5,-28); ceil_light(0,-23);
+  pl(0,4,-23,0xffeecc,2.0,22);
+  addPickup('Boarding Pass','🎫',-5,0.5,-18);
+  addPickup('Luggage Tag','🏷️',5,0.5,-25);
+
+  // ── CONTROL TOWER VIEW (northeast) ──
+  box(18,0.15,18,M.floor,23,-0.08,23);
+  box(18,0.12,18,M.dark,23,4.58,23);
+  wallBox(0.4,4.7,18,14,2.35,23);
+  wallBox(0.4,4.7,18,32,2.35,23);
+  wallBox(18,4.7,0.4,23,2.35,14);
+  wallBox(18,4.7,0.4,23,2.35,32);
+  // Tower column rising up
+  box(3,8,3,M.dgrey,23,4,23);
+  // Observation windows (lighter panels)
+  box(0.08,2.0,6,M.glass,14.2,3.0,23); box(0.08,2.0,6,M.glass,31.8,3.0,23);
+  box(6,2.0,0.08,M.glass,23,3.0,14.2); box(6,2.0,0.08,M.glass,23,3.0,31.8);
+  // Radar equipment
+  box(1.5,0.4,1.5,M.metal,19,0.7,26); cyl(0.6,0.05,0.3,M.metal,19,1.1,26);
+  box(1.5,0.4,1.5,M.metal,27,0.7,26);
+  // Radio equipment rack
+  box(2,2.5,0.5,M.dark,30,1.35,30); box(1.8,0.1,0.4,M.metal,30,0.5,30);
+  for(var ri=0;ri<5;ri++) box(1.6,0.15,0.3,lm([0x3366ff,0x33aa33,0xaaaa33,0xff4433,0x33aacc][ri]),30,0.65+ri*0.45,30);
+  // Runway view windows
+  for(var wi=0;wi<4;wi++){
+    box(2.5,0.08,1.5,lm(0xaaaaff),16+wi*4,4.2,23);
+  }
+  // Control desk
+  box(10,0.8,1.5,M.dark,23,0.45,30); box(9.8,0.08,1.3,M.grey,23,0.85,30);
+  for(var cdi=0;cdi<4;cdi++){
+    box(1.5,0.5,0.08,M.black,16+cdi*3,1.1,29.4);
+    box(1.3,0.4,0.06,lm(0x2233aa),16+cdi*3,1.1,29.3);
+  }
+  // Plane models
+  box(3,0.15,1.2,M.white,17,1.05,17); box(0.15,0.5,1.5,M.white,17,0.9,17);
+  box(3,0.15,1.2,M.ltblue,28,1.05,17); box(0.15,0.5,1.5,M.ltblue,28,0.9,17);
+  ceil_light(18,18); ceil_light(28,18); ceil_light(18,28); ceil_light(28,28); ceil_light(23,23);
+  pl(23,4,23,0xaaccff,2.5,24);
+  addPickup('Luggage Tag','🏷️',19,0.5,19);
+  addPickup('Boarding Pass','🎫',27,0.5,27);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+}
+setupMobile();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true;
+      scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name);
+      score++;
+      document.getElementById('score-el').textContent='🎫 '+score+' items';
+      updateInv();
+      showToast('Picked up '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Empty';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+
+  var spd=0.065;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.35&&Math.abs(nz-w.z)<w.d/2+0.35){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='✈️ '+(z?z.name:'Airport Corridor');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.2;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.8;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Pick up '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

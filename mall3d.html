@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mall 3D — Shopping Mall Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Arial,sans-serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,0.8); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(10,10,40,0.88); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:2px solid rgba(0,180,255,0.3); }
+#loc { color:#00cfff; font-size:13px; min-width:180px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(10,10,40,0.82); padding:8px 20px; border-radius:12px; color:#aaddff; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(10,10,40,0.94); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(0,200,255,0.4); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(5,5,25,0.97); border:2px solid rgba(0,180,255,0.4); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#00cfff; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(0,80,160,0.9); border:1px solid rgba(0,200,255,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(0,140,255,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(10,10,40,0.88); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(0,180,255,0.2); }
+#inv-title { color:#FFD700; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(5,5,25,0.95); color:#FFD700; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,200,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#8B0000; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#cc0000; color:#fff; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(5,5,25,0.85); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(0,180,255,0.3); background:rgba(10,10,40,0.8); color:#aaddff; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(10,10,40,0.7); border:1px solid rgba(0,180,255,0.3); border-radius:8px; color:#aaddff; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(0,180,255,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(0,100,200,0.35); border:2px solid #00cfff; border-radius:50%; color:#00cfff; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">🛍️ Food Court</span>
+  <span id="score-el">🎁 0 items</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Inventory</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Empty</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🛍️</div>
+  <div class="st" style="color:#00cfff">MALL EXPLORER 3D</div>
+  <div class="sb">Welcome to Sunshine Mall! Explore the Food Court, Electronics Store, Toy Store, Clothing Store, Movie Theater Lobby, and Arcade.<br><br>Chat with the Mall Cop, Store Clerk, Kid with Balloon, and Food Court Worker. Collect gift cards and coins!<br><br><span style="color:#FFD700">The biggest mall adventure ever! 🎮</span></div>
+  <button class="sbtn" onclick="beginGame()">🚪 ENTER THE MALL</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up</small>
+</div>
+
+<div id="lock-screen" style="display:none">
+  <p>Click to look around</p>
+  <small>Press Escape to unlock mouse</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111122);
+scene.fog = new THREE.Fog(0x111122, 12, 55);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+
+var M = {
+  floor:lm(0xcccccc), wall:lm(0xffffff), tile:lm(0xe0e0f0),
+  red:lm(0xff3333), blue:lm(0x3399ff), yellow:lm(0xffdd00),
+  green:lm(0x33cc66), orange:lm(0xff8800), pink:lm(0xff66aa),
+  wood:lm(0x8B5A2B), grey:lm(0x888888), dark:lm(0x333344),
+  neon1:new THREE.MeshLambertMaterial({color:0x00ffff,emissive:0x007777,emissiveIntensity:0.6}),
+  neon2:new THREE.MeshLambertMaterial({color:0xff00ff,emissive:0x770077,emissiveIntensity:0.6}),
+  neon3:new THREE.MeshLambertMaterial({color:0xffff00,emissive:0x777700,emissiveIntensity:0.6}),
+  glass:lm(0xaaddff), counter:lm(0xdddddd), skin:lm(0xFFCBA4),
+  black:lm(0x111111), purple:lm(0x9933cc), cyan:lm(0x00ccff)
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,10),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,8,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||20); l.position.set(x,y,z); scene.add(l); return l; }
+function ceil_light(x,z){ pl(x,3.8,z,0xffffff,1.5,16); box(0.8,0.1,0.8,M.neon1,x,3.9,z); }
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(5,5,25,0.9)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(0,180,255,0.5)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-12,x2:12, z1:-12,z2:12, name:"Food Court",        col:"#ffdd88"},
+  {x1:14, x2:32, z1:-10,z2:10, name:"Electronics Store", col:"#00cfff"},
+  {x1:-32,x2:-14,z1:-10,z2:10, name:"Toy Store",         col:"#ff88cc"},
+  {x1:-10,x2:10, z1:14, z2:32, name:"Clothing Store",    col:"#aaffaa"},
+  {x1:-10,x2:10, z1:-32,z2:-14,name:"Movie Theater Lobby",col:"#ffaaff"},
+  {x1:14, x2:32, z1:14, z2:32, name:"Arcade",            col:"#ffff00"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.25,0.04),lm(0xFFD700)); g.add(glow);
+  var lbl=label(icon+' '+name,'#FFD700'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,bodyCol,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.2,0.3),lm(bodyCol)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.28,8,8),M.skin); head.position.y=0.85; g.add(head);
+  var lbl=label(icon+' '+name,'#00cfff'); lbl.position.set(0,1.5,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,lines:lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M.wall);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x:x,z:z,w:w,d:d});
+  return m;
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0xffffff, 2.5));
+
+  // ── FOOD COURT (center) ──
+  box(24,0.15,24,M.tile,0,-0.08,0);
+  box(24,0.12,24,M.wall,0,4.08,0);
+  wallBox(0.4,4.2,24,-12,2.1,0);
+  wallBox(0.4,4.2,24, 12,2.1,0);
+  wallBox(24,4.2,0.4,  0,2.1,-12);
+  wallBox(24,4.2,0.4,  0,2.1, 12);
+  // Food stalls
+  box(5,0.1,2,M.counter,-6,0.9,-8); box(5,0.1,2,M.counter,6,0.9,-8);
+  box(5,1.8,0.2,M.orange,-6,1.0,-9); box(5,1.8,0.2,M.red,6,1.0,-9);
+  // Tables and chairs
+  for(var ti=0;ti<3;ti++){
+    box(1.5,0.06,1.5,M.grey,-4+ti*4,0.9,4);
+    cyl(0.06,0.06,0.9,M.grey,-4+ti*4,0.46,4);
+    for(var ci=0;ci<4;ci++){
+      var ca=ci*Math.PI/2;
+      box(0.5,0.06,0.5,M.blue,-4+ti*4+Math.sin(ca)*1.0,0.55,4+Math.cos(ca)*1.0);
+    }
+  }
+  ceil_light(0,0); ceil_light(-6,-6); ceil_light(6,-6); ceil_light(-6,6); ceil_light(6,6);
+  addPickup('Coin','🪙',3,0.5,2);
+  addPickup('Gift Card','🎁',-5,0.5,7);
+  addNPC("Food Court Worker","👨‍🍳",0,0.75,-6,0xff8800,[
+    "Welcome to Sunshine Food Court! Can I get you something?",
+    "We have pizza, burgers, tacos, and smoothies today!",
+    "Pro tip: the smoothies on the left side are buy-one-get-one today!",
+    "The Toy Store is to your left and the Electronics Store is to the right. Enjoy the mall!"
+  ]);
+
+  // ── ELECTRONICS STORE (east) ──
+  box(18,0.15,20,M.dark,23,-0.08,0);
+  box(18,0.12,20,M.dark,23,4.08,0);
+  wallBox(0.4,4.2,20,14,2.1,0);
+  wallBox(0.4,4.2,20,32,2.1,0);
+  wallBox(18,4.2,0.4,23,2.1,-10);
+  wallBox(18,4.2,0.4,23,2.1, 10);
+  // Display cases
+  for(var di=0;di<3;di++){
+    box(4,1.1,1.2,M.glass,17+di*4,0.56,-7);
+    box(3.8,0.05,1,M.cyan,17+di*4,1.1,-7);
+  }
+  // TVs on wall
+  for(var tvi=0;tvi<4;tvi++){
+    box(2.2,1.3,0.12,M.black,15+tvi*3.5,2.5,-9.5);
+    box(2.0,1.1,0.1,lm(0x112244),15+tvi*3.5,2.5,-9.4);
+  }
+  // Sign
+  box(6,0.5,0.1,M.neon1,23,3.7,-9.8);
+  ceil_light(18,-5); ceil_light(28,-5); ceil_light(18,5); ceil_light(28,5); ceil_light(23,0);
+  pl(23,3.5,-8,0x00aaff,2,20);
+  addPickup('Gift Card','🎁',20,0.5,5);
+  addPickup('Coin','🪙',26,0.5,-5);
+  addNPC("Store Clerk","🧑‍💼",23,0.75,6,0x3399ff,[
+    "Hello! Welcome to Tech World Electronics!",
+    "We just got the latest gaming consoles in stock. They are flying off the shelves!",
+    "Looking for headphones? We have over 50 models to choose from.",
+    "If you need help finding anything, just let me know. I know this store like the back of my hand!"
+  ]);
+
+  // ── TOY STORE (west) ──
+  box(18,0.15,20,lm(0xffe0f0),-23,-0.08,0);
+  box(18,0.12,20,M.wall,-23,4.08,0);
+  wallBox(0.4,4.2,20,-14,2.1,0);
+  wallBox(0.4,4.2,20,-32,2.1,0);
+  wallBox(18,4.2,0.4,-23,2.1,-10);
+  wallBox(18,4.2,0.4,-23,2.1, 10);
+  // Toy shelves
+  for(var shi=0;shi<3;shi++){
+    box(0.3,2.5,4,M.wood,-28+shi*3.5,1.35,-6);
+    for(var row=0;row<4;row++){
+      box(0.2,0.5,3.5,lm(0xff88cc),-28+shi*3.5,0.4+row*0.55,-6);
+    }
+  }
+  // Toy cars / boxes stacked
+  box(1,0.7,0.7,M.red,-18,0.5,3); box(1,0.7,0.7,M.blue,-18,1.25,3); box(1,0.7,0.7,M.yellow,-18,2.0,3);
+  // Giant stuffed bear
+  sph(0.6,lm(0xcc8844),-25,0.75,7);
+  box(1,1.4,0.6,lm(0xcc8844),-25,0.0,7);
+  // Balloon
+  sph(0.22,M.red,-20,2.5,2); cyl(0.01,0.01,1.5,M.grey,-20,1.7,2);
+  sph(0.22,M.blue,-20.5,2.8,2.5); cyl(0.01,0.01,1.5,M.grey,-20.5,2.0,2.5);
+  // Sign
+  box(5,0.5,0.1,M.neon2,-23,3.7,-9.8);
+  ceil_light(-18,-5); ceil_light(-28,-5); ceil_light(-18,5); ceil_light(-28,5); ceil_light(-23,0);
+  pl(-23,3,0,0xff66aa,1.5,22);
+  addPickup('Coin','🪙',-20,0.5,-5);
+  addPickup('Gift Card','🎁',-26,0.5,4);
+  addNPC("Kid with Balloon","🧒",-20,0.75,2,0xffdd00,[
+    "Whoa, this toy store is SO cool! Look at all the toys!",
+    "I am going to ask my mom for that giant remote control car over there!",
+    "I already have 47 action figures at home. I am going for 100!",
+    "Have you seen the new slime kits? They are in aisle three. So squishy!"
+  ]);
+
+  // ── CLOTHING STORE (north) ──
+  box(20,0.15,18,lm(0xeeffee),0,-0.08,23);
+  box(20,0.12,18,M.wall,0,4.08,23);
+  wallBox(20,4.2,0.4, 0,2.1,14);
+  wallBox(20,4.2,0.4, 0,2.1,32);
+  wallBox(0.4,4.2,18,-10,2.1,23);
+  wallBox(0.4,4.2,18, 10,2.1,23);
+  // Clothing racks
+  for(var cri=0;cri<4;cri++){
+    box(0.04,1.8,4,M.grey,-7+cri*4.5,2.0,20);
+    for(var ci2=0;ci2<5;ci2++){
+      box(0.8,0.8,0.2,lm([0xff6688,0x6688ff,0x88ff66,0xffaa00,0xaa66ff][ci2%5]),-7+cri*4.5+(-1+ci2*0.5),0.55,20);
+    }
+  }
+  // Mannequins
+  cyl(0.05,0.05,1.8,M.grey,-7,1.0,28); box(0.6,1.0,0.3,M.pink,-7,0.6,28); sph(0.25,M.grey,-7,1.75,28);
+  cyl(0.05,0.05,1.8,M.grey,7,1.0,28); box(0.6,1.0,0.3,M.blue,7,0.6,28); sph(0.25,M.grey,7,1.75,28);
+  // Mirrors
+  box(0.1,2.5,1.5,M.glass,-9,1.35,19); box(0.1,2.5,1.5,M.glass,9,1.35,19);
+  box(5,0.5,0.1,lm(0xaaffaa),0,3.7,14.1);
+  ceil_light(-5,18); ceil_light(5,18); ceil_light(-5,28); ceil_light(5,28); ceil_light(0,23);
+  addPickup('Gift Card','🎁',-3,0.5,17);
+  addPickup('Coin','🪙',4,0.5,25);
+  addNPC("Mall Cop","👮",-2,0.75,17,0x334499,[
+    "Hello there! Everything okay today? Just making sure everyone is having fun.",
+    "This mall has 6 amazing stores. Make sure to check out the arcade!",
+    "We have a lost and found at the food court. Found a balloon there today!",
+    "Remember, no running in the mall! Safety first, fun second. Well, maybe fun first."
+  ]);
+
+  // ── MOVIE THEATER LOBBY (south) ──
+  box(20,0.15,18,lm(0x220011),0,-0.08,-23);
+  box(20,0.12,18,M.dark,0,4.08,-23);
+  wallBox(20,4.2,0.4, 0,2.1,-14);
+  wallBox(20,4.2,0.4, 0,2.1,-32);
+  wallBox(0.4,4.2,18,-10,2.1,-23);
+  wallBox(0.4,4.2,18, 10,2.1,-23);
+  // Movie posters
+  box(0.08,2.0,1.3,lm(0x8800ff),-8,1.5,-31.5); box(0.08,2.0,1.3,lm(0xff4400),-4,1.5,-31.5);
+  box(0.08,2.0,1.3,lm(0x0044ff),0,1.5,-31.5); box(0.08,2.0,1.3,lm(0xff0044),4,1.5,-31.5);
+  box(0.08,2.0,1.3,lm(0x00aa44),8,1.5,-31.5);
+  // Ticket counter
+  box(8,1.1,1.5,M.dark,0,0.56,-28); box(8,0.08,1.5,M.glass,0,1.1,-28);
+  // Popcorn display
+  box(1.2,2.0,0.8,M.red,7,1.0,-22); box(0.8,0.4,0.6,M.yellow,7,2.1,-22);
+  // Velvet ropes
+  cyl(0.04,0.04,1.5,M.gold,-4,0.75,-20); cyl(0.04,0.04,1.5,M.gold,4,0.75,-20);
+  box(8,0.04,0.04,M.red,0,1.5,-20);
+  box(6,0.5,0.1,M.neon2,0,3.7,-14.1);
+  pl(0,3,-23,0x660033,2.0,22); pl(0,3,-28,0xaa0055,1.5,15);
+  ceil_light(-5,-18); ceil_light(5,-18); ceil_light(-5,-28); ceil_light(5,-28);
+  addPickup('Gift Card','🎁',-5,0.5,-17);
+  addPickup('Coin','🪙',5,0.5,-25);
+
+  // ── ARCADE (northeast) ──
+  box(18,0.15,18,lm(0x110022),23,-0.08,23);
+  box(18,0.12,18,M.dark,23,4.08,23);
+  wallBox(0.4,4.2,18,14,2.1,23);
+  wallBox(0.4,4.2,18,32,2.1,23);
+  wallBox(18,4.2,0.4,23,2.1,14);
+  wallBox(18,4.2,0.4,23,2.1,32);
+  // Arcade cabinets
+  var arcadeColors=[0xff0088,0x00aaff,0xffaa00,0x00ff88,0xff4400,0xaa00ff];
+  for(var ai=0;ai<6;ai++){
+    var ax=16+ai*2.8, az=17;
+    box(1.5,2.5,1.0,lm(arcadeColors[ai]),ax,1.35,az);
+    box(1.2,0.8,0.1,lm(0x000033),ax,1.9,az+0.46);
+    box(0.5,0.5,0.08,lm(0x222222),ax,0.8,az+0.5);
+    pl(ax,3,az,arcadeColors[ai],0.8,6);
+  }
+  // Prize counter
+  box(10,1.1,1.0,M.dark,23,0.56,30); box(10,0.08,0.8,M.glass,23,1.1,30);
+  for(var pi2=0;pi2<5;pi2++){
+    sph(0.2,[M.red,M.blue,M.yellow,M.green,M.pink][pi2],19+pi2*2,1.5,30);
+  }
+  // Neon signs
+  box(6,0.4,0.1,M.neon2,23,3.7,14.1); box(6,0.4,0.1,M.neon3,23,3.5,14.1);
+  pl(23,3,23,0xff00ff,2.5,22); pl(19,2,20,0x00ffff,1.5,12); pl(27,2,26,0xffff00,1.5,12);
+  addPickup('Gift Card','🎁',25,0.5,20);
+  addPickup('Coin','🪙',18,0.5,28);
+  addNPC("Arcade Gamer","🕹️",22,0.75,20,0x9933cc,[
+    "Dude, this arcade is AMAZING! I have been here for three hours!",
+    "I just got the high score on the racing game. Nobody can beat me!",
+    "You should try the claw machine by the back wall. I won four stuffed animals today!",
+    "If you get 1000 tickets, you can trade them for the giant teddy bear at the prize counter!"
+  ]);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+}
+setupMobile();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true;
+      scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name);
+      score++;
+      document.getElementById('score-el').textContent='🎁 '+score+' items';
+      updateInv();
+      showToast('Picked up '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Empty';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+
+  var spd=0.065;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.35&&Math.abs(nz-w.z)<w.d/2+0.35){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='🛍️ '+(z?z.name:'Mall Corridor');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.2;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.8;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Pick up '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>School 3D — School Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Arial,sans-serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,0.8); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(5,20,50,0.88); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:2px solid rgba(255,180,0,0.3); }
+#loc { color:#ffee44; font-size:13px; min-width:180px; }
+#score-el { color:#ff6644; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(5,20,50,0.82); padding:8px 20px; border-radius:12px; color:#aaccff; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(5,20,50,0.94); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(255,200,0,0.4); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(2,8,20,0.97); border:2px solid rgba(255,180,0,0.4); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#ffee44; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(50,80,20,0.9); border:1px solid rgba(255,200,0,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(100,150,20,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(5,20,50,0.88); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(255,180,0,0.2); }
+#inv-title { color:#ff6644; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(2,8,20,0.95); color:#ffee44; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,230,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#8B0000; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#cc0000; color:#fff; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(2,8,20,0.85); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(255,180,0,0.3); background:rgba(5,20,50,0.8); color:#aaccff; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(5,20,50,0.7); border:1px solid rgba(255,180,0,0.3); border-radius:8px; color:#aaccff; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(255,180,0,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(80,120,20,0.35); border:2px solid #ffee44; border-radius:50%; color:#ffee44; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">🏫 Main Hallway</span>
+  <span id="score-el">⭐ 0 items</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Backpack</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Empty</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🏫</div>
+  <div class="st" style="color:#ffee44">SCHOOL EXPLORER 3D</div>
+  <div class="sb">Welcome to Riverside Elementary! Explore the Main Hallway, Classroom, Cafeteria, Gymnasium, Library, and Science Lab.<br><br>Meet the Teacher, Principal, Student, and Librarian. Collect gold stars and books!<br><br><span style="color:#ff6644">Learning and fun go together! 📚</span></div>
+  <button class="sbtn" onclick="beginGame()">🎒 GO TO SCHOOL</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up</small>
+</div>
+
+<div id="lock-screen" style="display:none">
+  <p>Click to look around</p>
+  <small>Press Escape to unlock mouse</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x223355);
+scene.fog = new THREE.Fog(0x223355, 12, 55);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+
+var M = {
+  floor:lm(0xddcc88), wall:lm(0xffeedd), tile:lm(0xeeeedd),
+  red:lm(0xff3333), blue:lm(0x3366cc), yellow:lm(0xffdd00),
+  green:lm(0x22aa44), orange:lm(0xff8800), purple:lm(0x9933cc),
+  wood:lm(0x8B5A2B), dwood:lm(0x5C3010), grey:lm(0x999999),
+  black:lm(0x111111), white:lm(0xffffff), cream:lm(0xfff5dc),
+  ltblue:lm(0x88aaff), skin:lm(0xFFCBA4), chalk:lm(0xeeeeff),
+  brick:lm(0xcc5533), metal:lm(0x888888), teal:lm(0x009988)
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,10),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,8,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||20); l.position.set(x,y,z); scene.add(l); return l; }
+function ceil_light(x,z){ pl(x,3.8,z,0xffffff,1.8,18); box(1.0,0.08,0.4,M.white,x,3.92,z); }
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(2,8,20,0.9)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(255,200,0,0.5)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-12,x2:12, z1:-12,z2:12, name:"Main Hallway",  col:"#ffee44"},
+  {x1:14, x2:32, z1:-10,z2:10, name:"Classroom",     col:"#88ccff"},
+  {x1:-32,x2:-14,z1:-10,z2:10, name:"Cafeteria",     col:"#ffaa44"},
+  {x1:-10,x2:10, z1:14, z2:32, name:"Gymnasium",     col:"#ff6644"},
+  {x1:-10,x2:10, z1:-32,z2:-14,name:"Library",       col:"#aa88ff"},
+  {x1:14, x2:32, z1:14, z2:32, name:"Science Lab",   col:"#44ff88"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.04),lm(0xFFD700)); g.add(glow);
+  var lbl=label(icon+' '+name,'#ffee44'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,bodyCol,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.2,0.3),lm(bodyCol)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.28,8,8),M.skin); head.position.y=0.85; g.add(head);
+  var lbl=label(icon+' '+name,'#ffee44'); lbl.position.set(0,1.5,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,lines:lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z,mat){
+  var useMat=mat||M.wall;
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),useMat);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x:x,z:z,w:w,d:d});
+  return m;
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0xffffff, 2.5));
+
+  // ── MAIN HALLWAY (center) ──
+  box(24,0.15,24,M.tile,0,-0.08,0);
+  box(24,0.12,24,M.wall,0,4.08,0);
+  wallBox(0.4,4.2,24,-12,2.1,0);
+  wallBox(0.4,4.2,24, 12,2.1,0);
+  wallBox(24,4.2,0.4,  0,2.1,-12);
+  wallBox(24,4.2,0.4,  0,2.1, 12);
+  // Lockers along walls
+  for(var li=0;li<8;li++){
+    box(1.2,2.0,0.4,lm([0x3366cc,0xff3333,0x22aa44,0xffdd00,0x9933cc,0xff8800,0x3399cc,0xcc3366][li]),-11+li*3,1.1,-11.8);
+    box(1.0,1.8,0.3,M.grey,-11+li*3,1.1,-11.7);
+  }
+  // Trophy case
+  box(4,2.5,0.5,M.dwood,-4,1.35,11.8); box(3.8,2.3,0.4,M.grey,-4,1.35,11.7);
+  box(0.3,0.4,0.2,M.yellow,-5,1.5,11.6); box(0.3,0.5,0.2,M.yellow,-4,1.5,11.6); box(0.3,0.3,0.2,M.yellow,-3,1.5,11.6);
+  // School banner
+  box(0.08,1.0,5,M.blue,0,3.5,0); box(0.08,0.8,4,M.yellow,0,3.5,0);
+  // Notice board
+  box(0.08,2.0,3,lm(0x8B4513),11.8,2.0,0); box(0.06,1.8,2.8,lm(0xeecc88),11.8,2.0,0);
+  ceil_light(0,0); ceil_light(-6,0); ceil_light(6,0); ceil_light(0,-6); ceil_light(0,6);
+  addPickup('Gold Star','⭐',4,0.5,-5);
+  addPickup('Book','📚',-4,0.5,7);
+  addNPC("Principal","👔",5,0.75,5,0x334488,[
+    "Good morning! I am Principal Henderson. Welcome to Riverside Elementary!",
+    "Our school motto is: Learn, Grow, Shine! We are very proud of our students.",
+    "The Science Lab is in the northeast corner. Our students did amazing volcano projects this year!",
+    "Please walk in the hallways. No running! And have a wonderful day at school."
+  ]);
+
+  // ── CLASSROOM (east) ──
+  box(18,0.15,20,M.cream,23,-0.08,0);
+  box(18,0.12,20,M.wall,23,4.08,0);
+  wallBox(0.4,4.2,20,14,2.1,0);
+  wallBox(0.4,4.2,20,32,2.1,0);
+  wallBox(18,4.2,0.4,23,2.1,-10);
+  wallBox(18,4.2,0.4,23,2.1, 10);
+  // Chalkboard
+  box(0.1,2.2,7,lm(0x2a5a2a),14.2,2.5,-6); box(0.08,2.0,6.8,lm(0x336633),14.2,2.5,-6);
+  // Teacher desk
+  box(2.5,0.9,1.5,M.dwood,16,0.5,-8); box(2.3,0.08,1.3,M.wood,16,0.95,-8);
+  // Student desks
+  for(var di=0;di<12;di++){
+    var dcol=di%4, drow=Math.floor(di/4);
+    box(0.9,0.7,0.7,M.wood,18+dcol*3,0.4,drow*3-3);
+    box(0.8,0.06,0.6,M.cream,18+dcol*3,0.74,drow*3-3);
+  }
+  // ABCs on wall
+  box(0.08,0.5,8,lm(0xddddff),14.2,3.6,2);
+  // Alphabet posters
+  for(var ai=0;ai<6;ai++){
+    box(0.08,0.6,0.8,lm([0xff4444,0x4488ff,0xffcc00,0x44cc44,0xff8800,0xaa44cc][ai]),14.2,1.0,ai*1.5-4);
+  }
+  // Globe
+  sph(0.4,M.blue,17,1.2,-8); sph(0.38,lm(0x44bb44),17,1.2,-8);
+  ceil_light(18,-5); ceil_light(28,-5); ceil_light(18,5); ceil_light(28,5); ceil_light(23,0);
+  addPickup('Gold Star','⭐',26,0.5,7);
+  addPickup('Book','📚',20,0.5,-7);
+  addNPC("Teacher","👩‍🏫",16,0.75,-5,0x9944aa,[
+    "Hello class! Oh, we have a visitor today. Welcome!",
+    "Today we are learning about the solar system. Did you know Jupiter has 95 moons?",
+    "Reading is the most important skill you will ever learn. Read every single day!",
+    "Remember, there are no silly questions in my classroom. Every question helps you learn!"
+  ]);
+
+  // ── CAFETERIA (west) ──
+  box(18,0.15,20,lm(0xf5f0e8),-23,-0.08,0);
+  box(18,0.12,20,M.wall,-23,4.08,0);
+  wallBox(0.4,4.2,20,-14,2.1,0);
+  wallBox(0.4,4.2,20,-32,2.1,0);
+  wallBox(18,4.2,0.4,-23,2.1,-10);
+  wallBox(18,4.2,0.4,-23,2.1, 10);
+  // Lunch counter
+  box(12,1.1,1.5,lm(0xddddcc),-23,0.56,-8); box(12,0.08,1.5,M.grey,-23,1.1,-8);
+  // Lunch trays
+  for(var tri=0;tri<5;tri++){
+    box(0.8,0.05,0.5,lm(0x88aa88),-27+tri*2.5,1.15,-8.2);
+  }
+  // Cafeteria tables
+  for(var cti=0;cti<3;cti++){
+    box(10,0.1,1.5,M.dwood,-23,0.85,2+cti*3);
+    cyl(0.1,0.1,0.85,M.metal,-27,0.44,2+cti*3);
+    cyl(0.1,0.1,0.85,M.metal,-19,0.44,2+cti*3);
+    // Benches
+    box(10,0.08,0.5,M.wood,-23,0.56,1+cti*3); box(10,0.08,0.5,M.wood,-23,0.56,3+cti*3);
+  }
+  // Milk cartons
+  box(0.2,0.3,0.15,M.white,-20,1.2,-7.9); box(0.2,0.3,0.15,lm(0xffaaaa),-19.5,1.2,-7.9);
+  // Menu board
+  box(0.08,2.0,4,lm(0x334455),-31.8,2.5,-5); box(0.06,1.8,3.8,lm(0x44cc44),-31.8,2.5,-5);
+  ceil_light(-18,-5); ceil_light(-28,-5); ceil_light(-18,5); ceil_light(-28,5); ceil_light(-23,0);
+  addPickup('Gold Star','⭐',-18,0.5,6);
+  addPickup('Book','📚',-28,0.5,-4);
+  addNPC("Student","🧒",-23,0.75,5,0xff6644,[
+    "Hi! Lunch is my favorite part of the day. Pizza Fridays are the BEST!",
+    "I sit with my best friends Maya and Carlos every day at that table over there.",
+    "We are working on a science fair project about volcanoes. It shoots real foam!",
+    "If you go to the library, ask Ms. Chen for the mystery book series. Super good!"
+  ]);
+
+  // ── GYMNASIUM (north) ──
+  box(20,0.15,18,M.floor,0,-0.08,23);
+  box(20,0.15,18,M.wall,0,5.58,23);
+  wallBox(20,5.7,0.4, 0,2.85,14);
+  wallBox(20,5.7,0.4, 0,2.85,32);
+  wallBox(0.4,5.7,18,-10,2.85,23);
+  wallBox(0.4,5.7,18, 10,2.85,23);
+  // Basketball hoops
+  box(0.1,3,0.1,M.metal,-9,2.5,15); box(1.5,0.1,1.0,M.metal,-9,4.0,15.5);
+  cyl(0.5,0.5,0.1,lm(0xffaa44),-9,3.8,16); cyl(0.45,0.45,0.1,M.metal,-9,3.8,16);
+  box(0.1,3,0.1,M.metal,9,2.5,15); box(1.5,0.1,1.0,M.metal,9,4.0,15.5);
+  cyl(0.5,0.5,0.1,lm(0xffaa44),9,3.8,16); cyl(0.45,0.45,0.1,M.metal,9,3.8,16);
+  // Court lines
+  box(18,0.01,0.08,M.yellow,0,0.16,23); box(0.08,0.01,18,M.yellow,0,0.16,23);
+  cyl(2.0,2.0,0.02,M.yellow,0,0.16,23);
+  // Bleachers
+  for(var bi=0;bi<4;bi++){
+    box(18,0.2,1.0,M.dwood,0,0.3+bi*0.5,30+bi*0.3);
+  }
+  // Climbing rope
+  cyl(0.06,0.06,4.0,lm(0xcc8833),-5,3,31); cyl(0.06,0.06,4.0,lm(0xcc8833),5,3,31);
+  // Gym balls
+  sph(0.5,M.red,4,0.55,16); sph(0.4,M.blue,-4,0.45,20);
+  ceil_light(-5,18); ceil_light(5,18); ceil_light(-5,28); ceil_light(5,28); ceil_light(0,23);
+  pl(0,5,23,0xffffff,2.5,28);
+  addPickup('Gold Star','⭐',-5,0.5,18);
+  addPickup('Book','📚',5,0.5,28);
+  addNPC("Coach","🏋️",-3,0.75,20,0x3366cc,[
+    "Welcome to the gym! I am Coach Rivera. Ready to get moving?",
+    "Physical activity keeps your brain sharp AND your body strong. Exercise is important!",
+    "We just set a school record for jump rope. 847 jumps without stopping!",
+    "Gym class is every Tuesday and Thursday. Do not forget your sneakers!"
+  ]);
+
+  // ── LIBRARY (south) ──
+  box(20,0.15,18,lm(0xf5f0e8),0,-0.08,-23);
+  box(20,0.12,18,M.wall,0,4.08,-23);
+  wallBox(20,4.2,0.4, 0,2.1,-14);
+  wallBox(20,4.2,0.4, 0,2.1,-32);
+  wallBox(0.4,4.2,18,-10,2.1,-23);
+  wallBox(0.4,4.2,18, 10,2.1,-23);
+  // Bookshelves
+  for(var bsi=0;bsi<4;bsi++){
+    box(0.3,3.0,5,M.dwood,-8+bsi*5.5,1.55,-22);
+    for(var br=0;br<4;br++){
+      box(0.2,0.5,4.5,lm([0xff4444,0x4488ff,0x44aa44,0xffcc00][br%4]),-8+bsi*5.5,0.35+br*0.6,-22);
+    }
+  }
+  // Reading tables
+  box(4,0.08,2,M.dwood,-4,0.85,-17); box(4,0.08,2,M.dwood,4,0.85,-17);
+  cyl(0.08,0.08,0.85,M.metal,-4,0.44,-17); cyl(0.08,0.08,0.85,M.metal,4,0.44,-17);
+  // Comfy reading corner
+  box(2,0.6,2,lm(0x9966cc),-8,0.35,-30); box(2,0.8,0.3,lm(0x9966cc),-8,0.5,-31);
+  // Library computer stations
+  box(1.2,0.8,0.8,M.grey,7,0.45,-28); box(1.0,0.6,0.08,M.black,7,1.1,-28.3);
+  // Globe on desk
+  sph(0.35,M.blue,5,1.2,-17); sph(0.33,lm(0x44bb44),5,1.2,-17);
+  ceil_light(-5,-18); ceil_light(5,-18); ceil_light(-5,-28); ceil_light(5,-28); ceil_light(0,-23);
+  pl(0,3.5,-23,0xfffaee,2.0,24);
+  addPickup('Book','📚',-3,0.5,-18);
+  addPickup('Gold Star','⭐',5,0.5,-27);
+  addNPC("Librarian","📖",3,0.75,-20,0x6633aa,[
+    "Shhh! Welcome to the library. I am Ms. Chen, the school librarian.",
+    "We have over 8,000 books in this collection. Fiction, science, history, and more!",
+    "My favorite section is the mystery novels. We just got 20 new titles this month.",
+    "Remember to return your books on time! No late fees for students, but please be responsible."
+  ]);
+
+  // ── SCIENCE LAB (northeast) ──
+  box(18,0.15,18,lm(0xeef8ee),23,-0.08,23);
+  box(18,0.12,18,M.wall,23,4.08,23);
+  wallBox(0.4,4.2,18,14,2.1,23);
+  wallBox(0.4,4.2,18,32,2.1,23);
+  wallBox(18,4.2,0.4,23,2.1,14);
+  wallBox(18,4.2,0.4,23,2.1,32);
+  // Lab benches
+  for(var lbi=0;lbi<3;lbi++){
+    box(7,1.0,1.5,M.grey,18+lbi*2.5,0.55,17+lbi*2);
+    box(7,0.08,1.5,lm(0xddffdd),18+lbi*2.5,1.05,17+lbi*2);
+  }
+  // Beakers and flasks
+  cyl(0.2,0.15,0.5,lm(0x88aaff),17,1.35,17); cyl(0.15,0.2,0.4,lm(0xff8888),19,1.35,17);
+  cyl(0.2,0.1,0.6,lm(0x88ff88),21,1.35,17); cyl(0.1,0.2,0.5,lm(0xffee88),23,1.35,17);
+  // Microscope
+  box(0.4,0.8,0.3,M.black,26,0.95,17); cyl(0.15,0.1,0.5,M.metal,26,1.6,17);
+  // Periodic table poster
+  box(0.08,2.0,4,lm(0x2255aa),14.2,2.5,25); box(0.06,1.8,3.8,lm(0x3366cc),14.2,2.5,25);
+  // Skeleton model
+  cyl(0.08,0.08,1.8,lm(0xeeeedd),30,0.95,27); sph(0.22,lm(0xeeeedd),30,1.95,27);
+  for(var si2=0;si2<4;si2++) box(0.1,0.1,0.4,lm(0xeeeedd),30,0.8,26.8+si2*0.1);
+  // Plant experiment
+  cyl(0.25,0.2,0.5,lm(0x884422),18,0.35,28); box(0.1,0.6,0.08,M.green,18,0.85,28);
+  // Safety goggles
+  box(0.6,0.2,0.06,lm(0xaaddff),27,1.15,22);
+  ceil_light(18,18); ceil_light(28,18); ceil_light(18,28); ceil_light(28,28); ceil_light(23,23);
+  addPickup('Gold Star','⭐',20,0.5,28);
+  addPickup('Book','📚',27,0.5,26);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+}
+setupMobile();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true;
+      scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name);
+      score++;
+      document.getElementById('score-el').textContent='⭐ '+score+' items';
+      updateInv();
+      showToast('Picked up '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Empty';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+
+  var spd=0.065;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.35&&Math.abs(nz-w.z)<w.d/2+0.35){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='🏫 '+(z?z.name:'School');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.2;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.8;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Pick up '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

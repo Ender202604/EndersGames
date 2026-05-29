@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Farm 3D — Farm Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,0.8); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(20,12,5,0.88); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:2px solid rgba(180,120,40,0.3); }
+#loc { color:#ffcc66; font-size:13px; min-width:180px; }
+#score-el { color:#88ff44; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(20,12,5,0.82); padding:8px 20px; border-radius:12px; color:#ddcc88; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(20,12,5,0.94); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(255,200,80,0.4); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(10,6,2,0.97); border:2px solid rgba(180,120,40,0.4); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#ffcc44; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(80,50,10,0.9); border:1px solid rgba(200,160,80,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(150,100,20,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(20,12,5,0.88); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(180,120,40,0.2); }
+#inv-title { color:#88ff44; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(10,6,2,0.95); color:#88ff44; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(100,200,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#8B0000; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#cc2200; color:#fff; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(10,6,2,0.85); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(180,120,40,0.3); background:rgba(20,12,5,0.8); color:#ddcc88; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(20,12,5,0.7); border:1px solid rgba(180,120,40,0.3); border-radius:8px; color:#ddcc88; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(180,120,40,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(100,60,10,0.35); border:2px solid #ffcc44; border-radius:50%; color:#ffcc44; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">🌾 Farmhouse</span>
+  <span id="score-el">🥚 0 items</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Basket</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Empty</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🌾</div>
+  <div class="st" style="color:#ffcc44">FARM EXPLORER 3D</div>
+  <div class="sb">Welcome to Sunny Acres Farm! Explore the Farmhouse Kitchen, Barn, Cornfield, Chicken Coop, Tractor Shed, and Pond.<br><br>Meet the Farmer, friendly Farm Dog, Scarecrow, and Grandmother. Collect fresh eggs and vegetables!<br><br><span style="color:#88ff44">A warm and wonderful farm adventure! 🐔</span></div>
+  <button class="sbtn" onclick="beginGame()">🐄 VISIT THE FARM</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up</small>
+</div>
+
+<div id="lock-screen" style="display:none">
+  <p>Click to look around</p>
+  <small>Press Escape to unlock mouse</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+scene.fog = new THREE.Fog(0x87CEEB, 15, 60);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+
+var M = {
+  grass:lm(0x4a8c3f), dirt:lm(0x8B6340), wood:lm(0x8B4513),
+  dwood:lm(0x5C3010), red:lm(0xcc2200), white:lm(0xeeeecc),
+  hay:lm(0xe8c840), stone:lm(0x888877), water:lm(0x4488cc),
+  corn:lm(0x88cc00), yellow:lm(0xffdd00), brown:lm(0x6B3A1F),
+  orange:lm(0xff8800), green:lm(0x336622), ltgreen:lm(0x66aa44),
+  skin:lm(0xFFCBA4), grey:lm(0x888888), darkred:lm(0x881100),
+  blue:lm(0x3366aa), straw:lm(0xddcc66), tan:lm(0xd4b483)
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,10),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,8,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||20); l.position.set(x,y,z); scene.add(l); return l; }
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(10,6,2,0.9)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(180,140,40,0.5)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-10,x2:10, z1:-10,z2:10, name:"Farmhouse Kitchen", col:"#ffcc66"},
+  {x1:12, x2:30, z1:-10,z2:10, name:"Barn",              col:"#ffaa44"},
+  {x1:-30,x2:-12,z1:-10,z2:10, name:"Cornfield",         col:"#88ff44"},
+  {x1:-10,x2:10, z1:12, z2:30, name:"Chicken Coop",      col:"#ffee88"},
+  {x1:-10,x2:10, z1:-30,z2:-12,name:"Tractor Shed",      col:"#aaaaaa"},
+  {x1:12, x2:30, z1:12, z2:30, name:"Pond Area",         col:"#88ccff"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,8),lm(0xffee44)); g.add(glow);
+  var lbl=label(icon+' '+name,'#88ff44'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,bodyCol,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.2,0.3),lm(bodyCol)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.28,8,8),M.skin); head.position.y=0.85; g.add(head);
+  var lbl=label(icon+' '+name,'#ffcc44'); lbl.position.set(0,1.5,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,lines:lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z,mat){
+  var useMat=mat||M.wood;
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),useMat);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x:x,z:z,w:w,d:d});
+  return m;
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0xfff8e0, 2.8));
+  scene.add(new THREE.DirectionalLight(0xfff8cc, 1.5));
+
+  // ── GROUND ──
+  box(200,0.1,200,M.grass,0,-0.1,0);
+
+  // ── FARMHOUSE KITCHEN (center) ──
+  box(20,0.15,20,M.tan,0,-0.08,0);
+  box(20,0.12,20,M.white,0,3.58,0);
+  wallBox(0.4,3.7,20,-10,1.85,0,M.white);
+  wallBox(0.4,3.7,20, 10,1.85,0,M.white);
+  wallBox(20,3.7,0.4,  0,1.85,-10,M.white);
+  wallBox(20,3.7,0.4,  0,1.85, 10,M.white);
+  // Kitchen table
+  box(3,0.08,1.8,M.dwood,0,0.85,2); cyl(0.07,0.07,0.85,M.dwood,0,0.44,2);
+  // Chairs
+  box(0.6,0.06,0.6,M.brown,-2,0.55,2); box(0.6,0.06,0.6,M.brown,2,0.55,2);
+  // Kitchen counter
+  box(5,1.0,0.8,M.tan,-5,0.5,-9); box(5,0.08,0.8,M.white,-5,1.0,-9);
+  // Fireplace
+  box(3,0.1,0.5,M.stone,5,0.01,-9.5); box(0.3,1.8,0.5,M.stone,3.5,0.95,-9.5); box(0.3,1.8,0.5,M.stone,6.5,0.95,-9.5);
+  box(3,0.3,0.5,M.stone,5,1.95,-9.5);
+  var fire=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.8,0.2),new THREE.MeshLambertMaterial({color:0xFF6600,emissive:0xFF4400,emissiveIntensity:0.5}));
+  fire.position.set(5,0.5,-9.45); scene.add(fire);
+  pl(5,1.5,-8,0xFF8800,2,14);
+  // Windows
+  box(0.08,1.2,1.0,M.blue,-9.95,2.0,-5); box(0.08,1.2,1.0,M.blue,-9.95,2.0,5);
+  pl(0,3,0,0xfff8e0,1.5,18);
+  addPickup('Egg','🥚',3,0.5,-5);
+  addPickup('Vegetable','🥕',-3,0.5,6);
+  addNPC("Grandmother","👵",-2,0.75,-5,0x9966aa,[
+    "Welcome to our farm, dear! Come in and rest a while.",
+    "I just baked fresh apple pie this morning. The whole kitchen smells wonderful!",
+    "Make sure you visit the chicken coop to the north. Those hens laid 12 eggs today!",
+    "My late husband built this farmhouse 50 years ago. Every corner has a memory."
+  ]);
+
+  // ── BARN (east) ──
+  box(18,0.15,20,M.dirt,21,-0.08,0);
+  box(18,0.12,20,M.darkred,21,4.58,0);
+  wallBox(0.4,4.7,20,12,2.35,0,M.red);
+  wallBox(0.4,4.7,20,30,2.35,0,M.red);
+  wallBox(18,4.7,0.4,21,2.35,-10,M.red);
+  wallBox(18,4.7,0.4,21,2.35, 10,M.red);
+  // Roof triangle
+  box(18,0.2,0.4,M.dwood,21,4.7,-10); box(18,0.2,0.4,M.dwood,21,4.7,10);
+  // Hay bales
+  box(1.5,1.0,1.0,M.hay,14,0.55,-7); box(1.5,1.0,1.0,M.hay,14,1.6,-7); box(1.5,1.0,1.0,M.hay,16,0.55,-7);
+  // Animal stalls
+  for(var si=0;si<3;si++){
+    box(0.1,1.5,4,M.dwood,21+si*3-3,0.8,-5);
+  }
+  // Cow shapes
+  box(1.4,0.7,0.7,lm(0xddddbb),14,0.55,-3); sph(0.32,lm(0xddddbb),14,1.1,-3);
+  box(1.4,0.7,0.7,lm(0x886644),18,0.55,3); sph(0.32,lm(0x886644),18,1.1,3);
+  // Loft ladder
+  box(0.1,4,0.2,M.dwood,29,2,4); box(0.1,4,0.2,M.dwood,29.4,2,4);
+  for(var ri=0;ri<6;ri++) box(0.5,0.08,0.2,M.dwood,29.2,0.4+ri*0.65,4);
+  // Lanterns
+  box(0.2,0.3,0.2,M.yellow,15,3,8); box(0.2,0.3,0.2,M.yellow,27,3,8);
+  pl(15,2.5,7,0xffcc44,1.5,14); pl(27,2.5,7,0xffcc44,1.5,14);
+  pl(21,3,0,0xfff0cc,1.5,20);
+  addPickup('Egg','🥚',16,0.5,5);
+  addPickup('Vegetable','🥕',24,0.5,-5);
+  addNPC("Farmer Joe","👨‍🌾",23,0.75,5,0x5C3010,[
+    "Howdy! Welcome to Sunny Acres Farm! Been farming here for 30 years.",
+    "The corn is growing real tall this season. Should be a great harvest!",
+    "That old tractor in the shed still runs great. She may be old but she never quits.",
+    "If you head north past the chicken coop, you will find our beautiful pond. Great for fishing!"
+  ]);
+
+  // ── CORNFIELD (west) ──
+  box(18,0.15,20,M.dirt,-21,-0.08,0);
+  wallBox(0.4,3.5,20,-12,1.75,0,M.corn);
+  wallBox(0.4,3.5,20,-30,1.75,0,M.corn);
+  wallBox(18,3.5,0.4,-21,1.75,-10,M.corn);
+  wallBox(18,3.5,0.4,-21,1.75, 10,M.corn);
+  // Corn stalks
+  for(var cxi=-8;cxi<=8;cxi+=3){
+    for(var czi=-8;czi<=8;czi+=3){
+      if(Math.abs(cxi)<3&&Math.abs(czi)<3) continue;
+      var cx=-21+cxi, cz=czi;
+      cyl(0.06,0.06,2.5,M.ltgreen,cx,1.25,cz);
+      box(0.5,0.3,0.08,M.corn,cx,2.3,cz);
+      box(0.5,0.3,0.08,M.corn,cx,1.8,cz);
+    }
+  }
+  // Path through cornfield
+  box(1.5,0.01,20,M.dirt,-21,0.01,0);
+  pl(-21,3,0,0xfff8cc,1.5,22);
+  addPickup('Vegetable','🥕',-25,0.5,3);
+  addPickup('Egg','🥚',-17,0.5,-5);
+  addNPC("Scarecrow","🎃",-21,0.75,-7,0xddcc66,[
+    "...",
+    "I am just a scarecrow. I do not really talk. But hello anyway!",
+    "My job is to keep the crows away from the corn. I am very good at it.",
+    "Farmer Joe made me last autumn. I like my hat. It keeps the rain off."
+  ]);
+
+  // ── CHICKEN COOP (north) ──
+  box(20,0.15,18,M.dirt,0,-0.08,21);
+  box(20,0.12,18,M.dwood,0,2.58,21);
+  wallBox(20,2.7,0.4, 0,1.35,12,M.dwood);
+  wallBox(20,2.7,0.4, 0,1.35,30,M.dwood);
+  wallBox(0.4,2.7,18,-10,1.35,21,M.dwood);
+  wallBox(0.4,2.7,18, 10,1.35,21,M.dwood);
+  // Nesting boxes
+  for(var ni=0;ni<5;ni++){
+    box(1.4,0.6,0.8,M.straw,-8+ni*4,0.35,28);
+    box(0.2,0.2,0.2,lm(0xffddaa),-8+ni*4,0.5,28.2);
+  }
+  // Chickens (small boxes)
+  for(var chi=0;chi<6;chi++){
+    var chx=-7+chi*2.5, chz=17+Math.sin(chi)*2;
+    box(0.4,0.3,0.3,lm(0xeeeecc),chx,0.3,chz);
+    box(0.22,0.22,0.22,lm(0xeeeecc),chx,0.55,chz);
+    box(0.08,0.08,0.08,lm(0xff4400),chx,0.65,chz+0.1);
+  }
+  // Perch
+  box(10,0.08,0.08,M.dwood,0,1.8,25);
+  pl(0,2.5,21,0xfff8cc,2.0,22);
+  addPickup('Egg','🥚',-5,0.5,15);
+  addPickup('Egg','🥚',5,0.5,25);
+  addNPC("Farm Dog","🐕",3,0.75,15,0x8B4513,[
+    "Woof! Woof! (The dog wags its tail happily.)",
+    "Woof! (It looks like he wants you to pet him!)",
+    "Woof woof! (He circles around you excitedly.)",
+    "Woof! (The good boy seems very happy you visited the farm!)"
+  ]);
+
+  // ── TRACTOR SHED (south) ──
+  box(20,0.15,18,M.dirt,0,-0.08,-21);
+  box(20,0.12,18,M.grey,0,3.58,-21);
+  wallBox(20,3.7,0.4, 0,1.85,-12,M.grey);
+  wallBox(20,3.7,0.4, 0,1.85,-30,M.grey);
+  wallBox(0.4,3.7,18,-10,1.85,-21,M.grey);
+  wallBox(0.4,3.7,18, 10,1.85,-21,M.grey);
+  // Tractor body
+  box(3.5,1.5,2.2,M.darkred,-2,0.85,-21); box(2.0,1.0,1.8,M.darkred,0,1.35,-21);
+  // Tractor wheels
+  cyl(0.7,0.7,0.3,lm(0x222222),-3.5,0.7,-19.6); cyl(0.7,0.7,0.3,lm(0x222222),-3.5,0.7,-22.4);
+  cyl(0.5,0.5,0.3,lm(0x222222),-0.5,0.55,-19.6); cyl(0.5,0.5,0.3,lm(0x222222),-0.5,0.55,-22.4);
+  // Exhaust pipe
+  cyl(0.08,0.08,1.5,lm(0x444444),1.0,1.85,-21);
+  // Tool wall
+  box(0.1,3,0.4,M.grey,9,1.5,-26); box(0.1,3,0.4,M.grey,9,1.5,-25); box(0.1,3,0.4,M.grey,9,1.5,-24);
+  for(var twi=0;twi<5;twi++){
+    box(1.0,0.08,0.2,lm(0x555555),9,0.6+twi*0.55,-25);
+  }
+  // Fuel drum
+  cyl(0.5,0.5,1.2,lm(0x336633),-8,0.65,-25);
+  pl(0,3,-21,0xfff0cc,1.5,22); pl(-2,2,-18,0xffcc88,1.0,12);
+  addPickup('Vegetable','🥕',-7,0.5,-15);
+  addPickup('Egg','🥚',6,0.5,-25);
+
+  // ── POND AREA (northeast) ──
+  box(18,0.15,18,M.grass,21,-0.08,21);
+  // Pond
+  box(10,0.04,10,M.water,21,0.01,21);
+  // Pond border rocks
+  for(var pri=0;pri<12;pri++){
+    var pa=pri/12*Math.PI*2;
+    box(0.5+Math.random()*0.3,0.2,0.5+Math.random()*0.3,M.stone,21+Math.cos(pa)*5.5,0.1,21+Math.sin(pa)*5.5);
+  }
+  // Trees around pond
+  cyl(0.2,0.3,3,M.brown,14,1.5,14); sph(1.5,M.ltgreen,14,3.5,14);
+  cyl(0.2,0.3,3,M.brown,28,1.5,14); sph(1.5,M.ltgreen,28,3.5,14);
+  cyl(0.2,0.3,3,M.brown,28,1.5,28); sph(1.5,M.ltgreen,28,3.5,28);
+  // Dock
+  box(1.5,0.08,5,M.dwood,21,0.12,17); box(0.08,0.5,5,M.dwood,20.3,0.12,17); box(0.08,0.5,5,M.dwood,21.7,0.12,17);
+  // Lily pads
+  cyl(0.5,0.5,0.04,M.ltgreen,18,0.05,20); cyl(0.5,0.5,0.04,M.ltgreen,23,0.05,22); cyl(0.5,0.5,0.04,M.ltgreen,21,0.05,24);
+  pl(21,4,21,0xfff8cc,2.0,24);
+  addPickup('Vegetable','🥕',17,0.5,17);
+  addPickup('Egg','🥚',25,0.5,25);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+}
+setupMobile();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true;
+      scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name);
+      score++;
+      document.getElementById('score-el').textContent='🥚 '+score+' items';
+      updateInv();
+      showToast('Picked up '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Empty';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+var t2=0;
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+  t2+=0.02;
+
+  var spd=0.065;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.35&&Math.abs(nz-w.z)<w.d/2+0.35){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='🌾 '+(z?z.name:'Farm Grounds');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.2;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.8;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Pick up '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
