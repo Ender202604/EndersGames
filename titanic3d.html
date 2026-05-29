@@ -200,8 +200,8 @@ function label(text,color){
 var zones = [
   {x1:-2.5, x2:2.5,  z1:-3,   z2:6.5,  name:"Your Cabin",             col:"#aaddff"},
   {x1:-2.4, x2:2.4,  z1:6.0,  z2:25.0, name:"First Class Corridor",   col:"#aaffaa"},
-  {x1:2.4,  x2:19.0, z1:8.5,  z2:23.5, name:"First Class Dining Room",col:"#ffddaa"},
-  {x1:-12.0,x2:-2.4, z1:8.5,  z2:22.5, name:"Smoking Room",            col:"#ddbbff"},
+  {x1:1.8,  x2:19.0, z1:8.5,  z2:23.5, name:"First Class Dining Room",col:"#ffddaa"},
+  {x1:-12.0,x2:-1.8, z1:8.5,  z2:22.5, name:"Smoking Room",            col:"#ddbbff"},
   {x1:-13.0,x2:13.0, z1:24.5, z2:58.0, name:"Boat Deck",               col:"#aaddff"},
 ];
 function getZone(x,z){
@@ -501,7 +501,7 @@ function buildNPCs(){
     explore:"Dreadful weather we left Southampton in, but look at this crossing! Smooth as a millpond. Finest brandy at sea, I tell you. What say you to a game of cards, old chap?",
     sinking:"...Well. Cards can wait. The ship appears to be sinking and I for one intend to keep a stiff upper lip about it. After you to the lifeboats, old boy.",quiz:true});
 
-  spawnNPC(-9,17, M.grn,'Dr. O'Loughlin (Surgeon)',{hair:0xBBBBBB,
+  spawnNPC(-9,17, M.grn,'Dr. O\'Loughlin (Surgeon)',{hair:0xBBBBBB,
     explore:"Good evening. I've been treating a few seasick passengers in steerage — the lower decks are rather crowded. Between us, I had hoped to retire after this voyage. Finest ship of my career.",
     sinking:"Listen carefully — hypothermia kills in minutes in that water. If you go in, keep moving. Find a life belt. Find a lifeboat. Don't panic. God be with you.",quiz:true});
 
@@ -513,7 +513,7 @@ function buildNPCs(){
     explore:"Evening. Bitter cold tonight — very clear though. I've been on watch since 10. We've had ice warnings but no binoculars in the crow's nest tonight! I reported that up the chain. Nothing was done.",
     sinking:"ICEBERG RIGHT AHEAD — I rang three bells and phoned the bridge but we couldn't turn in time. Please — get your life belt and RUN to the boats! Don't wait!",quiz:true});
 
-  spawnNPC(5,40, M.teal,'Miss Rose O'Brien',{hair:0xCC4444,lc:'#ffccff',
+  spawnNPC(5,40, M.teal,'Miss Rose O\'Brien',{hair:0xCC4444,lc:'#ffccff',
     explore:"Oh it's such a beautiful night! I've been watching the stars from the bow — the sea is like glass. I've never felt so alive! The Milky Way is extraordinary out here.",
     sinking:"Did you hear that? Like a grinding, ripping sound... and the engines stopped. Something is very wrong. I'm frightened. The officers are uncovering the lifeboats...",quiz:true});
 
