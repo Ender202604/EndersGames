@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mahjong Solitaire - Ender's Game World</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#1a0000;color:#fff;font-family:Arial,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:10px;}
+a.home{position:fixed;top:10px;left:10px;background:darkred;color:yellow;text-decoration:none;padding:6px 12px;border-radius:8px;font-weight:bold;z-index:100;border:1px solid #ff6666;}
+a.home:hover{background:#8b0000;}
+h1{color:yellow;font-size:22px;margin:40px 0 4px;text-align:center;}
+#info{display:flex;gap:16px;justify-content:center;font-size:14px;margin:4px 0;flex-wrap:wrap;}
+.info-item{color:#ffcc00;background:#220000;padding:4px 10px;border-radius:6px;border:1px solid #440000;}
+.info-item span{color:#ff9999;}
+#status{color:#ffcc00;font-size:14px;margin:4px 0;min-height:20px;text-align:center;}
+#controls{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0;}
+button{background:darkred;color:yellow;border:1px solid #ff6666;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:13px;margin:2px;}
+button:hover{background:#8b0000;}
+button:disabled{opacity:0.5;cursor:default;}
+#board-wrap{position:relative;margin:8px auto;overflow:auto;}
+#board{position:relative;}
+.tile{position:absolute;background:linear-gradient(135deg,#f5e6d3 0%,#e8d5b7 100%);border:2px solid #c4923c;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;user-select:none;transition:filter 0.1s,transform 0.1s;box-shadow:3px 3px 0 #8b6520,4px 4px 0 #5a3d10;color:#333;}
+.tile:hover.free{filter:brightness(1.2);transform:translate(-1px,-1px);box-shadow:4px 4px 0 #8b6520,5px 5px 0 #5a3d10;}
+.tile.selected{background:linear-gradient(135deg,#ffe080 0%,#ffc040 100%);border-color:#ff8800;transform:translate(-2px,-2px);box-shadow:5px 5px 0 #8b6520,6px 6px 0 #5a3d10;}
+.tile.blocked{cursor:default;filter:brightness(0.7);}
+.tile.removed{display:none;}
+.tile.hint-glow{animation:hintpulse 0.6s ease-in-out infinite alternate;}
+@keyframes hintpulse{from{filter:brightness(1);}to{filter:brightness(1.5) hue-rotate(20deg);}}
+</style>
+</head>
+<body>
+<a href="index.html" class="home">🏠 Home</a>
+<h1>🀄 Mahjong Solitaire</h1>
+<div id="info">
+  <div class="info-item"><span>Tiles Left:</span> <span id="tilesLeft">0</span></div>
+  <div class="info-item"><span>Matched:</span> <span id="matched">0</span></div>
+  <div class="info-item"><span>Time:</span> <span id="timer">0:00</span></div>
+</div>
+<div id="controls">
+  <button onclick="newGame()">New Game</button>
+  <button onclick="showHint()" id="hintBtn">💡 Hint</button>
+  <button onclick="shuffleFree()" id="shuffleBtn">🔀 Shuffle</button>
+</div>
+<div id="status">Click matching free tiles to remove them!</div>
+<div id="board-wrap"><div id="board"></div></div>
+
+<script>
+// Tile symbols - 6 suits * multiple tiles = 144 total (36 unique pairs * 4 = 144, arranged in pairs)
+// We use 36 unique symbols in 4 copies each for 144 tiles
+var SYMBOLS = [
+  '🀇','🀈','🀉','🀊','🀋','🀌','🀍','🀎','🀏',  // 1-9 characters
+  '🀙','🀚','🀛','🀜','🀝','🀞','🀟','🀠','🀡',  // 1-9 circles
+  '🀀','🀁','🀂','🀃','🀄','🀅','🀆',            // winds + dragons
+  '🎴','🌸','⭐','🔴','🟡','🔵','🟢','🟠','🟣'   // bonus / extra
+];
+// We have 36 symbols, 4 copies each = 144 tiles
+
+// Classic pyramid layout: layers 0-4 (bottom to top)
+// Each layer is a 2D grid of positions {row, col}
+// We define positions as (layer, row, col) where col is in half-tile units for offset staggering
+// Simplified: use a standard mahjong turtle layout
+
+// Standard Turtle layout - positions as [layer, row, col]
+// Using a compressed layout: 144 tiles total
+function buildTurtleLayout() {
+  var positions = [];
+  // Layer 0 (bottom) - large base
+  var base = [
+    // Row 0: 2 tiles
+    [0,0,4],[0,0,10],
+    // Row 1: full row 12 tiles cols 0-11
+    [0,1,0],[0,1,1],[0,1,2],[0,1,3],[0,1,4],[0,1,5],[0,1,6],[0,1,7],[0,1,8],[0,1,9],[0,1,10],[0,1,11],
+    // Row 2: full row 12
+    [0,2,0],[0,2,1],[0,2,2],[0,2,3],[0,2,4],[0,2,5],[0,2,6],[0,2,7],[0,2,8],[0,2,9],[0,2,10],[0,2,11],
+    // Row 3: 12 + 2 extras on sides
+    [0,3,-1],[0,3,0],[0,3,1],[0,3,2],[0,3,3],[0,3,4],[0,3,5],[0,3,6],[0,3,7],[0,3,8],[0,3,9],[0,3,10],[0,3,11],[0,3,12],
+    // Row 4: 12 + 2 extras
+    [0,4,-1],[0,4,0],[0,4,1],[0,4,2],[0,4,3],[0,4,4],[0,4,5],[0,4,6],[0,4,7],[0,4,8],[0,4,9],[0,4,10],[0,4,11],[0,4,12],
+    // Row 5: 12
+    [0,5,0],[0,5,1],[0,5,2],[0,5,3],[0,5,4],[0,5,5],[0,5,6],[0,5,7],[0,5,8],[0,5,9],[0,5,10],[0,5,11],
+    // Row 6: 12
+    [0,6,0],[0,6,1],[0,6,2],[0,6,3],[0,6,4],[0,6,5],[0,6,6],[0,6,7],[0,6,8],[0,6,9],[0,6,10],[0,6,11],
+    // Row 7: 2 tiles
+    [0,7,4],[0,7,10]
+  ];
+  positions = positions.concat(base);
+  // Layer 1 - 10x2 area inside
+  for(var r=1;r<7;r++) for(var c=1;c<11;c++) positions.push([1,r,c]);
+  // Layer 2 - 6x4 inside
+  for(var r=2;r<6;r++) for(var c=2;c<10;c++) positions.push([2,r,c]);
+  // Layer 3 - 4x4 inside
+  for(var r=2;r<6;r++) for(var c=4;c<8;c++) positions.push([3,r,c]);
+  // Layer 4 - center single
+  positions.push([4,3,5],[4,3,6]);
+  return positions;
+}
+
+var TW=46,TH=56,TZ=6; // tile width, height, z-offset per layer
+var tiles=[],selected=null,timerVal=0,timerInterval=null,hintTiles=[];
+
+function newGame(){
+  clearInterval(timerInterval);timerVal=0;updateTimer();
+  selected=null;hintTiles=[];
+  var layout=buildTurtleLayout();
+  // Limit to 144 or less (must be even)
+  var count=Math.min(layout.length,144);
+  if(count%2!==0)count--;
+  layout=layout.slice(0,count);
+  // Create shuffled symbol pairs
+  var symbolList=[];
+  var pairsNeeded=count/2;
+  for(var i=0;i<pairsNeeded;i++){symbolList.push(SYMBOLS[i%SYMBOLS.length]);symbolList.push(SYMBOLS[i%SYMBOLS.length]);}
+  // Shuffle
+  for(var i=symbolList.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=symbolList[i];symbolList[i]=symbolList[j];symbolList[j]=tmp;}
+  tiles=layout.map(function(pos,idx){
+    return {id:idx,layer:pos[0],row:pos[1],col:pos[2],symbol:symbolList[idx],removed:false,selected:false};
+  });
+  updateDisplay();
+  timerInterval=setInterval(function(){timerVal++;updateTimer();},1000);
+  setStatus('Click matching free tiles to remove them!');
+}
+
+function isFree(tile){
+  if(tile.removed)return false;
+  // Check left/right blocked (tile at same layer overlapping on left or right)
+  var leftBlocked=false,rightBlocked=false;
+  tiles.forEach(function(t){
+    if(t.removed||t.id===tile.id||t.layer!==tile.layer)return;
+    var dr=Math.abs(t.row-tile.row),dc=t.col-tile.col;
+    if(dr<1){
+      if(dc===-1)leftBlocked=true;
+      if(dc===1)rightBlocked=true;
+    }
+  });
+  if(leftBlocked&&rightBlocked)return false;
+  // Check if covered from above
+  var coveredAbove=false;
+  tiles.forEach(function(t){
+    if(t.removed||t.id===tile.id||t.layer!==tile.layer+1)return;
+    var dr=Math.abs(t.row-tile.row),dc=Math.abs(t.col-tile.col);
+    if(dr<=1&&dc<=1)coveredAbove=true;
+  });
+  return !coveredAbove;
+}
+
+function updateDisplay(){
+  var board=document.getElementById('board');
+  board.innerHTML='';
+  var maxCol=0,maxRow=0;
+  tiles.forEach(function(t){if(t.col>maxCol)maxCol=t.col;if(t.row>maxRow)maxRow=t.row;});
+  var bw=(maxCol+3)*TW+TZ*5+20;
+  var bh=(maxRow+3)*TH+TZ*5+20;
+  board.style.width=bw+'px';board.style.height=bh+'px';
+  document.getElementById('board-wrap').style.maxWidth=Math.min(bw+20,window.innerWidth-20)+'px';
+  tiles.forEach(function(t){
+    if(t.removed)return;
+    var el=document.createElement('div');
+    el.className='tile'+(isFree(t)?' free':' blocked')+(t.selected?' selected':'');
+    if(hintTiles.includes(t.id))el.classList.add('hint-glow');
+    el.style.left=(t.col*TW+t.layer*TZ+10)+'px';
+    el.style.top=(t.row*TH-t.layer*TZ+10)+'px';
+    el.style.width=TW+'px';el.style.height=TH+'px';
+    el.style.zIndex=t.layer*100+t.row;
+    el.textContent=t.symbol;
+    el.dataset.id=t.id;
+    el.onclick=function(){tileClick(t.id);};
+    board.appendChild(el);
+  });
+  var left=tiles.filter(function(t){return !t.removed;}).length;
+  document.getElementById('tilesLeft').textContent=left;
+  document.getElementById('matched').textContent=tiles.length-left;
+  if(left===0){clearInterval(timerInterval);setStatus('🎉 You won! All tiles matched!');}
+  else if(!hasMoves()){setStatus('No more moves! Try Shuffle or New Game.');}
+}
+
+function tileClick(id){
+  var t=tiles[id];
+  if(!t||t.removed||!isFree(t))return;
+  hintTiles=[];
+  if(selected===null){
+    t.selected=true;selected=id;
+  } else if(selected===id){
+    t.selected=false;selected=null;
+  } else {
+    var s=tiles[selected];
+    if(s.symbol===t.symbol){
+      s.removed=true;t.removed=true;s.selected=false;t.selected=false;selected=null;
+    } else {
+      s.selected=false;t.selected=true;selected=id;
+    }
+  }
+  updateDisplay();
+}
+
+function hasMoves(){
+  var free=tiles.filter(function(t){return !t.removed&&isFree(t);});
+  for(var i=0;i<free.length;i++)for(var j=i+1;j<free.length;j++){if(free[i].symbol===free[j].symbol)return true;}
+  return false;
+}
+
+function showHint(){
+  hintTiles=[];
+  var free=tiles.filter(function(t){return !t.removed&&isFree(t);});
+  for(var i=0;i<free.length;i++)for(var j=i+1;j<free.length;j++){
+    if(free[i].symbol===free[j].symbol){hintTiles=[free[i].id,free[j].id];break;}
+    if(hintTiles.length)break;
+  }
+  if(hintTiles.length===0)setStatus('No hints available!');
+  else setStatus('Hint: matching tiles highlighted!');
+  updateDisplay();
+  setTimeout(function(){hintTiles=[];updateDisplay();},2000);
+}
+
+function shuffleFree(){
+  var free=tiles.filter(function(t){return !t.removed;});
+  var symbols=free.map(function(t){return t.symbol;});
+  for(var i=symbols.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=symbols[i];symbols[i]=symbols[j];symbols[j]=tmp;}
+  free.forEach(function(t,i){t.symbol=symbols[i];});
+  selected=null;hintTiles=[];
+  setStatus('Tiles reshuffled!');
+  updateDisplay();
+}
+
+function updateTimer(){
+  var m=Math.floor(timerVal/60),s=timerVal%60;
+  document.getElementById('timer').textContent=m+':'+(s<10?'0':'')+s;
+}
+
+function setStatus(msg){document.getElementById('status').textContent=msg;}
+
+newGame();
+</script>
+</body>
+</html>

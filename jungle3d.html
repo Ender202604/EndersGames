@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jungle 3D — Jungle Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,0.7); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(5,20,5,0.88); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:1px solid rgba(80,200,80,0.2); }
+#loc { color:#88ff88; font-size:13px; min-width:160px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(5,20,5,0.8); padding:8px 20px; border-radius:12px; color:#aaffaa; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(5,25,5,0.92); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(80,200,80,0.4); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(3,15,3,0.97); border:2px solid rgba(80,200,80,0.4); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#66ff66; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(20,70,20,0.9); border:1px solid rgba(80,200,80,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(40,140,40,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(5,20,5,0.85); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(80,200,80,0.2); }
+#inv-title { color:#66ff66; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(3,15,3,0.95); color:#FFD700; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,200,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#2A6B2A; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#44CC44; color:#000; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(3,12,3,0.85); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(80,200,80,0.3); background:rgba(5,20,5,0.8); color:#aaffaa; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(5,30,5,0.7); border:1px solid rgba(80,200,80,0.3); border-radius:8px; color:#aaffaa; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(80,200,80,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(40,130,40,0.4); border:2px solid #66ff66; border-radius:50%; color:#66ff66; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">🌿 Jungle Clearing</span>
+  <span id="score-el">💎 0 items</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Collected</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Nothing yet</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🌴</div>
+  <div class="st" style="color:#66ff66">JUNGLE EXPLORER 3D</div>
+  <div class="sb">Venture into the mysterious jungle! Explore a sunlit clearing, an ancient temple, a waterfall cave, a canopy platform high above the trees, and a lost village hidden deep in the jungle.<br><br>Meet a seasoned explorer, a tribal elder, and a talking parrot. Collect gems and ancient artifacts!<br><br><span style="color:#aaffaa">The jungle holds many secrets. Are you brave enough? 🌴</span></div>
+  <button class="sbtn" onclick="beginGame()">🌿 ENTER THE JUNGLE</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a1a05);
+scene.fog = new THREE.Fog(0x0a1a05, 12, 52);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+var M = {
+  dirt:lm(0x5A3A1A),grass:lm(0x2D6B1A),dgrass:lm(0x1A4A0A),
+  stone:lm(0x6A6050),dstone:lm(0x3A3028),wood:lm(0x5A3010),
+  leaf:lm(0x1A5A10),dleaf:lm(0x0A3A08),vine:lm(0x2A5A15),
+  gold:lm(0xD4AF37),gem:lm(0x2255FF),water:lm(0x1A4488),
+  skin:lm(0xFFCBA4),mud:lm(0x4A3020),orange:lm(0xFF7722)
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,8,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||18); l.position.set(x,y,z); scene.add(l); return l; }
+
+function tree(x,z,h){
+  h=h||4;
+  cyl(0.18,0.28,h,M.wood,x,h/2,z);
+  sph(1.1,M.leaf,x,h+0.6,z);
+  sph(0.7,M.dleaf,x+0.7,h+0.2,z+0.5);
+  sph(0.7,M.dleaf,x-0.7,h+0.2,z-0.5);
+}
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(3,12,3,0.9)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(80,200,80,0.5)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-10,x2:10,  z1:-10,z2:10,  name:"Jungle Clearing",   col:"#aaffaa"},
+  {x1:12, x2:30,  z1:-8, z2:8,   name:"Ancient Temple",    col:"#FFD700"},
+  {x1:-8, x2:8,   z1:12, z2:30,  name:"Waterfall Cave",    col:"#88aaff"},
+  {x1:-30,x2:-12, z1:-8, z2:8,   name:"Canopy Platform",   col:"#ffff88"},
+  {x1:-8, x2:8,   z1:-30,z2:-12, name:"Lost Village",      col:"#ffcc88"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,8),lm(0x22FFAA)); g.add(glow);
+  var lbl=label(icon+' '+name,'#FFD700'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g,pos:new THREE.Vector3(x,y,z),name,icon,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.5,1.2,0.3),lm(0x4A6A1A)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.27,8,8),M.skin); head.position.y=0.85; g.add(head);
+  var lbl=label(icon+' '+name,'#66ff66'); lbl.position.set(0,1.5,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g,pos:new THREE.Vector3(x,y,z),name,icon,lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M.dgrass);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x,z,w,d});
+  return m;
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0x224422,2.2));
+  pl(0,8,0,0x44AA44,1.5,60);
+
+  // ── JUNGLE CLEARING ──
+  box(20,0.15,20,M.grass,0,-0.08,0);
+  wallBox(0.5,4,20,-10,2,0); wallBox(0.5,4,20,10,2,0);
+  wallBox(20,4,0.5,0,2,-10); wallBox(20,4,0.5,0,2,10);
+  // Trees around clearing
+  tree(-8,7); tree(7,-8); tree(-6,-7); tree(8,6); tree(-7,2); tree(5,-5);
+  // Sunlight patches
+  pl(0,5,0,0x88FF44,1.8,25); pl(-4,4,4,0x66FF22,1.0,12); pl(5,4,-4,0x66FF22,1.0,12);
+  // Vines
+  for(var vi=0;vi<6;vi++){
+    var vx=-9+vi*3.5;
+    cyl(0.04,0.04,2.5,M.vine,vx,1.25,9.3);
+  }
+  addPickup('Jungle Gem','💎',4,0.5,-6);
+  addPickup('Jungle Gem','💎',-5,0.5,5);
+  addNPC("Dr. Piper","🎒",5,0.75,5,[
+    "Hello there! I am Dr. Piper, jungle explorer and botanist.",
+    "This clearing is home to over 300 species of rare plants! Remarkable biodiversity.",
+    "I have been exploring this jungle for 15 years. The ancient temple to the east is incredible.",
+    "Watch out for the wildlife here. Most animals are harmless if you stay calm."
+  ]);
+
+  // ── ANCIENT TEMPLE (east) ──
+  box(18,0.15,16,M.stone,21,-0.08,0);
+  wallBox(0.5,4,16,12,2,0); wallBox(0.5,4,16,30,2,0);
+  wallBox(18,4,0.5,21,2,-8); wallBox(18,4,0.5,21,2,8);
+  // Temple steps
+  box(6,0.3,1.0,M.dstone,21,0.07,-7); box(6,0.6,0.8,M.dstone,21,0.38,-6.2);
+  box(6,0.9,0.6,M.dstone,21,0.57,-5.6);
+  // Stone pillars
+  cyl(0.4,0.4,3.5,M.stone,14,1.75,-5); cyl(0.4,0.4,3.5,M.stone,14,1.75,5);
+  cyl(0.4,0.4,3.5,M.stone,28,1.75,-5); cyl(0.4,0.4,3.5,M.stone,28,1.75,5);
+  // Altar
+  box(2,1.0,2,M.dstone,21,0.5,5);
+  box(2.2,0.1,2.2,M.stone,21,1.08,5);
+  // Carvings / decorations
+  box(0.1,1.5,1.5,M.dstone,12.2,1.5,-3); box(0.1,1.5,1.5,M.dstone,12.2,1.5,3);
+  // Jungle light through cracks
+  pl(21,3,0,0x44CC22,1.5,22); pl(21,1,5,0x55AA11,1.0,12);
+  addPickup('Artifact','🏺',24,0.5,3);
+  addPickup('Jungle Gem','💎',18,0.5,-4);
+  addNPC("Elder Okan","🌿",17,0.75,4,[
+    "Welcome, young one, to the temple of our ancestors.",
+    "This place was built 2000 years ago by the people of the sun. Each carving tells a story.",
+    "The waterfall cave to the north holds sacred waters. Many come to drink from its pools.",
+    "Our village to the south has been here since before anyone can remember. You are welcome there."
+  ]);
+
+  // ── WATERFALL CAVE (north) ──
+  box(16,0.15,18,M.mud,0,-0.08,21);
+  wallBox(0.5,4,18,-8,2,21); wallBox(0.5,4,18,8,2,21);
+  wallBox(16,4,0.5,0,2,12); wallBox(16,4,0.5,0,2,30);
+  box(16,0.15,18,M.dstone,0,4.08,21);
+  // Waterfall
+  box(3,4,0.15,lm(0x4488CC),0,2,29.5);
+  box(3,0.1,2,M.water,0,-0.05,28.5);
+  pl(0,2,29,0x2266AA,2,18);
+  // Cave rocks
+  sph(0.8,M.stone,-5,0.8,15); sph(0.6,M.stone,5,0.6,18); sph(0.7,M.stone,-3,0.7,25);
+  sph(1.0,M.dstone,4,1.0,22); sph(0.5,M.stone,-6,0.5,27);
+  // Hanging vines
+  for(var hi=0;hi<5;hi++){
+    cyl(0.04,0.04,1.8+hi*0.3,M.vine,-6+hi*3,2.2,13.5);
+  }
+  pl(-3,3,20,0x22AA55,1.2,15); pl(4,2,26,0x1188AA,1.0,12);
+  addPickup('Artifact','🏺',-4,0.5,24);
+  addPickup('Jungle Gem','💎',5,0.5,16);
+
+  // ── CANOPY PLATFORM (west, elevated) ──
+  box(18,0.15,16,lm(0x4A3010),-21,3.0,0);
+  wallBox(0.5,2,16,-12,4,0); wallBox(0.5,2,16,-30,4,0);
+  wallBox(18,2,0.5,-21,4,-8); wallBox(18,2,0.5,-21,4,8);
+  // Support tree trunks
+  cyl(0.5,0.5,3.2,M.wood,-16,1.6,-5); cyl(0.5,0.5,3.2,M.wood,-16,1.6,5);
+  cyl(0.5,0.5,3.2,M.wood,-26,1.6,-5); cyl(0.5,0.5,3.2,M.wood,-26,1.6,5);
+  // Leafy canopy above
+  sph(3.5,M.leaf,-21,7,0);
+  sph(2.5,M.dleaf,-17,6.5,3); sph(2.5,M.dleaf,-25,6.5,-3);
+  // Rope bridge elements
+  box(10,0.1,0.3,M.wood,-21,3.08,0);
+  pl(-21,5,0,0xAAFF44,1.5,22);
+  addPickup('Jungle Gem','💎',-18,3.5,4);
+  addPickup('Artifact','🏺',-25,3.5,-3);
+  addNPC("Polly the Parrot","🦜",-24,3.75,4,[
+    "Squawk! Welcome to the treetops! Polly wants a cracker!",
+    "I have lived in this jungle for 30 years! I know every secret path. Squawk!",
+    "The lost village below hides amazing treasure! Follow the flowers... squawk!",
+    "Pretty visitor! Pretty visitor! Watch out for the snake near the waterfall! Squawk squawk!"
+  ]);
+
+  // ── LOST VILLAGE (south) ──
+  box(16,0.15,18,M.dirt,0,-0.08,-21);
+  wallBox(0.5,4,18,-8,2,-21); wallBox(0.5,4,18,8,2,-21);
+  wallBox(16,4,0.5,0,2,-12); wallBox(16,4,0.5,0,2,-30);
+  // Huts
+  for(var hi2=0;hi2<3;hi2++){
+    var hx=-5+hi2*5, hz=-20;
+    cyl(0.2,0.2,2.0,M.wood,hx,1.0,hz);
+    box(2.5,0.12,2.5,M.wood,hx,1.5,hz);
+    var roof=new THREE.Mesh(new THREE.ConeGeometry(1.8,1.2,4),lm(0x8B4513)); roof.position.set(hx,2.3,hz); scene.add(roof);
+  }
+  // Campfire
+  box(0.8,0.15,0.8,M.stone,0,0.06,-17);
+  var flame=new THREE.Mesh(new THREE.ConeGeometry(0.2,0.6,6),lm(0xFF6600)); flame.position.set(0,0.4,-17); scene.add(flame);
+  pl(0,1.2,-17,0xFF8822,2,14);
+  tree(-6,-28,3); tree(6,-28,3); tree(-7,-14,3); tree(7,-14,3);
+  pl(0,3,-21,0xFF9933,1.2,20);
+  addPickup('Artifact','🏺',4,0.5,-24);
+  addPickup('Jungle Gem','💎',-4,0.5,-16);
+  addPickup('Artifact','🏺',2,0.5,-28);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+}
+setupMobile();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true;
+      scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name);
+      score++;
+      document.getElementById('score-el').textContent='💎 '+score+' items';
+      updateInv();
+      showToast('Found '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Nothing yet';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+
+  var spd=0.065;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.35&&Math.abs(nz-w.z)<w.d/2+0.35){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='🌿 '+(z?z.name:'Deep Jungle');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.2;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.8;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Pick up '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

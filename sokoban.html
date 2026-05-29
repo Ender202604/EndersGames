@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sokoban - Ender's Game World</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#1a0000;color:#fff;font-family:Arial,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:10px;}
+a.home{position:fixed;top:10px;left:10px;background:darkred;color:yellow;text-decoration:none;padding:6px 12px;border-radius:8px;font-weight:bold;z-index:100;border:1px solid #ff6666;}
+a.home:hover{background:#8b0000;}
+h1{color:yellow;font-size:22px;margin:40px 0 4px;text-align:center;}
+#info{display:flex;gap:20px;justify-content:center;font-size:14px;margin:4px 0;flex-wrap:wrap;}
+.info-item{color:#ffcc00;}
+.info-item span{color:#ff9999;}
+#status{color:#ffcc00;font-size:15px;margin:4px 0;min-height:22px;text-align:center;}
+#controls{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0;}
+button{background:darkred;color:yellow;border:1px solid #ff6666;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:13px;margin:2px;}
+button:hover{background:#8b0000;}
+button.active-lvl{border-color:yellow;background:#660000;}
+#level-btns{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin:4px 0;}
+#canvas-wrap{margin:8px auto;display:flex;justify-content:center;}
+canvas{border-radius:8px;border:2px solid #440000;display:block;}
+#dpad{display:none;flex-direction:column;align-items:center;gap:4px;margin:8px 0;}
+#dpad-row{display:flex;gap:4px;}
+.dpad-btn{width:50px;height:50px;background:#330000;border:2px solid #660000;border-radius:8px;color:yellow;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;user-select:none;}
+.dpad-btn:active{background:#660000;}
+@media(max-width:600px){#dpad{display:flex;}}
+</style>
+</head>
+<body>
+<a href="index.html" class="home">🏠 Home</a>
+<h1>📦 Sokoban</h1>
+<div id="info">
+  <div class="info-item"><span>Level:</span> <span id="lvlDisp">1</span></div>
+  <div class="info-item"><span>Moves:</span> <span id="movesDisp">0</span></div>
+  <div class="info-item"><span>Boxes:</span> <span id="boxDisp">0/0</span></div>
+</div>
+<div id="level-btns"></div>
+<div id="controls">
+  <button onclick="undoMove()">↩ Undo</button>
+  <button onclick="resetLevel()">↺ Restart Level</button>
+</div>
+<div id="status">Use arrow keys or D-pad to move. Push boxes onto targets!</div>
+<div id="canvas-wrap"><canvas id="c"></canvas></div>
+<div id="dpad">
+  <div class="dpad-btn" onclick="doMove(0,-1)">▲</div>
+  <div id="dpad-row">
+    <div class="dpad-btn" onclick="doMove(-1,0)">◀</div>
+    <div class="dpad-btn" onclick="doMove(1,0)">▼</div>
+    <div class="dpad-btn" onclick="doMove(0,1)">▶</div>
+  </div>
+</div>
+<script>
+// Level format: array of strings. # wall, @ player, $ box, . target, * box on target, + player on target, space floor
+var LEVELS = [
+  // Level 1 - very easy, 1 box
+  [
+    "########",
+    "#      #",
+    "#  $   #",
+    "#  .   #",
+    "#  @   #",
+    "#      #",
+    "########"
+  ],
+  // Level 2 - 2 boxes
+  [
+    "#########",
+    "#       #",
+    "# $   $ #",
+    "# . @ . #",
+    "#       #",
+    "#########"
+  ],
+  // Level 3 - 3 boxes, tighter
+  [
+    "##########",
+    "#        #",
+    "# ##  ## #",
+    "# # $$ # #",
+    "#   @.   #",
+    "# .   .  #",
+    "#        #",
+    "##########"
+  ],
+  // Level 4 - corridor puzzle
+  [
+    "##########",
+    "#    #   #",
+    "# $  @   #",
+    "# ###.## #",
+    "#   .  $ #",
+    "#    #   #",
+    "#  . #   #",
+    "#  $     #",
+    "##########"
+  ],
+  // Level 5 - harder, 4 boxes
+  [
+    "###########",
+    "#         #",
+    "# ## #### #",
+    "# #  @    #",
+    "# # $$ .  #",
+    "# . #  #  #",
+    "# . $$    #",
+    "#         #",
+    "###########"
+  ]
+];
+
+var TILE=44;
+var currentLevel=0,moves=0,history=[];
+var grid,player,boxes,targets;
+
+function parseLevel(lv){
+  var rows=LEVELS[lv];
+  var g=[];player=null;boxes=[];targets=[];
+  for(var r=0;r<rows.length;r++){
+    var row=[];
+    for(var c=0;c<rows[r].length;c++){
+      var ch=rows[r][c];
+      if(ch==='#')row.push('wall');
+      else if(ch==='@'){row.push('floor');player={r:r,c:c};}
+      else if(ch==='$'){row.push('floor');boxes.push({r:r,c:c});}
+      else if(ch==='.'){row.push('target');targets.push({r:r,c:c});}
+      else if(ch==='*'){row.push('target');boxes.push({r:r,c:c});targets.push({r:r,c:c});}
+      else if(ch==='+'){row.push('target');player={r:r,c:c};targets.push({r:r,c:c});}
+      else row.push('floor');
+    }
+    g.push(row);
+  }
+  return g;
+}
+
+function loadLevel(lv){
+  currentLevel=lv;moves=0;history=[];
+  grid=parseLevel(lv);
+  document.getElementById('lvlDisp').textContent=lv+1;
+  document.getElementById('movesDisp').textContent=0;
+  updateBoxDisp();
+  document.getElementById('status').textContent='Use arrow keys or D-pad to move. Push boxes onto targets!';
+  setLevelButtons();
+  sizeCanvas();
+  draw();
+}
+
+function sizeCanvas(){
+  var rows=LEVELS[currentLevel];
+  var H=rows.length,W=rows[0].length;
+  var maxW=Math.min(window.innerWidth-24,600);
+  var t=Math.min(TILE,Math.floor(maxW/W));
+  var cv=document.getElementById('c');
+  cv.width=W*t;cv.height=H*t;
+  cv._t=t;
+}
+
+function draw(){
+  var cv=document.getElementById('c');
+  var ctx=cv.getContext('2d');
+  var t=cv._t||TILE;
+  var rows=LEVELS[currentLevel];
+  var H=rows.length,W=rows[0].length;
+  ctx.clearRect(0,0,cv.width,cv.height);
+
+  // Draw grid
+  for(var r=0;r<H;r++){
+    for(var c=0;c<(grid[r]?grid[r].length:0);c++){
+      var cell=grid[r]?grid[r][c]:'floor';
+      var x=c*t,y=r*t;
+      if(cell==='wall'){
+        ctx.fillStyle='#4a1a1a';
+        ctx.fillRect(x,y,t,t);
+        ctx.strokeStyle='#330000';ctx.lineWidth=1;
+        ctx.strokeRect(x,y,t,t);
+      } else {
+        ctx.fillStyle='#1a0808';
+        ctx.fillRect(x,y,t,t);
+      }
+      if(cell==='target'){
+        ctx.fillStyle='#442200';
+        ctx.fillRect(x,y,t,t);
+        ctx.fillStyle='#cc6600';
+        var m=t*0.3;
+        ctx.fillRect(x+m,y+m,t-m*2,t-m*2);
+      }
+    }
+  }
+
+  // Draw boxes
+  var onTarget=0;
+  boxes.forEach(function(b){
+    var isOn=targets.some(function(tg){return tg.r===b.r&&tg.c===b.c;});
+    if(isOn)onTarget++;
+    var x=b.c*t+2,y=b.r*t+2,sz=t-4;
+    ctx.fillStyle=isOn?'#006600':'#8B4513';
+    ctx.beginPath();ctx.roundRect(x,y,sz,sz,4);ctx.fill();
+    ctx.strokeStyle=isOn?'#00aa00':'#cc7722';ctx.lineWidth=2;
+    ctx.stroke();
+    ctx.fillStyle=isOn?'#aaffaa':'#ffe4b5';
+    ctx.font='bold '+(t*0.45)+'px Arial';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(isOn?'✓':'📦',b.c*t+t/2,b.r*t+t/2);
+  });
+
+  // Draw player
+  if(player){
+    ctx.fillStyle='#ffdd00';
+    ctx.beginPath();ctx.arc(player.c*t+t/2,player.r*t+t/2,t*0.38,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#1a0000';
+    ctx.font='bold '+(t*0.45)+'px Arial';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('😊',player.c*t+t/2,player.r*t+t/2);
+  }
+}
+
+function getBox(r,c){
+  for(var i=0;i<boxes.length;i++){if(boxes[i].r===r&&boxes[i].c===c)return i;}
+  return -1;
+}
+
+function doMove(dr,dc){
+  if(isComplete())return;
+  var nr=player.r+dr,nc=player.c+dc;
+  if(!grid[nr]||!grid[nr][nc]||grid[nr][nc]==='wall')return;
+  var boxIdx=getBox(nr,nc);
+  if(boxIdx!==-1){
+    var br2=nr+dr,bc2=nc+dc;
+    if(!grid[br2]||!grid[br2][bc2]||grid[br2][bc2]==='wall')return;
+    if(getBox(br2,bc2)!==-1)return;
+    // Save history
+    history.push({pr:player.r,pc:player.c,bi:boxIdx,br:boxes[boxIdx].r,bc:boxes[boxIdx].c});
+    boxes[boxIdx].r=br2;boxes[boxIdx].c=bc2;
+  } else {
+    history.push({pr:player.r,pc:player.c,bi:-1});
+  }
+  player.r=nr;player.c=nc;
+  moves++;
+  document.getElementById('movesDisp').textContent=moves;
+  updateBoxDisp();
+  draw();
+  if(isComplete()){document.getElementById('status').textContent='🎉 Level '+(currentLevel+1)+' complete! Moves: '+moves;setTimeout(function(){if(currentLevel<LEVELS.length-1){loadLevel(currentLevel+1);}else{document.getElementById('status').textContent='🏆 You completed all levels!';} },1200);}
+}
+
+function undoMove(){
+  if(history.length===0)return;
+  var h=history.pop();
+  player.r=h.pr;player.c=h.pc;
+  if(h.bi!==-1){boxes[h.bi].r=h.br;boxes[h.bi].c=h.bc;}
+  moves=Math.max(0,moves-1);
+  document.getElementById('movesDisp').textContent=moves;
+  updateBoxDisp();
+  draw();
+}
+
+function isComplete(){
+  return boxes.every(function(b){return targets.some(function(t){return t.r===b.r&&t.c===b.c;});});
+}
+
+function updateBoxDisp(){
+  var on=boxes.filter(function(b){return targets.some(function(t){return t.r===b.r&&t.c===b.c;});}).length;
+  document.getElementById('boxDisp').textContent=on+'/'+targets.length;
+}
+
+function resetLevel(){loadLevel(currentLevel);}
+
+function setLevelButtons(){
+  var panel=document.getElementById('level-btns');panel.innerHTML='';
+  LEVELS.forEach(function(_,i){
+    var btn=document.createElement('button');
+    btn.textContent='Level '+(i+1);
+    if(i===currentLevel)btn.className='active-lvl';
+    btn.onclick=function(){loadLevel(i);};
+    panel.appendChild(btn);
+  });
+}
+
+document.addEventListener('keydown',function(e){
+  if(e.key==='ArrowUp'||e.key==='w'){e.preventDefault();doMove(-1,0);}
+  else if(e.key==='ArrowDown'||e.key==='s'){e.preventDefault();doMove(1,0);}
+  else if(e.key==='ArrowLeft'||e.key==='a'){e.preventDefault();doMove(0,-1);}
+  else if(e.key==='ArrowRight'||e.key==='d'){e.preventDefault();doMove(0,1);}
+  else if(e.key==='z'||e.key==='Z'){undoMove();}
+});
+
+// Touch swipe support
+var touchStart=null;
+document.getElementById('c').addEventListener('touchstart',function(e){touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY};});
+document.getElementById('c').addEventListener('touchend',function(e){
+  if(!touchStart)return;
+  var dx=e.changedTouches[0].clientX-touchStart.x;
+  var dy=e.changedTouches[0].clientY-touchStart.y;
+  if(Math.abs(dx)<20&&Math.abs(dy)<20)return;
+  if(Math.abs(dx)>Math.abs(dy)){doMove(0,dx>0?1:-1);}else{doMove(dy>0?1:-1,0);}
+  touchStart=null;
+});
+
+loadLevel(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tic Tac Toe - Ender's Game World</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#1a0000;color:#fff;font-family:Arial,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px;}
+a.home{position:fixed;top:10px;left:10px;background:darkred;color:yellow;text-decoration:none;padding:6px 12px;border-radius:8px;font-weight:bold;z-index:100;border:1px solid #ff6666;}
+a.home:hover{background:#8b0000;}
+h1{color:yellow;font-size:26px;margin:40px 0 6px;text-align:center;}
+#score{display:flex;gap:30px;margin:8px 0;font-size:15px;justify-content:center;}
+.score-box{background:#330000;border:1px solid #660000;border-radius:8px;padding:6px 18px;text-align:center;}
+.score-box .lbl{color:#ff9999;font-size:12px;}
+.score-box .val{color:yellow;font-size:22px;font-weight:bold;}
+#status{font-size:17px;color:#ffcc00;margin:8px 0;min-height:26px;text-align:center;}
+#options{margin:6px 0;text-align:center;}
+button{background:darkred;color:yellow;border:1px solid #ff6666;padding:7px 18px;border-radius:7px;cursor:pointer;font-size:14px;margin:3px;}
+button:hover{background:#8b0000;}
+button.active-btn{background:#660000;border-color:yellow;}
+#board{display:grid;grid-template-columns:repeat(3,100px);grid-template-rows:repeat(3,100px);gap:6px;margin:12px 0;background:#220000;padding:6px;border-radius:10px;border:2px solid #440000;}
+.cell{width:100px;height:100px;background:#2a0a0a;border-radius:8px;border:2px solid #440000;display:flex;align-items:center;justify-content:center;font-size:48px;cursor:pointer;transition:background 0.15s,transform 0.1s;user-select:none;}
+.cell:hover:not(.taken){background:#3a1010;}
+.cell.taken{cursor:default;}
+.cell.X{color:#ff4444;}
+.cell.O{color:#44aaff;}
+.cell.win-cell{animation:winpulse 0.5s ease-in-out infinite alternate;border-color:yellow;}
+@keyframes winpulse{from{background:#440000;}to{background:#884400;}}
+.cell.draw-cell{background:#333;}
+</style>
+</head>
+<body>
+<a href="index.html" class="home">🏠 Home</a>
+<h1>❌ Tic Tac Toe ⭕</h1>
+<div id="score">
+  <div class="score-box"><div class="lbl">You (X) Wins</div><div class="val" id="winsVal">0</div></div>
+  <div class="score-box"><div class="lbl">Draws</div><div class="val" id="drawsVal">0</div></div>
+  <div class="score-box"><div class="lbl">AI (O) Wins</div><div class="val" id="lossesVal">0</div></div>
+</div>
+<div id="options">
+  <button id="goFirstBtn" class="active-btn" onclick="setGoFirst(true)">Go First</button>
+  <button id="goSecondBtn" onclick="setGoFirst(false)">Go Second</button>
+  <button onclick="newGame()">New Game</button>
+</div>
+<div id="status">Your turn!</div>
+<div id="board"></div>
+<script>
+var board,gameOver,playerFirst,wins=0,draws=0,losses=0;
+
+function setGoFirst(first){
+  playerFirst=first;
+  document.getElementById('goFirstBtn').className=first?'active-btn':'';
+  document.getElementById('goSecondBtn').className=first?'':'active-btn';
+  newGame();
+}
+
+function newGame(){
+  board=Array(9).fill(null);gameOver=false;
+  renderBoard();
+  if(playerFirst===undefined)playerFirst=true;
+  if(playerFirst){setStatus('Your turn! You are X');}
+  else{setStatus('AI goes first...');setTimeout(aiMove,400);}
+}
+
+function renderBoard(){
+  var b=document.getElementById('board');b.innerHTML='';
+  board.forEach(function(val,i){
+    var cell=document.createElement('div');
+    cell.className='cell'+(val?' taken '+val:'');
+    cell.textContent=val||'';
+    if(!val&&!gameOver)cell.onclick=function(){playerClick(i);};
+    b.appendChild(cell);
+  });
+}
+
+function playerClick(i){
+  if(gameOver||board[i])return;
+  board[i]='X';
+  var result=checkResult();
+  if(result){endGame(result);return;}
+  setStatus('AI thinking...');
+  renderBoard();
+  setTimeout(aiMove,300);
+}
+
+function aiMove(){
+  if(gameOver)return;
+  var idx=minimax(board,'O').idx;
+  board[idx]='O';
+  var result=checkResult();
+  if(result){endGame(result);return;}
+  setStatus('Your turn!');
+  renderBoard();
+}
+
+function minimax(b,player){
+  var result=checkResultBoard(b);
+  if(result==='X')return{score:-10};
+  if(result==='O')return{score:10};
+  if(b.every(function(v){return v;}))return{score:0};
+  var moves=[];
+  b.forEach(function(v,i){
+    if(!v){
+      var nb=b.slice();nb[i]=player;
+      var res=minimax(nb,player==='O'?'X':'O');
+      moves.push({idx:i,score:res.score});
+    }
+  });
+  moves.sort(function(a,b){return player==='O'?b.score-a.score:a.score-b.score;});
+  return moves[0];
+}
+
+var WINS=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+function checkResultBoard(b){
+  for(var i=0;i<WINS.length;i++){
+    var w=WINS[i];
+    if(b[w[0]]&&b[w[0]]===b[w[1]]&&b[w[1]]===b[w[2]])return b[w[0]];
+  }
+  if(b.every(function(v){return v;}))return'draw';
+  return null;
+}
+
+function checkResult(){return checkResultBoard(board);}
+
+function endGame(result){
+  gameOver=true;
+  var cells=document.getElementById('board').children;
+  if(result==='X'){
+    wins++;document.getElementById('winsVal').textContent=wins;
+    setStatus('🎉 You win!');
+    WINS.forEach(function(w){if(board[w[0]]==='X'&&board[w[1]]==='X'&&board[w[2]]==='X'){[w[0],w[1],w[2]].forEach(function(i){cells[i].classList.add('win-cell');});}});
+  } else if(result==='O'){
+    losses++;document.getElementById('lossesVal').textContent=losses;
+    setStatus('AI wins! Better luck next time.');
+    WINS.forEach(function(w){if(board[w[0]]==='O'&&board[w[1]]==='O'&&board[w[2]]==='O'){[w[0],w[1],w[2]].forEach(function(i){cells[i].classList.add('win-cell');});}});
+  } else {
+    draws++;document.getElementById('drawsVal').textContent=draws;
+    setStatus("It's a draw!");
+    for(var i=0;i<9;i++)cells[i].classList.add('draw-cell');
+  }
+  renderBoard();
+  if(result==='X'){
+    WINS.forEach(function(w){if(board[w[0]]==='X'&&board[w[1]]==='X'&&board[w[2]]==='X'){var bc=document.getElementById('board').children;[w[0],w[1],w[2]].forEach(function(i){bc[i].classList.add('win-cell');});}});
+  } else if(result==='O'){
+    WINS.forEach(function(w){if(board[w[0]]==='O'&&board[w[1]]==='O'&&board[w[2]]==='O'){var bc=document.getElementById('board').children;[w[0],w[1],w[2]].forEach(function(i){bc[i].classList.add('win-cell');});}});
+  } else {
+    var bc=document.getElementById('board').children;
+    for(var j=0;j<9;j++)bc[j].classList.add('draw-cell');
+  }
+}
+
+function setStatus(msg){document.getElementById('status').textContent=msg;}
+playerFirst=true;newGame();
+</script>
+</body>
+</html>

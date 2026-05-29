@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mastermind - Ender's Game World</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#1a0000;color:#fff;font-family:Arial,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:10px 8px;}
+a.home{position:fixed;top:10px;left:10px;background:darkred;color:yellow;text-decoration:none;padding:6px 12px;border-radius:8px;font-weight:bold;z-index:100;border:1px solid #ff6666;}
+a.home:hover{background:#8b0000;}
+h1{color:yellow;font-size:22px;margin:40px 0 2px;text-align:center;}
+p.sub{color:#ff9999;font-size:12px;margin-bottom:8px;text-align:center;}
+#status{color:#ffcc00;font-size:15px;margin:4px 0;min-height:22px;text-align:center;}
+button{background:darkred;color:yellow;border:1px solid #ff6666;padding:6px 16px;border-radius:7px;cursor:pointer;font-size:13px;margin:3px;}
+button:hover{background:#8b0000;}
+button:disabled{opacity:0.5;cursor:default;}
+#colors-panel{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:8px 0;}
+.color-pick{width:40px;height:40px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform 0.1s,border-color 0.1s;}
+.color-pick:hover{transform:scale(1.15);}
+.color-pick.selected{border-color:white;transform:scale(1.2);}
+#guess-row{display:flex;gap:8px;justify-content:center;align-items:center;margin:6px 0;}
+.guess-peg{width:36px;height:36px;border-radius:50%;background:#330000;border:2px solid #660000;cursor:pointer;transition:background 0.15s;}
+.guess-peg:hover{border-color:#ff6666;}
+#game-area{width:100%;max-width:480px;}
+.row{display:flex;align-items:center;gap:6px;margin:4px 0;padding:4px 6px;background:#220000;border-radius:8px;border:1px solid #330000;}
+.row.active-row{border-color:#ff6666;background:#2a0808;}
+.row-num{color:#666;font-size:12px;width:22px;text-align:right;}
+.peg{width:32px;height:32px;border-radius:50%;background:#330000;border:2px solid #440000;flex-shrink:0;}
+.feedback{display:grid;grid-template-columns:repeat(2,14px);grid-template-rows:repeat(2,14px);gap:3px;margin-left:8px;}
+.fb-dot{width:14px;height:14px;border-radius:50%;background:#330000;border:1px solid #440000;}
+.fb-dot.black{background:#111;border-color:#666;}
+.fb-dot.white{background:#eee;border-color:#ccc;}
+#secret-row{display:flex;gap:8px;justify-content:center;margin:8px 0;}
+.secret-peg{width:36px;height:36px;border-radius:50%;background:#330000;border:2px dashed #660000;}
+.secret-peg.revealed{border-style:solid;}
+</style>
+</head>
+<body>
+<a href="index.html" class="home">🏠 Home</a>
+<h1>🧠 Mastermind</h1>
+<p class="sub">Crack the 4-color secret code in 10 guesses!</p>
+<div id="status">Pick 4 colors for your guess.</div>
+<div id="secret-row">
+  <div class="secret-peg" id="s0"></div>
+  <div class="secret-peg" id="s1"></div>
+  <div class="secret-peg" id="s2"></div>
+  <div class="secret-peg" id="s3"></div>
+</div>
+<div id="colors-panel"></div>
+<div id="guess-row">
+  <div class="guess-peg" id="g0" onclick="guessClick(0)"></div>
+  <div class="guess-peg" id="g1" onclick="guessClick(1)"></div>
+  <div class="guess-peg" id="g2" onclick="guessClick(2)"></div>
+  <div class="guess-peg" id="g3" onclick="guessClick(3)"></div>
+  <button id="submitBtn" onclick="submitGuess()" disabled>Submit</button>
+  <button onclick="clearGuess()">Clear</button>
+</div>
+<button onclick="newGame()" style="margin:4px auto;display:block;">New Game</button>
+<div id="game-area"></div>
+
+<script>
+var COLORS=['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6'];
+var CNAMES=['Red','Orange','Yellow','Green','Blue','Purple'];
+var secret,currentGuess,guessCount,gameOver,selectedColor;
+
+function newGame(){
+  secret=[0,1,2,3,4,5].sort(()=>Math.random()-0.5).slice(0,4).map(()=>Math.floor(Math.random()*6));
+  currentGuess=[null,null,null,null];guessCount=0;gameOver=false;selectedColor=null;
+  for(var i=0;i<4;i++){var sp=document.getElementById('s'+i);sp.style.background='#330000';sp.classList.remove('revealed');}
+  document.getElementById('game-area').innerHTML='';
+  document.getElementById('submitBtn').disabled=true;
+  setStatus('Pick 4 colors for your guess.');
+  clearGuess();
+  renderColorPicks();
+  renderCurrentGuess();
+}
+
+function renderColorPicks(){
+  var panel=document.getElementById('colors-panel');panel.innerHTML='';
+  COLORS.forEach(function(col,i){
+    var d=document.createElement('div');
+    d.className='color-pick'+(selectedColor===i?' selected':'');
+    d.style.background=col;
+    d.title=CNAMES[i];
+    d.onclick=function(){selectColor(i);};
+    panel.appendChild(d);
+  });
+}
+
+function selectColor(i){selectedColor=i;renderColorPicks();}
+
+function guessClick(pos){
+  if(gameOver||selectedColor===null)return;
+  currentGuess[pos]=selectedColor;
+  renderCurrentGuess();
+  checkSubmit();
+}
+
+function renderCurrentGuess(){
+  for(var i=0;i<4;i++){
+    var p=document.getElementById('g'+i);
+    p.style.background=currentGuess[i]!==null?COLORS[currentGuess[i]]:'#330000';
+  }
+}
+
+function checkSubmit(){
+  document.getElementById('submitBtn').disabled=currentGuess.some(function(v){return v===null;});
+}
+
+function clearGuess(){currentGuess=[null,null,null,null];renderCurrentGuess();document.getElementById('submitBtn').disabled=true;}
+
+function submitGuess(){
+  if(gameOver||currentGuess.some(function(v){return v===null;}))return;
+  guessCount++;
+  var blacks=0,whites=0;
+  var sc=secret.slice(),gc=currentGuess.slice();
+  for(var i=0;i<4;i++){if(sc[i]===gc[i]){blacks++;sc[i]=-1;gc[i]=-2;}}
+  for(var i=0;i<4;i++){
+    if(gc[i]===-2)continue;
+    var idx=sc.indexOf(gc[i]);
+    if(idx!==-1){whites++;sc[idx]=-1;}
+  }
+  addGuessRow(currentGuess.slice(),blacks,whites);
+  if(blacks===4){
+    gameOver=true;revealSecret();setStatus('🎉 You cracked the code in '+guessCount+' guess'+(guessCount===1?'':'es')+'!');
+  } else if(guessCount>=10){
+    gameOver=true;revealSecret();setStatus('❌ Out of guesses! The code was...');
+  } else {
+    setStatus('Guess '+guessCount+'/10 — '+blacks+' black, '+whites+' white pegs.');
+    clearGuess();
+  }
+}
+
+function addGuessRow(guess,blacks,whites){
+  var area=document.getElementById('game-area');
+  var row=document.createElement('div');row.className='row';
+  var num=document.createElement('div');num.className='row-num';num.textContent=guessCount;row.appendChild(num);
+  guess.forEach(function(c){
+    var p=document.createElement('div');p.className='peg';p.style.background=COLORS[c];row.appendChild(p);
+  });
+  var fb=document.createElement('div');fb.className='feedback';
+  var dots=[];
+  for(var i=0;i<blacks;i++)dots.push('black');
+  for(var i=0;i<whites;i++)dots.push('white');
+  while(dots.length<4)dots.push('empty');
+  dots.forEach(function(type){
+    var d=document.createElement('div');d.className='fb-dot '+type;fb.appendChild(d);
+  });
+  row.appendChild(fb);
+  area.insertBefore(row,area.firstChild);
+}
+
+function revealSecret(){
+  for(var i=0;i<4;i++){
+    var sp=document.getElementById('s'+i);
+    sp.style.background=COLORS[secret[i]];
+    sp.classList.add('revealed');
+  }
+}
+
+function setStatus(msg){document.getElementById('status').textContent=msg;}
+newGame();
+</script>
+</body>
+</html>

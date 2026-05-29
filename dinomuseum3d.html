@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dino Museum 3D — Dinosaur Museum Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(80,60,40,0.9); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #fff; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(40,30,20,0.9); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:1px solid rgba(180,150,100,0.3); }
+#loc { color:#ddbb88; font-size:13px; min-width:160px; }
+#score-el { color:#8B5E3C; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(40,30,20,0.82); padding:8px 20px; border-radius:12px; color:#ddbb88; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(40,30,20,0.95); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(180,150,100,0.4); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(30,22,14,0.97); border:2px solid rgba(180,150,100,0.4); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#ddbb66; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(100,70,30,0.9); border:1px solid rgba(180,150,100,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(160,120,50,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(40,30,20,0.88); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(180,150,100,0.2); }
+#inv-title { color:#ddbb66; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(30,22,14,0.95); color:#FFD700; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,200,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#7A4A1A; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#ddbb66; color:#000; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(25,18,10,0.88); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(180,150,100,0.3); background:rgba(40,30,20,0.8); color:#ddbb88; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(40,30,15,0.7); border:1px solid rgba(180,150,100,0.3); border-radius:8px; color:#ddbb88; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(180,150,100,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(120,80,30,0.4); border:2px solid #ddbb66; border-radius:50%; color:#ddbb66; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">🦕 Entrance Hall</span>
+  <span id="score-el">🦴 0 fossils</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Fossil Collection</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">None found</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🦕</div>
+  <div class="st" style="color:#ddbb66">DINO MUSEUM 3D</div>
+  <div class="sb">Welcome to the Natural History Museum! Explore the Entrance Hall, T-Rex Wing, Sauropod Hall, Fossil Lab, Gift Shop, and the incredible Volcano Room.<br><br>Meet the museum guide, a paleontologist, and an excited kid. Collect fossil fragments on your tour!<br><br><span style="color:#ddbb88">65 million years of history await you! 🦖</span></div>
+  <button class="sbtn" onclick="beginGame()">🦴 ENTER THE MUSEUM</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0xEEE5D0);
+scene.fog = new THREE.Fog(0xEEE5D0, 15, 58);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+var M = {
+  floor:lm(0xD4C4A0),wall:lm(0xCCBB99),dwall:lm(0xBBAA88),
+  bone:lm(0xEEE0B8),wood:lm(0x8B6040),gold:lm(0xD4AF37),
+  red:lm(0xCC2200),white:lm(0xF5F0E0),case_m:lm(0xAABBCC),
+  skin:lm(0xFFCBA4),green:lm(0x226622),grey:lm(0x888880),
+  lava:new THREE.MeshLambertMaterial({color:0xFF4400,emissive:0xFF2200,emissiveIntensity:0.6}),
+  rock:lm(0x665544),glass:new THREE.MeshLambertMaterial({color:0xAADDFF,transparent:true,opacity:0.3})
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,10),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,8,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||18); l.position.set(x,y,z); scene.add(l); return l; }
+
+// Dino skeleton helper
+function dinoSkeleton(gx,gy,gz,scale){
+  scale=scale||1;
+  var s=scale;
+  // body
+  box(s*2.5,s*0.8,s*0.7,M.bone,gx,gy+s*1.2,gz);
+  // neck
+  cyl(s*0.15,s*0.2,s*1.2,M.bone,gx+s*1.0,gy+s*1.8,gz);
+  // head
+  sph(s*0.32,M.bone,gx+s*1.2,gy+s*2.55,gz);
+  // jaw
+  box(s*0.5,s*0.12,s*0.28,M.bone,gx+s*1.4,gy+s*2.3,gz);
+  // tail
+  box(s*1.8,s*0.25,s*0.25,M.bone,gx-s*1.8,gy+s*1.0,gz);
+  // legs
+  cyl(s*0.1,s*0.1,s*1.2,M.bone,gx+s*0.6,gy+s*0.5,gz+s*0.3);
+  cyl(s*0.1,s*0.1,s*1.2,M.bone,gx+s*0.6,gy+s*0.5,gz-s*0.3);
+  cyl(s*0.1,s*0.1,s*1.2,M.bone,gx-s*0.6,gy+s*0.5,gz+s*0.3);
+  cyl(s*0.1,s*0.1,s*1.2,M.bone,gx-s*0.6,gy+s*0.5,gz-s*0.3);
+  // arms (small T-rex style)
+  cyl(s*0.06,s*0.06,s*0.6,M.bone,gx+s*1.1,gy+s*1.6,gz+s*0.35);
+  cyl(s*0.06,s*0.06,s*0.6,M.bone,gx+s*1.1,gy+s*1.6,gz-s*0.35);
+}
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(30,22,14,0.92)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(180,150,100,0.5)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-10,x2:10,  z1:-10,z2:10,  name:"Entrance Hall",   col:"#ddbb88"},
+  {x1:12, x2:30,  z1:-8, z2:8,   name:"T-Rex Wing",      col:"#ff8844"},
+  {x1:-30,x2:-12, z1:-8, z2:8,   name:"Sauropod Hall",   col:"#88ccaa"},
+  {x1:-8, x2:8,   z1:12, z2:28,  name:"Fossil Lab",      col:"#aabbcc"},
+  {x1:-8, x2:8,   z1:-28,z2:-12, name:"Gift Shop",       col:"#ffccaa"},
+  {x1:12, x2:28,  z1:12, z2:28,  name:"Volcano Room",    col:"#ff6622"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.12,0.18),M.bone); g.add(glow);
+  var lbl=label(icon+' '+name,'#ddbb66'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g,pos:new THREE.Vector3(x,y,z),name,icon,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.2,0.3),lm(0x336699)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.27,8,8),M.skin); head.position.y=0.85; g.add(head);
+  var lbl=label(icon+' '+name,'#ddbb66'); lbl.position.set(0,1.5,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g,pos:new THREE.Vector3(x,y,z),name,icon,lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M.wall);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x,z,w,d});
+  return m;
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0xDDCCAA,3.0));
+  pl(0,6,0,0xFFEECC,1.5,60);
+
+  // ── ENTRANCE HALL ──
+  box(20,0.15,20,M.floor,0,-0.08,0);
+  box(20,0.12,20,M.white,0,4.08,0);
+  wallBox(0.4,4.2,20,-10,2.1,0); wallBox(0.4,4.2,20,10,2.1,0);
+  wallBox(20,4.2,0.4,0,2.1,-10); wallBox(20,4.2,0.4,0,2.1,10);
+  // Welcome sign
+  box(6,0.8,0.1,M.wood,0,3.5,-9.5);
+  // Display cases in center
+  box(2,0.06,1,M.case_m,-3,1.1,0); box(2,0.06,1,M.case_m,3,1.1,0);
+  box(2,1.0,0.05,M.glass,-3,0.6,0.5); box(2,1.0,0.05,M.glass,-3,0.6,-0.5);
+  box(2,1.0,0.05,M.glass,3,0.6,0.5); box(2,1.0,0.05,M.glass,3,0.6,-0.5);
+  // Fossils in cases
+  box(0.4,0.15,0.25,M.bone,-3,1.18,0);
+  box(0.4,0.15,0.25,M.bone,3,1.18,0);
+  // Pillars
+  cyl(0.3,0.3,4.2,M.white,-8,2.1,-7); cyl(0.3,0.3,4.2,M.white,8,2.1,-7);
+  cyl(0.3,0.3,4.2,M.white,-8,2.1,7); cyl(0.3,0.3,4.2,M.white,8,2.1,7);
+  pl(-5,3,-5,0xFFEECC,1.2,16); pl(5,3,5,0xFFEECC,1.2,16);
+  addPickup('Fossil Fragment','🦴',5,0.5,-6);
+  addPickup('Fossil Fragment','🦴',-5,0.5,5);
+  addNPC("Guide Sarah","🎤",3,0.75,-5,[
+    "Welcome to the Natural History Museum! I am Sarah, your guide today.",
+    "The museum has fossils spanning 65 million years of prehistoric life. Amazing, right?",
+    "The T-Rex Wing to the east is our most popular exhibit. The skeleton is fully authentic!",
+    "The Volcano Room in the northeast is very exciting — it simulates an actual eruption!"
+  ]);
+
+  // ── T-REX WING (east) ──
+  box(18,0.15,16,M.floor,21,-0.08,0);
+  box(18,0.12,16,M.white,21,4.08,0);
+  wallBox(0.4,4.2,16,12,2.1,0); wallBox(0.4,4.2,16,30,2.1,0);
+  wallBox(18,4.2,0.4,21,2.1,-8); wallBox(18,4.2,0.4,21,2.1,8);
+  // T-Rex skeleton!
+  dinoSkeleton(21,0,0,1.3);
+  // Spotlight on dino
+  pl(21,4,0,0xFFEE88,2.5,18);
+  // Info panels
+  box(0.1,1.5,2,M.wood,12.2,1.5,0);
+  box(0.1,1.5,2,M.wood,29.8,1.5,0);
+  // Exhibit cases on walls
+  box(3,1.8,0.2,M.case_m,21,1.0,-7);
+  box(3,0.06,1.5,M.glass,21,1.9,-7);
+  pl(21,3,-7,0xFFFF88,1.0,10);
+  addPickup('Fossil Fragment','🦴',24,0.5,5);
+  addPickup('Fossil Fragment','🦴',18,0.5,-4);
+  addPickup('Fossil Fragment','🦴',26,0.5,-2);
+  addNPC("Dr. Jones","🔬",15,0.75,-4,[
+    "Magnificent, isn't it! I am Dr. Jones, lead paleontologist here.",
+    "This T-Rex skeleton is 67 million years old! We found it in Montana in 1995.",
+    "Tyrannosaurus Rex was one of the largest meat-eating dinosaurs. Up to 40 feet long!",
+    "Look at those tiny forearms! Scientists are still debating what they were used for."
+  ]);
+
+  // ── SAUROPOD HALL (west) ──
+  box(18,0.15,16,M.floor,-21,-0.08,0);
+  box(18,5.0,16,lm(0xE8DDD0),-21,2.5,0); // larger room feeling via ceiling tint
+  box(18,0.12,16,M.white,-21,5.08,0);
+  wallBox(0.4,5.2,16,-12,2.6,0); wallBox(0.4,5.2,16,-30,2.6,0);
+  wallBox(18,5.2,0.4,-21,2.6,-8); wallBox(18,5.2,0.4,-21,2.6,8);
+  // Long-neck sauropod skeleton (simplified)
+  box(5,1.0,1.2,M.bone,-21,1.2,0);
+  // Long neck going up
+  cyl(0.2,0.3,3.5,M.bone,-18,2.5,0);
+  sph(0.4,M.bone,-17.5,4.5,0);
+  // Tail
+  box(3,0.3,0.3,M.bone,-25,1.2,0);
+  // Four big legs
+  cyl(0.2,0.2,1.2,M.bone,-20,0.65,0.5); cyl(0.2,0.2,1.2,M.bone,-20,0.65,-0.5);
+  cyl(0.2,0.2,1.2,M.bone,-22,0.65,0.5); cyl(0.2,0.2,1.2,M.bone,-22,0.65,-0.5);
+  pl(-21,4,0,0xFFFFEE,2.5,22); pl(-18,3.5,0,0xFFEECC,1.5,12);
+  addPickup('Fossil Fragment','🦴',-18,0.5,4);
+  addPickup('Fossil Fragment','🦴',-24,0.5,-3);
+
+  // ── FOSSIL LAB (north) ──
+  box(16,0.15,16,M.floor,0,-0.08,20);
+  box(16,0.12,16,M.white,0,4.08,20);
+  wallBox(16,4.2,0.4,0,2.1,12); wallBox(16,4.2,0.4,0,2.1,28);
+  wallBox(0.4,4.2,16,-8,2.1,20); wallBox(0.4,4.2,16,8,2.1,20);
+  // Lab benches
+  box(5,0.08,1.5,M.wood,-3,0.9,14); box(5,0.08,1.5,M.wood,3,0.9,14);
+  box(5,0.08,1.5,M.wood,-3,0.9,26); box(5,0.08,1.5,M.wood,3,0.9,26);
+  // Equipment on benches
+  cyl(0.15,0.15,0.4,M.grey,-4,1.12,13.5); cyl(0.15,0.15,0.4,M.grey,-2,1.12,13.5);
+  box(0.6,0.3,0.4,M.case_m,4,1.12,14); box(0.6,0.3,0.4,M.case_m,5,1.12,14);
+  // Fossil molds
+  box(0.5,0.1,0.35,M.bone,-1,1.12,26.2); box(0.5,0.1,0.35,M.bone,1,1.12,26.2);
+  box(0.7,0.12,0.5,M.bone,3,1.12,25.8);
+  pl(0,3,20,0xFFFFFF,2.0,20); pl(-4,2,14,0xFFFFCC,1.0,10); pl(4,2,26,0xFFFFCC,1.0,10);
+  addPickup('Fossil Fragment','🦴',5,0.5,18);
+  addPickup('Fossil Fragment','🦴',-4,0.5,23);
+  addNPC("Excited Kid","🧒",-4,0.75,18,[
+    "WOAH! Did you see that T-Rex?! That was SO COOL!",
+    "I want to be a paleontologist when I grow up! They dig up dinosaur bones!",
+    "My favorite dinosaur is the Triceratops! Three horns! How awesome is that?!",
+    "Can you believe dinosaurs were REAL?! Like, actual real real! Mind = blown!"
+  ]);
+
+  // ── GIFT SHOP (south) ──
+  box(16,0.15,16,M.floor,0,-0.08,-20);
+  box(16,0.12,16,M.white,0,4.08,-20);
+  wallBox(16,4.2,0.4,0,2.1,-12); wallBox(16,4.2,0.4,0,2.1,-28);
+  wallBox(0.4,4.2,16,-8,2.1,-20); wallBox(0.4,4.2,16,8,2.1,-20);
+  // Shelves
+  box(5,0.08,0.4,M.wood,-3,1.5,-27); box(5,0.08,0.4,M.wood,3,1.5,-27);
+  box(5,0.08,0.4,M.wood,-3,1.0,-27); box(5,0.08,0.4,M.wood,3,1.0,-27);
+  box(5,0.08,0.4,M.wood,-3,0.5,-27); box(5,0.08,0.4,M.wood,3,0.5,-27);
+  // Dino toy replicas on shelves
+  for(var si=0;si<5;si++){
+    sph(0.12,lm(0x226622),-4.5+si*1.1,1.6,-26.9);
+    sph(0.1,lm(0x8B4513),3.5-si*1.1,1.1,-26.9);
+  }
+  // Counter
+  box(6,1.0,0.8,M.wood,0,0.5,-23);
+  pl(0,3,-20,0xFFEECC,2.0,20);
+  addPickup('Fossil Fragment','🦴',4,0.5,-17);
+  addPickup('Fossil Fragment','🦴',-4,0.5,-24);
+
+  // ── VOLCANO ROOM (northeast) ──
+  box(16,0.15,16,M.rock,20,-0.08,20);
+  box(16,0.12,16,lm(0x332211),20,5.08,20);
+  wallBox(0.4,5.2,16,12,2.6,20); wallBox(0.4,5.2,16,28,2.6,20);
+  wallBox(16,5.2,0.4,20,2.6,12); wallBox(16,5.2,0.4,20,2.6,28);
+  // Volcano model
+  cyl(0.4,2.5,3.5,M.rock,20,1.75,20);
+  cyl(0.2,0.4,0.5,M.lava,20,3.75,20);
+  // Lava flows
+  box(0.5,0.05,2,M.lava,19,3.45,21.5); box(0.5,0.05,2,M.lava,21,3.45,21.5);
+  box(2,0.05,0.5,M.lava,21.5,3.45,20); box(2,0.05,0.5,M.lava,21.5,3.45,21);
+  // Lava pool at base
+  box(3,0.08,3,M.lava,20,0.0,20);
+  // Rocks around
+  sph(0.5,M.rock,17,0.5,18); sph(0.7,M.rock,23,0.7,22); sph(0.4,M.rock,18,0.4,23);
+  pl(20,3,20,0xFF4400,2.5,18); pl(20,0.5,20,0xFF8800,2.0,10);
+  pl(17,1.5,17,0xFF6600,1.0,12); pl(23,1.5,23,0xFF6600,1.0,12);
+  addPickup('Fossil Fragment','🦴',17,0.5,16);
+  addPickup('Fossil Fragment','🦴',23,0.5,25);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+}
+setupMobile();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true;
+      scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name);
+      score++;
+      document.getElementById('score-el').textContent='🦴 '+score+' fossils';
+      updateInv();
+      showToast('Collected '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='None found';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+var lavaGlow=0;
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+  lavaGlow+=0.04;
+
+  var spd=0.065;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.35&&Math.abs(nz-w.z)<w.d/2+0.35){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='🦕 '+(z?z.name:'Museum Corridor');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.2;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.8;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Pick up '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pirate Cove 3D — Pirate Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,220,100,0.8); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(15,8,3,0.9); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:1px solid rgba(200,150,50,0.25); }
+#loc { color:#ddaa55; font-size:13px; min-width:160px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(15,8,3,0.82); padding:8px 20px; border-radius:12px; color:#ddaa55; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(20,10,3,0.95); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(200,150,50,0.4); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(10,5,2,0.97); border:2px solid rgba(200,150,50,0.4); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#ffcc44; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(80,45,10,0.9); border:1px solid rgba(200,150,50,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(140,90,20,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(15,8,3,0.88); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(200,150,50,0.2); }
+#inv-title { color:#FFD700; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(10,5,2,0.95); color:#FFD700; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,200,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#7A4500; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#FFD700; color:#000; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(8,4,1,0.88); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(200,150,50,0.3); background:rgba(15,8,3,0.82); color:#ddaa55; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(25,12,3,0.7); border:1px solid rgba(200,150,50,0.3); border-radius:8px; color:#ddaa55; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(200,150,50,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(150,90,20,0.4); border:2px solid #FFD700; border-radius:50%; color:#FFD700; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">⚓ Ship Deck</span>
+  <span id="score-el">🪙 0 treasures</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Loot</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">None yet</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🏴‍☠️</div>
+  <div class="st" style="color:#FFD700">PIRATE COVE 3D</div>
+  <div class="sb">Ahoy, matey! Explore the pirate ship and cove! Visit the Ship Deck, Captain Cabin, Treasure Hold, Sea Cave, the rowdy Tavern, and the Crow Nest high above!<br><br>Meet Captain Blackbeard, the first mate, a chatty parrot, and a locked-up prisoner. Collect gold coins and treasure maps!<br><br><span style="color:#ffcc44">X marks the spot! Can you find all the treasure? 🗺️</span></div>
+  <button class="sbtn" onclick="beginGame()">⚓ SET SAIL</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x080402);
+scene.fog = new THREE.Fog(0x080402, 10, 50);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+var M = {
+  dwood:lm(0x3A2010),wood:lm(0x5A3818),plank:lm(0x6B4420),
+  rope:lm(0x8B7355),gold:lm(0xD4AF37),brass:lm(0xB8860B),
+  iron:lm(0x3A3A44),sail:lm(0xEEE8CC),red:lm(0x8B0000),
+  skin:lm(0xFFCBA4),stone:lm(0x4A4A55),sand:lm(0xAA9966),
+  water:lm(0x0A1A33),lantern:new THREE.MeshLambertMaterial({color:0xFF9933,emissive:0xFF6600,emissiveIntensity:0.5}),
+  black:lm(0x111111),orange:lm(0xFF7722),blk:lm(0x1A1208)
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,10),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,8,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||18); l.position.set(x,y,z); scene.add(l); return l; }
+function lantern(x,y,z){
+  var f=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.2,0.15),M.lantern); f.position.set(x,y,z); scene.add(f);
+  pl(x,y+0.3,z,0xFF9933,1.5,12);
+}
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(8,4,1,0.92)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(200,150,50,0.55)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-10,x2:10,  z1:-10,z2:10,  name:"Ship Deck",      col:"#ddaa55"},
+  {x1:12, x2:28,  z1:-8, z2:8,   name:"Captain Cabin",  col:"#ffcc44"},
+  {x1:-28,x2:-12, z1:-8, z2:8,   name:"Treasure Hold",  col:"#FFD700"},
+  {x1:-8, x2:8,   z1:12, z2:28,  name:"Sea Cave",       col:"#88aacc"},
+  {x1:-8, x2:8,   z1:-28,z2:-12, name:"Tavern",         col:"#cc8833"},
+  {x1:12, x2:26,  z1:12, z2:26,  name:"Crow Nest",      col:"#aaccee"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.SphereGeometry(0.15,8,8),lm(0xFFD700)); g.add(glow);
+  var lbl=label(icon+' '+name,'#FFD700'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g,pos:new THREE.Vector3(x,y,z),name,icon,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.2,0.3),lm(0x2A1A0A)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.27,8,8),M.skin); head.position.y=0.85; g.add(head);
+  var hat=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.3,0.3,8),M.black); hat.position.y=1.15; g.add(hat);
+  var lbl=label(icon+' '+name,'#ffcc44'); lbl.position.set(0,1.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g,pos:new THREE.Vector3(x,y,z),name,icon,lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M.dwood);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x,z,w,d});
+  return m;
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0x221408,2.0));
+  pl(0,8,0,0x664400,1.2,65);
+
+  // ── SHIP DECK (main) ──
+  box(20,0.2,20,M.plank,0,-0.1,0);
+  wallBox(0.4,3,20,-10,1.5,0); wallBox(0.4,3,20,10,1.5,0);
+  wallBox(20,3,0.4,0,1.5,-10); wallBox(20,3,0.4,0,1.5,10);
+  // Mast
+  cyl(0.18,0.18,7,M.dwood,0,3.5,-4);
+  // Sails
+  box(0.06,2.5,4.0,M.sail,0,5.5,-4);
+  box(0.06,2.0,3.0,M.sail,0,4.0,-4);
+  // Rope rigging
+  cyl(0.03,0.03,8,M.rope,-4,4,0);
+  cyl(0.03,0.03,8,M.rope,4,4,0);
+  // Cannons
+  cyl(0.15,0.18,1.2,M.iron,-8,0.4,2); cyl(0.15,0.18,1.2,M.iron,-8,0.4,-2);
+  cyl(0.15,0.18,1.2,M.iron,8,0.4,2); cyl(0.15,0.18,1.2,M.iron,8,0.4,-2);
+  // Barrels
+  cyl(0.35,0.35,0.8,M.dwood,3,0.5,-8); cyl(0.35,0.35,0.8,M.dwood,5,0.5,-8);
+  cyl(0.35,0.35,0.8,M.dwood,-3,0.5,8);
+  // Ship wheel
+  cyl(0.05,0.05,1.0,M.brass,-5,1.2,7); sph(0.5,M.dwood,-5,1.7,7);
+  for(var wi=0;wi<8;wi++){
+    var wa=wi*Math.PI/4;
+    var ws=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.9,6),M.brass);
+    ws.rotation.z=wa; ws.position.set(-5+Math.cos(wa)*0.4,1.7+Math.sin(wa)*0.4,7); scene.add(ws);
+  }
+  lantern(7,2.5,-8); lantern(-7,2.5,-8); lantern(0,2.5,8);
+  pl(0,3,0,0xFF9933,1.5,22);
+  addPickup('Gold Coin','🪙',4,0.5,4);
+  addPickup('Gold Coin','🪙',-4,0.5,-5);
+  addNPC("First Mate Scar","⚓",6,0.75,-4,[
+    "Ahoy! I be First Mate Scar, second in command of this vessel!",
+    "We have sailed these waters for 20 years, plunderin' and explorin'!",
+    "The captain is in his cabin to the east. Knock before entering, or he will make you walk the plank!",
+    "The treasure hold below decks is stuffed with loot from a dozen ships. Yarr har har!"
+  ]);
+
+  // ── CAPTAIN CABIN (east) ──
+  box(16,0.2,16,M.plank,20,-0.1,0);
+  box(16,0.15,16,M.dwood,20,3.15,0);
+  wallBox(0.4,3.3,16,12,1.65,0); wallBox(0.4,3.3,16,28,1.65,0);
+  wallBox(16,3.3,0.4,20,1.65,-8); wallBox(16,3.3,0.4,20,1.65,8);
+  // Big desk
+  box(3,0.1,2,M.dwood,22,0.85,-4); box(3,0.8,0.1,M.dwood,22,0.45,-5);
+  box(0.1,0.8,2,M.dwood,23.6,0.45,-4);
+  // Map and treasures on desk
+  box(0.9,0.02,0.6,lm(0xCCBB88),22,0.87,-4);
+  box(0.3,0.1,0.2,M.gold,21.5,0.88,-3.6);
+  // Captain bed
+  box(2.5,0.4,1.5,M.dwood,25,0.2,4);
+  box(2.5,0.12,1.5,lm(0x8B0000),25,0.46,4);
+  box(2.5,0.5,0.2,M.dwood,25,0.65,3.25);
+  // Portraits on wall
+  box(0.05,1.0,0.7,M.dwood,27.8,1.8,-4); box(0.05,1.0,0.7,M.dwood,27.8,1.8,0);
+  // Windows
+  box(0.05,0.7,0.7,lm(0x334466),28,1.8,5);
+  lantern(14,2.5,-6); lantern(26,2.5,6); lantern(14,2.5,6);
+  pl(22,2.5,-3,0xFF9922,2.0,18);
+  addPickup('Treasure Map','🗺️',18,0.5,4);
+  addPickup('Gold Coin','🪙',24,0.5,-2);
+  addNPC("Captain Blackbeard","🏴‍☠️",16,0.75,4,[
+    "YARR! Who dares enter me cabin?! Show yourself!",
+    "I am Captain Blackbeard, most feared pirate on the seven seas!",
+    "That treasure map on me desk shows the location of the greatest treasure ever buried. Hands off!",
+    "I have sailed from the Caribbean to the Pacific. No storm has ever sunk me ship!"
+  ]);
+
+  // ── TREASURE HOLD (west, below) ──
+  box(16,0.2,16,M.dwood,-20,-0.1,0);
+  box(16,0.15,16,M.blk,-20,3.15,0);
+  wallBox(0.4,3.3,16,-12,1.65,0); wallBox(0.4,3.3,16,-28,1.65,0);
+  wallBox(16,3.3,0.4,-20,1.65,-8); wallBox(16,3.3,0.4,-20,1.65,8);
+  // Treasure chests
+  for(var ti=0;ti<4;ti++){
+    var tx=-26+ti*3.5, tz=-5+Math.random()*4;
+    box(1.2,0.7,0.8,M.dwood,tx,0.35,tz);
+    box(1.2,0.1,0.8,M.gold,tx,0.73,tz);
+    box(0.4,0.4,0.05,M.brass,tx,0.45,tz+0.41);
+  }
+  // Coin piles
+  cyl(0.4,0.6,0.3,M.gold,-18,0.15,3); cyl(0.3,0.45,0.2,M.gold,-16,0.1,4);
+  sph(0.2,M.gold,-22,0.2,2); sph(0.15,M.gold,-24,0.15,3);
+  lantern(-14,2,-5); lantern(-26,2,5); lantern(-22,2,-5);
+  pl(-20,2,0,0xAA7700,1.8,20);
+  addPickup('Gold Coin','🪙',-18,0.5,-3);
+  addPickup('Gold Coin','🪙',-24,0.5,4);
+  addPickup('Treasure Map','🗺️',-26,0.5,-2);
+  addPickup('Gold Coin','🪙',-15,0.5,6);
+
+  // ── SEA CAVE (north) ──
+  box(16,0.2,16,M.sand,0,-0.1,20);
+  box(16,0.15,16,M.stone,0,3.15,20);
+  wallBox(16,3.3,0.4,0,1.65,12); wallBox(16,3.3,0.4,0,1.65,28);
+  wallBox(0.4,3.3,16,-8,1.65,20); wallBox(0.4,3.3,16,8,1.65,20);
+  // Cave stalactites
+  for(var ci=0;ci<6;ci++){
+    var cx=-6+ci*2.4, cz=14+Math.random()*12;
+    cyl(0.1,0.04,0.6+Math.random()*0.8,M.stone,cx,3.1,cz);
+  }
+  // Water pool
+  box(5,0.06,4,M.water,0,-0.08,26); box(3,0.06,3,M.water,3,-0.08,19);
+  // Cave rocks
+  sph(0.6,M.stone,-5,0.6,14); sph(0.8,M.stone,5,0.8,22); sph(0.5,M.stone,-2,0.5,26);
+  sph(0.7,M.stone,4,0.7,16); sph(0.4,M.stone,-6,0.4,20);
+  pl(0,2,20,0x336688,1.2,20); pl(-3,1.5,26,0x224466,0.8,10);
+  addPickup('Gold Coin','🪙',4,0.5,16);
+  addPickup('Treasure Map','🗺️',-3,0.5,24);
+  addNPC("Prisoner Pete","🔗",-5,0.75,16,[
+    "Help! I have been locked in this cave for a week!",
+    "Blackbeard captured me when I tried to steal his map. He left me here to rot!",
+    "I know where the real treasure is buried! Help me escape and I will share it with you!",
+    "There is a secret exit in the back of this cave, behind the big rock. Please hurry!"
+  ]);
+
+  // ── TAVERN (south) ──
+  box(16,0.2,16,M.plank,0,-0.1,-20);
+  box(16,0.15,16,M.dwood,0,3.15,-20);
+  wallBox(16,3.3,0.4,0,1.65,-12); wallBox(16,3.3,0.4,0,1.65,-28);
+  wallBox(0.4,3.3,16,-8,1.65,-20); wallBox(0.4,3.3,16,8,1.65,-20);
+  // Bar counter
+  box(8,1.0,0.8,M.dwood,0,0.5,-27);
+  box(8,0.1,1.0,M.plank,0,1.08,-27);
+  // Mugs on bar
+  for(var mi=0;mi<5;mi++){
+    cyl(0.1,0.12,0.2,M.brass,-3+mi*1.4,1.2,-27);
+  }
+  // Tables and stools
+  cyl(0.04,0.04,0.85,M.dwood,-4,0.45,-16);
+  box(1.2,0.08,1.2,M.plank,-4,0.88,-16);
+  cyl(0.04,0.04,0.85,M.dwood,4,0.45,-18);
+  box(1.2,0.08,1.2,M.plank,4,0.88,-18);
+  // Stools around tables
+  cyl(0.18,0.18,0.55,M.dwood,-5.5,0.3,-15); cyl(0.18,0.18,0.55,M.dwood,-2.5,0.3,-17);
+  cyl(0.18,0.18,0.55,M.dwood,2.5,0.3,-19); cyl(0.18,0.18,0.55,M.dwood,5.5,0.3,-17);
+  lantern(-7,2.5,-12); lantern(7,2.5,-12); lantern(-7,2.5,-27); lantern(7,2.5,-27);
+  pl(0,2.5,-20,0xFF8833,2.0,22); pl(0,1.5,-26,0xAA6611,1.2,12);
+  addPickup('Gold Coin','🪙',2,0.5,-15);
+  addPickup('Gold Coin','🪙',-5,0.5,-23);
+  addNPC("Polly the Parrot","🦜",5,0.75,-15,[
+    "SQUAWK! Pieces of eight! Pieces of eight!",
+    "I have listened to pirates for 50 years! I know all their secrets! SQUAWK!",
+    "The treasure is buried east of the big coconut tree! X marks the spot! SQUAWK!",
+    "Pretty pirate! Pretty pirate! Want a cracker? SQUAWK SQUAWK SQUAWK!"
+  ]);
+
+  // ── CROW NEST (northeast, elevated) ──
+  box(14,0.2,14,M.plank,20,4.0,20);
+  wallBox(0.4,2,14,13,5.0,20); wallBox(0.4,2,14,27,5.0,20);
+  wallBox(14,2,0.4,20,5.0,13); wallBox(14,2,0.4,20,5.0,27);
+  // Supports (tall masts)
+  cyl(0.3,0.3,4.2,M.dwood,14,2.1,14); cyl(0.3,0.3,4.2,M.dwood,26,2.1,14);
+  cyl(0.3,0.3,4.2,M.dwood,14,2.1,26); cyl(0.3,0.3,4.2,M.dwood,26,2.1,26);
+  // Telescope
+  cyl(0.12,0.1,1.5,M.brass,16,4.85,15); cyl(0.08,0.12,1.2,M.brass,16.3,5.5,14.3);
+  // Flags
+  box(0.05,1.5,0.7,M.black,26,5.75,14); box(0.05,1.2,0.6,M.red,14,5.5,26);
+  // View barrier (low walls)
+  box(14,0.4,0.1,M.plank,20,4.22,13.05); box(14,0.4,0.1,M.plank,20,4.22,26.95);
+  lantern(14,5,13); lantern(26,5,27);
+  pl(20,6,20,0xFF9933,1.5,22);
+  addPickup('Treasure Map','🗺️',18,4.5,16);
+  addPickup('Gold Coin','🪙',23,4.5,24);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+}
+setupMobile();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true;
+      scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name);
+      score++;
+      document.getElementById('score-el').textContent='🪙 '+score+' treasures';
+      updateInv();
+      showToast('Found '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='None yet';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+var shipBob=0;
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+  shipBob+=0.02;
+
+  var spd=0.065;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.35&&Math.abs(nz-w.z)<w.d/2+0.35){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='⚓ '+(z?z.name:'Open Waters');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.2;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.8;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Pick up '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

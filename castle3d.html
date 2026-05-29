@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Castle 3D — Medieval Castle Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,0.7); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(20,15,10,0.85); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:1px solid rgba(200,160,80,0.2); }
+#loc { color:#ffddaa; font-size:13px; min-width:160px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(20,15,10,0.8); padding:8px 20px; border-radius:12px; color:#ffddaa; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(20,15,10,0.92); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(255,200,80,0.4); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(15,10,5,0.97); border:2px solid rgba(200,160,80,0.4); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#ffcc44; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(80,50,10,0.9); border:1px solid rgba(200,160,80,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(150,100,20,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(20,15,10,0.85); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(200,160,80,0.2); }
+#inv-title { color:#FFD700; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(15,10,5,0.95); color:#FFD700; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,200,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#8B6914; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#FFD700; color:#000; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(10,7,3,0.85); z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(200,160,80,0.3); background:rgba(20,15,10,0.8); color:#ffddaa; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(30,20,10,0.7); border:1px solid rgba(200,160,80,0.3); border-radius:8px; color:#ffddaa; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(200,160,80,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(180,130,20,0.35); border:2px solid #FFD700; border-radius:50%; color:#FFD700; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">🏰 Great Hall</span>
+  <span id="score-el">⚔️ 0 items</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Inventory</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Empty</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🏰</div>
+  <div class="st" style="color:#FFD700">CASTLE EXPLORER 3D</div>
+  <div class="sb">Enter the ancient castle! Explore the Great Hall, Throne Room, dark Dungeon, the Armory, Wizard Tower, and Chapel.<br><br>Meet the King, brave knights, a mysterious wizard, and a dungeon prisoner. Collect gold coins and magic potions!<br><br><span style="color:#ffcc44">A great adventure awaits inside these stone walls! ⚔️</span></div>
+  <button class="sbtn" onclick="beginGame()">⚔️ ENTER THE CASTLE</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/pick up</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x100a05);
+scene.fog = new THREE.Fog(0x100a05, 10, 50);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+
+var M = {
+  stone:lm(0x666677),dstone:lm(0x444455),floor:lm(0x554433),
+  wood:lm(0x5A3A1A),gold:lm(0xD4AF37),red:lm(0x8B0000),
+  iron:lm(0x505060),blue:lm(0x1A2A6B),purple:lm(0x4A1A7A),
+  white:lm(0xEEE8D0),grey:lm(0x888899),torch:lm(0xFF6600),
+  skin:lm(0xFFCBA4),blk:lm(0x111111),green:lm(0x2A5A2A),
+  torch2:new THREE.MeshLambertMaterial({color:0xFF8800,emissive:0xFF4400,emissiveIntensity:0.5})
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,10),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,8,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||18); l.position.set(x,y,z); scene.add(l); return l; }
+function torch(x,y,z){
+  cyl(0.04,0.04,0.35,M.wood,x,y-0.1,z);
+  var f=new THREE.Mesh(new THREE.SphereGeometry(0.08,6,6),M.torch2); f.position.set(x,y+0.1,z); scene.add(f);
+  pl(x,y+0.3,z,0xFF8800,1.2,12);
+}
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(15,10,5,0.9)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(200,160,80,0.5)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-10,x2:10,  z1:-10,z2:10,  name:"Great Hall",    col:"#ffddaa"},
+  {x1:12, x2:30,  z1:-8, z2:8,   name:"Throne Room",   col:"#FFD700"},
+  {x1:-30,x2:-12, z1:-8, z2:8,   name:"Dungeon",       col:"#aa6666"},
+  {x1:-8, x2:8,   z1:12, z2:28,  name:"Armory",        col:"#aabbcc"},
+  {x1:-8, x2:8,   z1:-28,z2:-12, name:"Wizard Tower",  col:"#cc88ff"},
+  {x1:12, x2:28,  z1:12, z2:28,  name:"Chapel",        col:"#ffffff"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var glow=new THREE.Mesh(new THREE.SphereGeometry(0.18,8,8),lm(0xFFD700)); g.add(glow);
+  var lbl=label(icon+' '+name,'#FFD700'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g,pos:new THREE.Vector3(x,y,z),name,icon,collected:false});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.2,0.3),lm(0x8B0000)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.28,8,8),M.skin); head.position.y=0.85; g.add(head);
+  var lbl=label(icon+' '+name,'#ffcc44'); lbl.position.set(0,1.5,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g,pos:new THREE.Vector3(x,y,z),name,icon,lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M.stone);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x,z,w,d});
+  return m;
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0x221810,2.0));
+
+  // ── GREAT HALL ──
+  box(20,0.15,20,M.floor,0,-0.08,0);
+  box(20,0.12,20,M.stone,0,4.08,0);
+  wallBox(0.4,4.2,20,-10,2.1,0);
+  wallBox(0.4,4.2,20, 10,2.1,0);
+  wallBox(20,4.2,0.4,  0,2.1,-10);
+  wallBox(20,4.2,0.4,  0,2.1, 10);
+  // Long tables
+  box(8,0.12,1.5,M.wood,-2,0.82,2); box(8,0.12,1.5,M.wood,-2,0.82,-2);
+  box(8,0.7,0.12,M.wood,-2,0.38,0.7); box(8,0.7,0.12,M.wood,-2,0.38,-0.7);
+  // Banners
+  box(0.06,2.5,0.8,M.red,-7,2.5,-8); box(0.06,2.5,0.8,M.red, 7,2.5,-8);
+  box(0.06,2.5,0.8,M.blue,-7,2.5, 5); box(0.06,2.5,0.8,M.blue,7,2.5, 5);
+  // Torches
+  torch(-8,2.5,-7); torch(8,2.5,-7); torch(-8,2.5,5); torch(8,2.5,5);
+  // Fireplace
+  box(3,0.1,0.5,M.stone,0,0.0,-9.5); box(0.3,2.0,0.5,M.stone,-1.5,1.0,-9.5);
+  box(0.3,2.0,0.5,M.stone,1.5,1.0,-9.5); box(3,0.3,0.5,M.stone,0,2.1,-9.5);
+  var fire=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.8,0.2),M.torch2); fire.position.set(0,0.5,-9.45); scene.add(fire);
+  pl(0,1.5,-9,0xFF6600,2.5,15);
+  addPickup('Gold Coin','🪙',3,0.5,-5);
+  addPickup('Gold Coin','🪙',-3,0.5,6);
+  addNPC("King Edmund","👑",6,0.75,-6,[
+    "Welcome, brave traveler, to my great hall! I am King Edmund the Bold.",
+    "My kingdom has stood for 500 years. These stone walls have seen many battles.",
+    "The wizard Aldric resides in the south tower. He studies ancient magic — quite peculiar fellow.",
+    "If you seek adventure, visit the armory to the north. Fine weapons are stored there!"
+  ]);
+
+  // ── THRONE ROOM (east) ──
+  box(18,0.15,16,M.floor,21,-0.08,0);
+  box(18,0.12,16,M.stone,21,4.08,0);
+  wallBox(0.4,4.2,16,12,2.1,0);
+  wallBox(0.4,4.2,16,30,2.1,0);
+  wallBox(18,4.2,0.4, 21,2.1,-8);
+  wallBox(18,4.2,0.4, 21,2.1, 8);
+  // Throne
+  box(1.8,0.5,1.5,M.wood,26,0.25,-5);
+  box(1.8,2.5,0.2,M.wood,26,1.5,-5.75);
+  box(0.25,2.5,1.5,M.wood,24.9,1.5,-5);
+  box(0.25,2.5,1.5,M.wood,27.1,1.5,-5);
+  box(1.8,0.08,1.5,M.gold,26,0.52,-5);
+  // Red carpet
+  box(0.1,14,1.5,M.red,0.05,0.09,0); // just a line
+  box(14,0.01,2.0,M.red,21,0.09,0);
+  // Columns
+  cyl(0.35,0.35,4.2,M.stone,14,2.1,-5); cyl(0.35,0.35,4.2,M.stone,14,2.1,5);
+  cyl(0.35,0.35,4.2,M.stone,18,2.1,-5); cyl(0.35,0.35,4.2,M.stone,18,2.1,5);
+  torch(13,3,-7); torch(13,3,7); torch(28,3,-6); torch(28,3,6);
+  pl(26,3,-4,0xFFAA44,2,18);
+  addPickup('Gold Coin','🪙',24,0.5,3);
+  addPickup('Magic Potion','🧪',22,0.5,-3);
+  addNPC("Knight Gareth","⚔️",16,0.75,3,[
+    "Halt! Who goes there? Ah, a visitor. Welcome to the Throne Room.",
+    "I am Sir Gareth, royal knight and protector of the king.",
+    "My sword has never been defeated in battle. Forty duels and forty victories!",
+    "The dungeon to the west holds those who break the king's laws. Do not end up there!"
+  ]);
+
+  // ── DUNGEON (west) ──
+  box(18,0.15,16,M.dstone,-21,-0.08,0);
+  box(18,0.12,16,M.dstone,-21,4.08,0);
+  wallBox(0.4,4.2,16,-12,2.1,0);
+  wallBox(0.4,4.2,16,-30,2.1,0);
+  wallBox(18,4.2,0.4,-21,2.1,-8);
+  wallBox(18,4.2,0.4,-21,2.1, 8);
+  // Cells
+  for(var ci=0;ci<3;ci++){
+    var cx=-28+ci*4, cz=-5;
+    box(0.1,3,4,M.iron,cx+1.5,1.5,cz);
+    cyl(0.06,0.06,3,M.iron,cx,1.5,cz-2); cyl(0.06,0.06,3,M.iron,cx,1.5,cz-1);
+    cyl(0.06,0.06,3,M.iron,cx,1.5,cz+0); cyl(0.06,0.06,3,M.iron,cx,1.5,cz+1);
+    cyl(0.06,0.06,3,M.iron,cx,1.5,cz+2);
+  }
+  torch(-14,2.5,-5); torch(-28,2.5,5);
+  pl(-21,2,-2,0x882200,1.5,20);
+  addPickup('Gold Coin','🪙',-26,0.5,4);
+  addPickup('Magic Potion','🧪',-16,0.5,-3);
+  addNPC("Prisoner Tom","🔗",-24,0.75,-3,[
+    "Please, help me! I have been locked here for three weeks!",
+    "I was caught stealing bread for my children. The king is not always merciful...",
+    "There is a secret passage behind the east wall of this dungeon. I have heard guards speak of it.",
+    "If you ever get out, please tell my family in the village that I am alive!"
+  ]);
+
+  // ── ARMORY (north) ──
+  box(16,0.15,16,M.stone,0,-0.08,20);
+  box(16,0.12,16,M.stone,0,4.08,20);
+  wallBox(16,4.2,0.4, 0,2.1,12);
+  wallBox(16,4.2,0.4, 0,2.1,28);
+  wallBox(0.4,4.2,16,-8,2.1,20);
+  wallBox(0.4,4.2,16, 8,2.1,20);
+  // Weapon racks
+  box(4,0.08,0.4,M.wood,-4,1.5,27); box(4,0.08,0.4,M.wood,4,1.5,27);
+  for(var wi=-5;wi<=5;wi+=2.5){
+    box(0.08,1.5,0.08,M.iron,wi,0.8,27.2);
+    box(0.6,0.06,0.06,M.iron,wi,1.4,27.1);
+  }
+  // Shields on wall
+  box(0.08,0.9,0.75,M.red,-7,1.8,27.5); box(0.08,0.9,0.75,M.blue,-5,1.8,27.5);
+  box(0.08,0.9,0.75,M.red,-3,1.8,27.5);
+  // Armor stand
+  box(0.6,1.0,0.3,M.iron,4,0.65,14); box(0.5,0.6,0.5,M.iron,4,1.6,14);
+  sph(0.3,M.iron,4,2.1,14);
+  torch(-6,3,13); torch(6,3,13); torch(-6,3,27); torch(6,3,27);
+  addPickup('Gold Coin','🪙',2,0.5,16);
+  addPickup('Magic Potion','🧪',-3,0.5,24);
+  addNPC("Wizard Aldric","🧙",5,0.75,24,[
+    "Ah, a curious soul! I am Aldric, royal wizard of the castle.",
+    "I have been studying ancient spells for 40 years. Magic is all around us, if you know where to look.",
+    "That potion you may find — it grants invisibility for exactly one minute. Very useful for sneaking past guards!",
+    "The chapel to the northeast is where knights are blessed before battle. Sacred ground, that place."
+  ]);
+
+  // ── WIZARD TOWER (south) ──
+  box(16,0.15,16,M.stone,0,-0.08,-20);
+  box(16,0.12,16,M.stone,0,4.08,-20);
+  wallBox(16,4.2,0.4, 0,2.1,-12);
+  wallBox(16,4.2,0.4, 0,2.1,-28);
+  wallBox(0.4,4.2,16,-8,2.1,-20);
+  wallBox(0.4,4.2,16, 8,2.1,-20);
+  // Telescope
+  cyl(0.2,0.15,2,M.iron,3,1.5,-14); cyl(0.12,0.12,1.5,M.iron,3.3,2.3,-13.2);
+  // Bookshelves
+  box(3,2.5,0.3,M.wood,-5,1.35,-27); box(3,2.5,0.3,M.wood,5,1.35,-27);
+  for(var bi=0;bi<5;bi++){
+    box(2.5,0.08,0.2,lm(0x4A3010),-5,0.5+bi*0.5,-26.9);
+    box(2.5,0.08,0.2,lm(0x4A3010),5,0.5+bi*0.5,-26.9);
+  }
+  // Crystal ball
+  sph(0.25,lm(0x8844FF),0,1.3,-14);
+  pl(0,1.5,-14,0x8844FF,1.5,12);
+  // Cauldron
+  cyl(0.5,0.35,0.6,M.iron,-2,0.3,-16); pl(-2,1.2,-16,0x00FF88,1.2,10);
+  torch(-6,3,-27); torch(6,3,-27); torch(0,3,-12);
+  addPickup('Magic Potion','🧪',2,0.5,-17);
+  addPickup('Gold Coin','🪙',-4,0.5,-22);
+
+  // ── CHAPEL (northeast) ──
+  box(16,0.15,16,M.white,20,-0.08,20);
+  box(16,0.12,16,M.stone,20,4.08,20);
+  wallBox(0.4,4.2,16,12,2.1,20);
+  wallBox(0.4,4.2,16,28,2.1,20);
+  wallBox(16,4.2,0.4,20,2.1,12);
+  wallBox(16,4.2,0.4,20,2.1,28);
+  // Pews
+  for(var pi=0;pi<4;pi++){
+    box(4,0.4,0.5,M.wood,18,0.3,14+pi*2);
+    box(4,0.4,0.5,M.wood,22,0.3,14+pi*2);
+  }
+  // Altar
+  box(3,0.06,2,M.white,20,1.2,27); box(3,1.2,0.3,M.stone,20,0.65,26.2);
+  // Cross
+  box(0.2,2,0.2,M.gold,20,2.5,27.6); box(1.2,0.2,0.2,M.gold,20,3.0,27.6);
+  // Candles
+  cyl(0.06,0.06,0.4,M.white,19,1.35,27); cyl(0.06,0.06,0.4,M.white,21,1.35,27);
+  pl(20,3,27,0xFFEECC,1.5,14); pl(20,2,20,0xFFEECC,0.8,16);
+  torch(14,3,13); torch(27,3,13); torch(14,3,27); torch(27,3,27);
+  addPickup('Gold Coin','🪙',17,0.5,18);
+  addPickup('Magic Potion','🧪',23,0.5,22);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+}
+setupMobile();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true;
+      scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name);
+      score++;
+      document.getElementById('score-el').textContent='⚔️ '+score+' items';
+      updateInv();
+      showToast('Picked up '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Empty';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+var torchFlicker=0;
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+  torchFlicker+=0.05;
+
+  var spd=0.065;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.35&&Math.abs(nz-w.z)<w.d/2+0.35){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='🏰 '+(z?z.name:'Castle Corridor');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.2;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.8;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Pick up '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
