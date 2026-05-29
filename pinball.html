@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Pinball - Ender's Game World</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a0000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: white;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #homeBtn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: darkred;
+    color: yellow;
+    border: 2px solid yellow;
+    padding: 6px 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 100;
+  }
+  #homeBtn:hover { background: #8b0000; }
+  #topBar {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    padding: 8px 0 6px 0;
+    font-size: 16px;
+    color: yellow;
+  }
+  #gameCanvas {
+    border: 3px solid #ff6600;
+    border-radius: 4px;
+    display: block;
+    background: #0a0a1a;
+  }
+  #controls {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #888;
+    text-align: center;
+  }
+  #msg {
+    font-size: 15px;
+    color: #ffaaaa;
+    text-align: center;
+    margin-top: 4px;
+    min-height: 22px;
+  }
+</style>
+</head>
+<body>
+<a href="index.html" id="homeBtn">🏠 Home</a>
+<div id="topBar">
+  <span>Score: <span id="scoreEl">0</span></span>
+  <span>Best: <span id="bestEl">0</span></span>
+  <span>Lives: <span id="livesEl">♥♥♥</span></span>
+</div>
+<canvas id="gameCanvas" width="320" height="520"></canvas>
+<div id="msg">Press SPACE to launch ball</div>
+<div id="controls">Z / Left = Left Flipper &nbsp;|&nbsp; X / Right = Right Flipper &nbsp;|&nbsp; Tap Left/Right half to flip</div>
+
+<script>
+(function() {
+  var canvas = document.getElementById('gameCanvas');
+  var ctx = canvas.getContext('2d');
+  var scoreEl = document.getElementById('scoreEl');
+  var bestEl = document.getElementById('bestEl');
+  var livesEl = document.getElementById('livesEl');
+  var msgEl = document.getElementById('msg');
+
+  var W = canvas.width, H = canvas.height;
+
+  var score = 0, best = 0, lives = 3;
+  var state = 'ready'; // ready, playing, dead
+
+  // Physics
+  var GRAVITY = 0.25;
+  var ball = { x: W/2, y: H - 80, r: 8, vx: 0, vy: 0, active: false };
+
+  // Flippers
+  var flipperLen = 55;
+  var flipperY = H - 50;
+  var leftFlipper = { x: 60, y: flipperY, angle: 0.5, down: false };
+  var rightFlipper = { x: W - 60, y: flipperY, angle: Math.PI - 0.5, down: false };
+  var FLIPPER_UP_L = -0.45, FLIPPER_DOWN_L = 0.5;
+  var FLIPPER_UP_R = Math.PI + 0.45, FLIPPER_DOWN_R = Math.PI - 0.5;
+  var flipperSpeed = 0.18;
+
+  // Bumpers: {x, y, r, pts, flash, color}
+  var bumpers = [
+    {x:80, y:140, r:18, pts:100, flash:0, color:'#ff2222'},
+    {x:160, y:100, r:18, pts:150, flash:0, color:'#ffaa00'},
+    {x:240, y:140, r:18, pts:100, flash:0, color:'#ff2222'},
+    {x:120, y:220, r:14, pts:200, flash:0, color:'#00aaff'},
+    {x:200, y:220, r:14, pts:200, flash:0, color:'#00aaff'},
+    {x:160, y:300, r:16, pts:300, flash:0, color:'#ff44ff'}
+  ];
+
+  // Walls (left/right slanted gutters)
+  var walls = [
+    // Left wall slope at bottom
+    {x1:0, y1:H-120, x2:50, y2:H-60},
+    // Right wall slope at bottom
+    {x1:W, y1:H-120, x2:W-50, y2:H-60},
+    // Left gutter wall
+    {x1:30, y1:H-60, x2:30, y2:H},
+    // Right gutter wall
+    {x1:W-30, y1:H-60, x2:W-30, y2:H}
+  ];
+
+  var keys = {};
+  document.addEventListener('keydown', function(e) {
+    keys[e.code] = true;
+    if (e.code === 'Space') { e.preventDefault(); launch(); }
+    if (e.code === 'ArrowLeft' || e.code === 'KeyZ') { e.preventDefault(); leftFlipper.down = true; }
+    if (e.code === 'ArrowRight' || e.code === 'KeyX') { e.preventDefault(); rightFlipper.down = true; }
+  });
+  document.addEventListener('keyup', function(e) {
+    keys[e.code] = false;
+    if (e.code === 'ArrowLeft' || e.code === 'KeyZ') leftFlipper.down = false;
+    if (e.code === 'ArrowRight' || e.code === 'KeyX') rightFlipper.down = false;
+  });
+
+  // Touch controls - left half = left flipper, right half = right flipper
+  canvas.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      var rect = canvas.getBoundingClientRect();
+      var tx = t.clientX - rect.left;
+      if (tx < W / 2) leftFlipper.down = true;
+      else rightFlipper.down = true;
+    }
+    launch();
+  }, {passive:false});
+  canvas.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    leftFlipper.down = false;
+    rightFlipper.down = false;
+  }, {passive:false});
+
+  function launch() {
+    if (state === 'dead') {
+      if (lives <= 0) {
+        lives = 3;
+        score = 0;
+        scoreEl.textContent = score;
+        updateLivesDisplay();
+      }
+      state = 'ready';
+    }
+    if (state === 'ready') {
+      ball.x = W / 2;
+      ball.y = H - 80;
+      ball.vx = (Math.random() - 0.5) * 4;
+      ball.vy = -8;
+      ball.active = true;
+      state = 'playing';
+      msgEl.textContent = '';
+    }
+  }
+
+  function updateLivesDisplay() {
+    var s = '';
+    for (var i = 0; i < lives; i++) s += '♥';
+    for (var j = lives; j < 3; j++) s += '♡';
+    livesEl.textContent = s;
+  }
+
+  function getFlipperEnd(f) {
+    return {
+      x: f.x + Math.cos(f.angle) * flipperLen,
+      y: f.y + Math.sin(f.angle) * flipperLen
+    };
+  }
+
+  function distPointSegment(px, py, ax, ay, bx, by) {
+    var dx = bx - ax, dy = by - ay;
+    var lenSq = dx*dx + dy*dy;
+    if (lenSq === 0) return Math.sqrt((px-ax)*(px-ax)+(py-ay)*(py-ay));
+    var t = ((px-ax)*dx + (py-ay)*dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    var nx = ax + t*dx - px, ny = ay + t*dy - py;
+    return Math.sqrt(nx*nx + ny*ny);
+  }
+
+  function closestPointOnSeg(px, py, ax, ay, bx, by) {
+    var dx = bx - ax, dy = by - ay;
+    var lenSq = dx*dx + dy*dy;
+    if (lenSq === 0) return {x:ax, y:ay, t:0};
+    var t = ((px-ax)*dx + (py-ay)*dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    return {x: ax + t*dx, y: ay + t*dy, t:t};
+  }
+
+  function reflectOffSegment(ball, ax, ay, bx, by, elasticity) {
+    var dx = bx - ax, dy = by - ay;
+    var len = Math.sqrt(dx*dx+dy*dy);
+    if (len === 0) return false;
+    var nx = -dy/len, ny = dx/len; // normal
+    var dot = ball.vx*nx + ball.vy*ny;
+    if (dot < 0) {
+      ball.vx -= 2*dot*nx * elasticity;
+      ball.vy -= 2*dot*ny * elasticity;
+      return true;
+    }
+    return false;
+  }
+
+  function update() {
+    // Update flipper angles
+    var targetL = leftFlipper.down ? FLIPPER_UP_L : FLIPPER_DOWN_L;
+    var targetR = rightFlipper.down ? FLIPPER_UP_R : FLIPPER_DOWN_R;
+    leftFlipper.angle += (targetL - leftFlipper.angle) * 0.35;
+    rightFlipper.angle += (targetR - rightFlipper.angle) * 0.35;
+
+    if (state !== 'playing') return;
+
+    // Ball physics
+    ball.vy += GRAVITY;
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    // Speed cap
+    var spd = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy);
+    if (spd > 18) { ball.vx = ball.vx/spd*18; ball.vy = ball.vy/spd*18; }
+
+    // Wall collisions
+    if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx = Math.abs(ball.vx) * 0.85; }
+    if (ball.x + ball.r > W) { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx) * 0.85; }
+    if (ball.y - ball.r < 10) { ball.y = 10 + ball.r; ball.vy = Math.abs(ball.vy) * 0.85; }
+
+    // Bumper collisions
+    for (var i = 0; i < bumpers.length; i++) {
+      var b = bumpers[i];
+      var dx = ball.x - b.x, dy = ball.y - b.y;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < ball.r + b.r) {
+        var nx = dx/dist, ny = dy/dist;
+        ball.x = b.x + nx * (ball.r + b.r + 1);
+        ball.y = b.y + ny * (ball.r + b.r + 1);
+        var dot = ball.vx*nx + ball.vy*ny;
+        ball.vx = (ball.vx - 2*dot*nx) * 1.1;
+        ball.vy = (ball.vy - 2*dot*ny) * 1.1;
+        if (spd < 8) { ball.vx *= 1.5; ball.vy *= 1.5; }
+        score += b.pts;
+        scoreEl.textContent = score;
+        b.flash = 12;
+      }
+      if (b.flash > 0) b.flash--;
+    }
+
+    // Flipper collisions
+    var flippers = [
+      {pivot: leftFlipper, end: getFlipperEnd(leftFlipper)},
+      {pivot: rightFlipper, end: getFlipperEnd(rightFlipper)}
+    ];
+    for (var fi = 0; fi < flippers.length; fi++) {
+      var fp = flippers[fi].pivot;
+      var fe = flippers[fi].end;
+      var d = distPointSegment(ball.x, ball.y, fp.x, fp.y, fe.x, fe.y);
+      if (d < ball.r + 4) {
+        var cp = closestPointOnSeg(ball.x, ball.y, fp.x, fp.y, fe.x, fe.y);
+        var nx2 = ball.x - cp.x, ny2 = ball.y - cp.y;
+        var nd = Math.sqrt(nx2*nx2 + ny2*ny2);
+        if (nd > 0) { nx2 /= nd; ny2 /= nd; } else { nx2 = 0; ny2 = -1; }
+        var sep = ball.r + 4 - d;
+        ball.x += nx2 * sep;
+        ball.y += ny2 * sep;
+        var dot2 = ball.vx*nx2 + ball.vy*ny2;
+        if (dot2 < 0) {
+          ball.vx -= 2*dot2*nx2;
+          ball.vy -= 2*dot2*ny2;
+          ball.vy -= 2; // extra upward kick
+        }
+        ball.vy = Math.min(ball.vy, -2);
+      }
+    }
+
+    // Slanted gutter walls
+    // Left slope: from (0, H-120) to (50, H-60)
+    var gd1 = distPointSegment(ball.x, ball.y, 0, H-120, 50, H-60);
+    if (gd1 < ball.r + 2) reflectOffSegment(ball, 0, H-120, 50, H-60, 0.85);
+    // Right slope
+    var gd2 = distPointSegment(ball.x, ball.y, W, H-120, W-50, H-60);
+    if (gd2 < ball.r + 2) reflectOffSegment(ball, W, H-120, W-50, H-60, 0.85);
+
+    // Ball lost
+    if (ball.y - ball.r > H) {
+      lives--;
+      updateLivesDisplay();
+      if (lives <= 0) {
+        if (score > best) { best = score; bestEl.textContent = best; }
+        state = 'dead';
+        msgEl.textContent = 'Game Over! Score: ' + score + ' | Press SPACE to restart';
+      } else {
+        state = 'ready';
+        ball.active = false;
+        ball.x = W/2; ball.y = H-80; ball.vx = 0; ball.vy = 0;
+        msgEl.textContent = 'Ball lost! Lives: ' + lives + ' | Press SPACE to launch';
+      }
+    }
+  }
+
+  function drawFlipper(f) {
+    var end = getFlipperEnd(f);
+    ctx.strokeStyle = '#ffcc00';
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(f.x, f.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+    ctx.strokeStyle = '#ff8800';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(f.x, f.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Side walls
+    ctx.strokeStyle = '#334';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W, 0); ctx.lineTo(W, H); ctx.stroke();
+
+    // Gutter slopes
+    ctx.strokeStyle = '#556';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(0, H-120); ctx.lineTo(50, H-60); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W, H-120); ctx.lineTo(W-50, H-60); ctx.stroke();
+
+    // Lane guides (dotted lines)
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6,8]);
+    ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H*0.5); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Bumpers
+    for (var i = 0; i < bumpers.length; i++) {
+      var b = bumpers[i];
+      var lit = b.flash > 0;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+      var grad = ctx.createRadialGradient(b.x-4, b.y-4, 2, b.x, b.y, b.r);
+      var c = lit ? '#ffffff' : b.color;
+      grad.addColorStop(0, lit ? '#ffffff' : lighten(b.color));
+      grad.addColorStop(1, lit ? b.color : darken(b.color));
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.strokeStyle = lit ? '#ffffff' : b.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      if (lit) {
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = 20;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+      ctx.fillStyle = lit ? '#000' : '#fff';
+      ctx.font = 'bold 10px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(b.pts, b.x, b.y);
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+
+    // Flippers
+    drawFlipper(leftFlipper);
+    drawFlipper(rightFlipper);
+
+    // Ball
+    if (ball.active || state === 'ready' || state === 'dead') {
+      ctx.beginPath();
+      ctx.arc(state === 'ready' ? W/2 : ball.x, state === 'ready' ? H-80 : ball.y, ball.r, 0, Math.PI*2);
+      var ballGrad = ctx.createRadialGradient(
+        (state === 'ready' ? W/2 : ball.x) - 3,
+        (state === 'ready' ? H-80 : ball.y) - 3,
+        1,
+        state === 'ready' ? W/2 : ball.x,
+        state === 'ready' ? H-80 : ball.y,
+        ball.r
+      );
+      ballGrad.addColorStop(0, '#ffffff');
+      ballGrad.addColorStop(1, '#cccccc');
+      ctx.fillStyle = ballGrad;
+      ctx.fill();
+      ctx.shadowColor = 'rgba(255,255,255,0.6)';
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // Score flash for bumper hits
+    if (state === 'dead') {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(0, H/2 - 50, W, 100);
+      ctx.fillStyle = '#ff4444';
+      ctx.font = 'bold 28px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('GAME OVER', W/2, H/2 - 10);
+      ctx.fillStyle = 'yellow';
+      ctx.font = '16px Courier New';
+      ctx.fillText('Score: ' + score, W/2, H/2 + 20);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  function lighten(hex) {
+    var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    r = Math.min(255, r + 80); g = Math.min(255, g + 80); b = Math.min(255, b + 80);
+    return '#'+r.toString(16).padStart(2,'0')+g.toString(16).padStart(2,'0')+b.toString(16).padStart(2,'0');
+  }
+  function darken(hex) {
+    var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    r = Math.max(0, r - 60); g = Math.max(0, g - 60); b = Math.max(0, b - 60);
+    return '#'+r.toString(16).padStart(2,'0')+g.toString(16).padStart(2,'0')+b.toString(16).padStart(2,'0');
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  updateLivesDisplay();
+  loop();
+})();
+</script>
+</body>
+</html>

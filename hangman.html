@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hangman - Ender's Game World</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #1a0000;
+  font-family: Arial, sans-serif;
+  color: #fff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+}
+#home-btn {
+  position: absolute;
+  top: 10px; left: 10px;
+  background: darkred;
+  color: yellow;
+  border: 2px solid yellow;
+  padding: 6px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: bold;
+}
+#home-btn:hover { background: #8b0000; }
+h1 { color: yellow; font-size: 28px; margin: 10px 0 4px; }
+#category-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.cat-btn {
+  background: #3a0000;
+  color: #ffaaaa;
+  border: 1px solid #ff6666;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+.cat-btn.active, .cat-btn:hover { background: darkred; color: yellow; border-color: yellow; }
+#game-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 480px;
+}
+canvas {
+  background: #2a0000;
+  border-radius: 10px;
+  border: 2px solid #8b0000;
+}
+#word-display {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  min-height: 50px;
+  align-items: center;
+}
+.letter-blank {
+  width: 34px;
+  height: 40px;
+  border-bottom: 3px solid yellow;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: yellow;
+}
+#message {
+  font-size: 18px;
+  font-weight: bold;
+  color: yellow;
+  min-height: 28px;
+  text-align: center;
+}
+#hint-area {
+  color: #ffaaaa;
+  font-size: 13px;
+  min-height: 20px;
+}
+#alphabet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: center;
+  max-width: 420px;
+}
+.alpha-btn {
+  width: 38px;
+  height: 38px;
+  background: #555;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.alpha-btn:hover:not(:disabled) { filter: brightness(1.3); }
+.alpha-btn:disabled { opacity: 0.35; cursor: default; }
+.alpha-btn.wrong { background: #8b0000; }
+.alpha-btn.right  { background: #538d4e; }
+#new-game-btn {
+  padding: 10px 24px;
+  background: darkred;
+  color: yellow;
+  border: 2px solid yellow;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 6px;
+}
+#new-game-btn:hover { background: #8b0000; }
+#wrong-count {
+  color: #ffaaaa;
+  font-size: 14px;
+}
+</style>
+</head>
+<body>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<h1>🪢 Hangman</h1>
+<div id="category-bar"></div>
+<div id="game-area">
+  <canvas id="canvas" width="240" height="220"></canvas>
+  <div id="wrong-count">Wrong guesses: 0 / 6</div>
+  <div id="word-display"></div>
+  <div id="hint-area"></div>
+  <div id="message"></div>
+  <div id="alphabet"></div>
+  <button id="new-game-btn" onclick="newGame()">New Game</button>
+</div>
+
+<script>
+const CATEGORIES = {
+  Animals:   ['ELEPHANT','GIRAFFE','PENGUIN','DOLPHIN','CROCODILE','KANGAROO','CHEETAH','GORILLA','HAMSTER','JAGUAR','LEOPARD','OCTOPUS','PANTHER','RACCOON','SCORPION','TOUCAN','WALRUS','BUFFALO','CARIBOU','FALCON'],
+  Countries: ['FRANCE','BRAZIL','JAPAN','CANADA','MEXICO','INDIA','EGYPT','RUSSIA','TURKEY','NORWAY','SWEDEN','GREECE','POLAND','UKRAINE','VIETNAM','KENYA','GHANA','CHILE','PERU','CUBA'],
+  Sports:    ['SOCCER','TENNIS','HOCKEY','CRICKET','SWIMMING','CYCLING','BOXING','ARCHERY','SURFING','KARATE','BOWLING','FENCING','SAILING','CLIMBING','SKIING','ROWING','DIVING','WRESTLING','GYMNASTICS','VOLLEYBALL'],
+  Foods:     ['PIZZA','BURGER','SUSHI','TACOS','PASTA','SALMON','MANGO','BANANA','PRETZEL','WAFFLE','BROWNIE','COOKIE','NOODLE','OYSTER','PICKLE','QUINOA','RADISH','SPINACH','TOMATO','YOGURT']
+};
+
+let currentCat = 'Animals';
+let word = '';
+let guessed = new Set();
+let wrong = 0;
+const MAX_WRONG = 6;
+
+function setCategory(cat) {
+  currentCat = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+  newGame();
+}
+
+function buildCategoryBar() {
+  const bar = document.getElementById('category-bar');
+  bar.innerHTML = '';
+  Object.keys(CATEGORIES).forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn' + (cat === currentCat ? ' active' : '');
+    btn.textContent = cat;
+    btn.dataset.cat = cat;
+    btn.onclick = () => setCategory(cat);
+    bar.appendChild(btn);
+  });
+}
+
+function newGame() {
+  const words = CATEGORIES[currentCat];
+  word = words[Math.floor(Math.random() * words.length)];
+  guessed = new Set();
+  wrong = 0;
+  document.getElementById('message').textContent = '';
+  document.getElementById('hint-area').textContent = 'Category: ' + currentCat;
+  renderWordDisplay();
+  renderAlphabet();
+  renderCanvas();
+  updateWrongCount();
+}
+
+function renderWordDisplay() {
+  const div = document.getElementById('word-display');
+  div.innerHTML = '';
+  word.split('').forEach(letter => {
+    const span = document.createElement('div');
+    span.className = 'letter-blank';
+    span.textContent = (letter === ' ' || guessed.has(letter)) ? (letter === ' ' ? '' : letter) : '';
+    if (letter === ' ') span.style.borderBottom = 'none';
+    div.appendChild(span);
+  });
+}
+
+function renderAlphabet() {
+  const div = document.getElementById('alphabet');
+  div.innerHTML = '';
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(l => {
+    const btn = document.createElement('button');
+    btn.className = 'alpha-btn';
+    btn.textContent = l;
+    btn.id = 'alpha-' + l;
+    if (guessed.has(l)) {
+      btn.disabled = true;
+      btn.classList.add(word.includes(l) ? 'right' : 'wrong');
+    }
+    btn.onclick = () => guess(l);
+    div.appendChild(btn);
+  });
+}
+
+function updateWrongCount() {
+  document.getElementById('wrong-count').textContent = 'Wrong guesses: ' + wrong + ' / ' + MAX_WRONG;
+}
+
+function guess(letter) {
+  if (guessed.has(letter) || wrong >= MAX_WRONG) return;
+  guessed.add(letter);
+  const btn = document.getElementById('alpha-' + letter);
+  if (btn) {
+    btn.disabled = true;
+    if (word.includes(letter)) {
+      btn.classList.add('right');
+    } else {
+      btn.classList.add('wrong');
+      wrong++;
+      renderCanvas();
+      updateWrongCount();
+    }
+  }
+  renderWordDisplay();
+  checkWin();
+}
+
+function checkWin() {
+  const allGuessed = word.split('').every(l => l === ' ' || guessed.has(l));
+  if (allGuessed) {
+    document.getElementById('message').textContent = '🎉 You got it! Well done!';
+    disableAll();
+  } else if (wrong >= MAX_WRONG) {
+    document.getElementById('message').textContent = '💀 Game Over! Word: ' + word;
+    revealWord();
+    disableAll();
+  }
+}
+
+function revealWord() {
+  word.split('').forEach(l => guessed.add(l));
+  renderWordDisplay();
+}
+
+function disableAll() {
+  document.querySelectorAll('.alpha-btn').forEach(b => b.disabled = true);
+}
+
+function renderCanvas() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#ff6666';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+
+  // Gallows
+  ctx.beginPath();
+  ctx.moveTo(20, 210); ctx.lineTo(220, 210); // base
+  ctx.moveTo(60, 210); ctx.lineTo(60, 20);   // pole
+  ctx.moveTo(60, 20);  ctx.lineTo(160, 20);  // top bar
+  ctx.moveTo(160, 20); ctx.lineTo(160, 50);  // rope
+  ctx.stroke();
+
+  if (wrong < 1) return;
+  // Head
+  ctx.beginPath();
+  ctx.arc(160, 70, 22, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (wrong < 2) return;
+  // Body
+  ctx.beginPath();
+  ctx.moveTo(160, 92); ctx.lineTo(160, 150);
+  ctx.stroke();
+
+  if (wrong < 3) return;
+  // Left arm
+  ctx.beginPath();
+  ctx.moveTo(160, 110); ctx.lineTo(125, 135);
+  ctx.stroke();
+
+  if (wrong < 4) return;
+  // Right arm
+  ctx.beginPath();
+  ctx.moveTo(160, 110); ctx.lineTo(195, 135);
+  ctx.stroke();
+
+  if (wrong < 5) return;
+  // Left leg
+  ctx.beginPath();
+  ctx.moveTo(160, 150); ctx.lineTo(130, 185);
+  ctx.stroke();
+
+  if (wrong < 6) return;
+  // Right leg
+  ctx.beginPath();
+  ctx.moveTo(160, 150); ctx.lineTo(190, 185);
+  ctx.stroke();
+}
+
+document.addEventListener('keydown', e => {
+  if (/^[a-zA-Z]$/.test(e.key)) guess(e.key.toUpperCase());
+});
+
+buildCategoryBar();
+newGame();
+</script>
+</body>
+</html>

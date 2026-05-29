@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Simon Says - Ender's Game World</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a0000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: white;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  #homeBtn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: darkred;
+    color: yellow;
+    border: 2px solid yellow;
+    padding: 6px 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 100;
+  }
+  #homeBtn:hover { background: #8b0000; }
+  h1 {
+    color: yellow;
+    font-size: 26px;
+    margin-bottom: 6px;
+    text-shadow: 2px 2px 0 #8b0000;
+  }
+  #scoreRow {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 14px;
+    font-size: 16px;
+    color: yellow;
+  }
+  #board {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: #111;
+    border: 6px solid #444;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 8px;
+    padding: 8px;
+    overflow: hidden;
+  }
+  .btn {
+    border-radius: 50%;
+    cursor: pointer;
+    transition: filter 0.05s;
+    border: none;
+    outline: none;
+  }
+  .btn:nth-child(1) { background: radial-gradient(circle at 35% 35%, #ff6666, #cc0000); border-radius: 50% 20% 20% 20%; }
+  .btn:nth-child(2) { background: radial-gradient(circle at 65% 35%, #6666ff, #0000cc); border-radius: 20% 50% 20% 20%; }
+  .btn:nth-child(3) { background: radial-gradient(circle at 35% 65%, #ffff66, #cccc00); border-radius: 20% 20% 20% 50%; }
+  .btn:nth-child(4) { background: radial-gradient(circle at 65% 65%, #66ff66, #00cc00); border-radius: 20% 20% 50% 20%; }
+  .btn.lit:nth-child(1) { background: radial-gradient(circle at 35% 35%, #ffaaaa, #ff3333); box-shadow: 0 0 30px #ff0000; }
+  .btn.lit:nth-child(2) { background: radial-gradient(circle at 65% 35%, #aaaaff, #3333ff); box-shadow: 0 0 30px #0000ff; }
+  .btn.lit:nth-child(3) { background: radial-gradient(circle at 35% 65%, #ffffaa, #ffff33); box-shadow: 0 0 30px #ffff00; }
+  .btn.lit:nth-child(4) { background: radial-gradient(circle at 65% 65%, #aaffaa, #33ff33); box-shadow: 0 0 30px #00ff00; }
+  .btn.pressed { filter: brightness(1.8); transform: scale(0.95); }
+  #centerCircle {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px; height: 80px;
+    background: #1a0000;
+    border-radius: 50%;
+    border: 4px solid #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #888;
+    text-align: center;
+    z-index: 10;
+    pointer-events: none;
+  }
+  #msg {
+    margin-top: 16px;
+    font-size: 18px;
+    color: #ffaaaa;
+    text-align: center;
+    min-height: 28px;
+    font-weight: bold;
+  }
+  #startBtn {
+    margin-top: 16px;
+    background: darkred;
+    color: yellow;
+    border: 2px solid yellow;
+    padding: 10px 30px;
+    border-radius: 10px;
+    font-size: 18px;
+    font-family: 'Courier New', monospace;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  #startBtn:hover { background: #8b0000; }
+  #labels {
+    display: flex;
+    gap: 12px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #888;
+  }
+  .label-item { display: flex; align-items: center; gap: 4px; }
+  .label-dot { width: 12px; height: 12px; border-radius: 50%; }
+</style>
+</head>
+<body>
+<a href="index.html" id="homeBtn">🏠 Home</a>
+<h1>🎮 Simon Says</h1>
+<div id="scoreRow">
+  <span>Round: <span id="roundDisplay">0</span></span>
+  <span>Best: <span id="bestDisplay">0</span></span>
+</div>
+<div id="board">
+  <div class="btn" id="btn0" data-i="0"></div>
+  <div class="btn" id="btn1" data-i="1"></div>
+  <div class="btn" id="btn2" data-i="2"></div>
+  <div class="btn" id="btn3" data-i="3"></div>
+  <div id="centerCircle">SIMON<br>SAYS</div>
+</div>
+<div id="msg">Press Start to play!</div>
+<button id="startBtn">▶ Start</button>
+<div id="labels">
+  <div class="label-item"><div class="label-dot" style="background:#cc0000"></div> Red = A</div>
+  <div class="label-item"><div class="label-dot" style="background:#0000cc"></div> Blue = S</div>
+  <div class="label-item"><div class="label-dot" style="background:#cccc00"></div> Yellow = D</div>
+  <div class="label-item"><div class="label-dot" style="background:#00cc00"></div> Green = F</div>
+</div>
+
+<script>
+(function() {
+  var btns = [
+    document.getElementById('btn0'),
+    document.getElementById('btn1'),
+    document.getElementById('btn2'),
+    document.getElementById('btn3')
+  ];
+  var roundEl = document.getElementById('roundDisplay');
+  var bestEl = document.getElementById('bestDisplay');
+  var msgEl = document.getElementById('msg');
+  var startBtn = document.getElementById('startBtn');
+
+  var sequence = [];
+  var playerIndex = 0;
+  var round = 0;
+  var best = 0;
+  var accepting = false;
+  var playing = false;
+
+  // Web Audio
+  var AudioCtx = window.AudioContext || window.webkitAudioContext;
+  var audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new AudioCtx();
+  }
+
+  var tones = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+  var colors = ['red', 'blue', 'yellow', 'green'];
+
+  function playTone(i, duration) {
+    ensureAudio();
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = tones[i];
+    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + duration);
+  }
+
+  function playErrorSound() {
+    ensureAudio();
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.value = 100;
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.6);
+  }
+
+  function lightBtn(i, duration) {
+    btns[i].classList.add('lit');
+    playTone(i, duration / 1000);
+    setTimeout(function() { btns[i].classList.remove('lit'); }, duration);
+  }
+
+  function flashBtn(i) {
+    btns[i].classList.add('pressed');
+    playTone(i, 0.2);
+    setTimeout(function() { btns[i].classList.remove('pressed'); }, 150);
+  }
+
+  function playSequence() {
+    accepting = false;
+    msgEl.textContent = 'Watch the pattern...';
+    var speed = Math.max(300, 700 - round * 20);
+    var delay = 600;
+    for (var k = 0; k < sequence.length; k++) {
+      (function(idx, d) {
+        setTimeout(function() {
+          lightBtn(sequence[idx], speed - 50);
+        }, d);
+      })(k, delay + k * speed);
+    }
+    setTimeout(function() {
+      accepting = true;
+      playerIndex = 0;
+      msgEl.textContent = 'Your turn! Repeat the pattern.';
+    }, delay + sequence.length * speed + 200);
+  }
+
+  function nextRound() {
+    round++;
+    roundEl.textContent = round;
+    sequence.push(Math.floor(Math.random() * 4));
+    setTimeout(playSequence, 500);
+  }
+
+  function startGame() {
+    ensureAudio();
+    sequence = [];
+    playerIndex = 0;
+    round = 0;
+    playing = true;
+    accepting = false;
+    startBtn.textContent = '↺ Restart';
+    msgEl.textContent = 'Get ready...';
+    nextRound();
+  }
+
+  function handlePress(i) {
+    if (!accepting || !playing) return;
+    flashBtn(i);
+    if (i === sequence[playerIndex]) {
+      playerIndex++;
+      if (playerIndex === sequence.length) {
+        accepting = false;
+        if (round > best) { best = round; bestEl.textContent = best; }
+        msgEl.textContent = 'Correct! Round ' + round + ' done! ✓';
+        setTimeout(nextRound, 1000);
+      }
+    } else {
+      // Wrong!
+      accepting = false;
+      playing = false;
+      playErrorSound();
+      // Flash wrong answer red briefly
+      btns[i].style.boxShadow = '0 0 40px #ff0000';
+      if (round > best) { best = round - 1; bestEl.textContent = best; }
+      msgEl.textContent = '❌ Wrong! You reached round ' + round + '. Press Start!';
+      setTimeout(function() {
+        btns[i].style.boxShadow = '';
+      }, 600);
+      startBtn.textContent = '▶ Play Again';
+    }
+  }
+
+  btns.forEach(function(btn, i) {
+    btn.addEventListener('mousedown', function(e) { e.preventDefault(); handlePress(i); });
+    btn.addEventListener('touchstart', function(e) { e.preventDefault(); handlePress(i); }, {passive:false});
+  });
+
+  startBtn.addEventListener('click', startGame);
+  startBtn.addEventListener('touchstart', function(e) { e.preventDefault(); startGame(); }, {passive:false});
+
+  // Keyboard controls
+  var keyMap = {'KeyA':0, 'KeyS':1, 'KeyD':2, 'KeyF':3};
+  document.addEventListener('keydown', function(e) {
+    if (keyMap[e.code] !== undefined) handlePress(keyMap[e.code]);
+    if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); startGame(); }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Helicopter - Ender's Game World</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a0000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: white;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #homeBtn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: darkred;
+    color: yellow;
+    border: 2px solid yellow;
+    padding: 6px 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 100;
+  }
+  #homeBtn:hover { background: #8b0000; }
+  h1 {
+    color: yellow;
+    font-size: 22px;
+    margin-bottom: 6px;
+    text-shadow: 2px 2px 0 #8b0000;
+  }
+  #gameCanvas {
+    border: 3px solid #ff6600;
+    border-radius: 6px;
+    display: block;
+  }
+  #ui {
+    display: flex;
+    justify-content: space-between;
+    width: 520px;
+    max-width: 95vw;
+    margin-top: 6px;
+    font-size: 15px;
+    color: yellow;
+  }
+  #msg {
+    margin-top: 6px;
+    font-size: 14px;
+    color: #ffaaaa;
+    text-align: center;
+    min-height: 20px;
+  }
+</style>
+</head>
+<body>
+<a href="index.html" id="homeBtn">🏠 Home</a>
+<h1>🚁 Helicopter</h1>
+<canvas id="gameCanvas" width="520" height="320"></canvas>
+<div id="ui">
+  <span>Distance: <span id="distEl">0</span>m</span>
+  <span>Best: <span id="bestEl">0</span>m</span>
+  <span>Speed: <span id="speedEl">1.0</span>x</span>
+</div>
+<div id="msg">Click / Tap / Hold SPACE to fly!</div>
+
+<script>
+(function() {
+  var canvas = document.getElementById('gameCanvas');
+  var ctx = canvas.getContext('2d');
+  var distEl = document.getElementById('distEl');
+  var bestEl = document.getElementById('bestEl');
+  var speedEl = document.getElementById('speedEl');
+  var msgEl = document.getElementById('msg');
+
+  var W = canvas.width, H = canvas.height;
+
+  var state = 'idle'; // idle, playing, dead
+  var dist = 0, best = 0, frame = 0;
+  var gameSpeed = 3;
+  var thrust = false;
+
+  var HELI_X = 100, HELI_W = 60, HELI_H = 24;
+  var heli = { y: H/2, vy: 0 };
+  var GRAVITY = 0.25, THRUST = -0.5;
+
+  // Cave segments - array of {top, bottom} ceiling/floor heights
+  var SEG_W = 40;
+  var numSegs = Math.ceil(W / SEG_W) + 4;
+  var segments = [];
+  var segOffset = 0;
+
+  // Obstacles inside cave
+  var obstacles = [];
+  var obstTimer = 0;
+
+  // Background parallax
+  var bgStars = [];
+  for (var i = 0; i < 30; i++) {
+    bgStars.push({x: Math.random()*W, y: Math.random()*H, size: Math.random()*2+1, speed: Math.random()*0.5+0.2});
+  }
+
+  // Rotor animation
+  var rotorAngle = 0;
+
+  function initSegments() {
+    segments = [];
+    var topH = 60, botH = H - 60;
+    var gap = botH - topH;
+    for (var i = 0; i < numSegs + 2; i++) {
+      segments.push({top: topH, bottom: botH});
+    }
+  }
+
+  function getNextSeg() {
+    var last = segments[segments.length - 1];
+    var minGap = Math.max(90, 150 - dist/30);
+    var topNew = last.top + (Math.random() - 0.5) * 20;
+    topNew = Math.max(20, Math.min(H * 0.4, topNew));
+    var botNew = topNew + minGap + Math.random() * 40;
+    botNew = Math.min(H - 20, botNew);
+    if (botNew - topNew < minGap) { topNew = botNew - minGap; topNew = Math.max(20, topNew); }
+    return {top: topNew, bottom: botNew};
+  }
+
+  function startGame() {
+    state = 'playing';
+    dist = 0; frame = 0; gameSpeed = 3;
+    heli.y = H/2; heli.vy = 0;
+    thrust = false;
+    obstacles = [];
+    obstTimer = 0;
+    initSegments();
+    segOffset = 0;
+    msgEl.textContent = '';
+    distEl.textContent = '0';
+  }
+
+  // Controls
+  var holding = false;
+  document.addEventListener('keydown', function(e) {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      holding = true;
+      if (state !== 'playing') startGame();
+    }
+  });
+  document.addEventListener('keyup', function(e) {
+    if (e.code === 'Space') holding = false;
+  });
+  canvas.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    holding = true;
+    if (state !== 'playing') startGame();
+  });
+  canvas.addEventListener('mouseup', function() { holding = false; });
+  canvas.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    holding = true;
+    if (state !== 'playing') startGame();
+  }, {passive:false});
+  canvas.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    holding = false;
+  }, {passive:false});
+
+  function update() {
+    if (state !== 'playing') return;
+
+    frame++;
+    dist = Math.floor(frame * gameSpeed / 10);
+    gameSpeed = 3 + frame / 600;
+    if (gameSpeed > 9) gameSpeed = 9;
+
+    // Heli physics
+    if (holding) heli.vy += THRUST;
+    else heli.vy += GRAVITY;
+    heli.vy = Math.max(-6, Math.min(6, heli.vy));
+    heli.y += heli.vy;
+
+    rotorAngle += 0.3 + (holding ? 0.2 : 0);
+
+    // Rotor anim
+    // Scroll cave
+    segOffset += gameSpeed;
+    while (segOffset >= SEG_W) {
+      segOffset -= SEG_W;
+      segments.shift();
+      segments.push(getNextSeg());
+    }
+
+    // Obstacle update
+    obstTimer++;
+    if (obstTimer > 80 - dist/50) {
+      obstTimer = 0;
+      // Place obstacle inside cave at screen right
+      var rightSeg = segments[segments.length - 1];
+      var maxH = rightSeg.bottom - rightSeg.top - 50;
+      if (maxH > 20) {
+        var oh = 20 + Math.random() * Math.min(60, maxH - 20);
+        var oy = rightSeg.top + (Math.random() * (rightSeg.bottom - rightSeg.top - oh));
+        obstacles.push({x: W + 30, y: oy, w: 18, h: oh});
+      }
+    }
+    for (var i = obstacles.length - 1; i >= 0; i--) {
+      obstacles[i].x -= gameSpeed;
+      if (obstacles[i].x + obstacles[i].w < 0) obstacles.splice(i, 1);
+    }
+
+    // Collision: cave walls (check at heli position)
+    var heliCx = HELI_X + HELI_W/2;
+    var segIdx = Math.floor((heliCx + segOffset) / SEG_W);
+    segIdx = Math.max(0, Math.min(segments.length - 1, segIdx));
+    var seg = segments[segIdx];
+
+    var pad = 4;
+    if (heli.y - HELI_H/2 < seg.top + pad) { die(); return; }
+    if (heli.y + HELI_H/2 > seg.bottom - pad) { die(); return; }
+    if (heli.y - HELI_H/2 < 0 || heli.y + HELI_H/2 > H) { die(); return; }
+
+    // Collision: obstacles
+    for (var j = 0; j < obstacles.length; j++) {
+      var o = obstacles[j];
+      if (HELI_X + pad < o.x + o.w - pad && HELI_X + HELI_W - pad > o.x + pad &&
+          heli.y - HELI_H/2 + pad < o.y + o.h - pad && heli.y + HELI_H/2 - pad > o.y + pad) {
+        die(); return;
+      }
+    }
+
+    distEl.textContent = dist;
+    speedEl.textContent = gameSpeed.toFixed(1);
+  }
+
+  function die() {
+    state = 'dead';
+    if (dist > best) { best = dist; bestEl.textContent = best; }
+    msgEl.textContent = 'Crashed! ' + dist + 'm | Click/Tap/Space to retry';
+  }
+
+  function drawHeli(cx, cy) {
+    // Body
+    ctx.fillStyle = '#ffcc00';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, HELI_W/2, HELI_H/2, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Cockpit window
+    ctx.fillStyle = '#88ddff';
+    ctx.beginPath();
+    ctx.ellipse(cx + 14, cy - 2, 10, 8, -0.2, 0, Math.PI*2);
+    ctx.fill();
+    // Tail
+    ctx.fillStyle = '#ffaa00';
+    ctx.beginPath();
+    ctx.moveTo(cx - 26, cy);
+    ctx.lineTo(cx - 44, cy - 8);
+    ctx.lineTo(cx - 44, cy + 4);
+    ctx.closePath();
+    ctx.fill();
+    // Tail rotor
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.save();
+    ctx.translate(cx - 44, cy - 2);
+    ctx.rotate(rotorAngle * 2);
+    ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(0, 10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.stroke();
+    ctx.restore();
+    // Main rotor
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.save();
+    ctx.translate(cx, cy - HELI_H/2 - 2);
+    ctx.rotate(rotorAngle);
+    ctx.beginPath(); ctx.moveTo(-30, 0); ctx.lineTo(30, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 30); ctx.stroke();
+    ctx.restore();
+    // Landing skids
+    ctx.strokeStyle = '#aa8800';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - 15, cy + HELI_H/2); ctx.lineTo(cx - 15, cy + HELI_H/2 + 8); ctx.moveTo(cx - 15, cy + HELI_H/2 + 8); ctx.lineTo(cx + 20, cy + HELI_H/2 + 8); ctx.moveTo(cx + 10, cy + HELI_H/2); ctx.lineTo(cx + 10, cy + HELI_H/2 + 8); ctx.stroke();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // Cave background fill
+    ctx.fillStyle = '#0a0a2a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Parallax stars
+    for (var s = 0; s < bgStars.length; s++) {
+      var star = bgStars[s];
+      star.x -= star.speed * (state === 'playing' ? gameSpeed * 0.1 : 0.1);
+      if (star.x < 0) star.x = W;
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillRect(star.x, star.y, star.size, star.size);
+    }
+
+    // Draw cave walls
+    ctx.fillStyle = '#1a1a3a';
+    var ceilPts = [], floorPts = [];
+    for (var i = 0; i < segments.length; i++) {
+      var sx = i * SEG_W - segOffset;
+      ceilPts.push({x: sx, y: segments[i].top});
+      floorPts.push({x: sx, y: segments[i].bottom});
+    }
+
+    // Ceiling
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    for (var c = 0; c < ceilPts.length; c++) ctx.lineTo(ceilPts[c].x, ceilPts[c].y);
+    ctx.lineTo(W + SEG_W, 0);
+    ctx.closePath();
+    ctx.fillStyle = '#2a1a1a';
+    ctx.fill();
+    // Ceiling texture
+    ctx.strokeStyle = '#442222';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var c2 = 0; c2 < ceilPts.length; c2++) {
+      if (c2 === 0) ctx.moveTo(ceilPts[c2].x, ceilPts[c2].y);
+      else ctx.lineTo(ceilPts[c2].x, ceilPts[c2].y);
+    }
+    ctx.stroke();
+
+    // Floor
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (var f = 0; f < floorPts.length; f++) ctx.lineTo(floorPts[f].x, floorPts[f].y);
+    ctx.lineTo(W + SEG_W, H);
+    ctx.closePath();
+    ctx.fillStyle = '#2a1a1a';
+    ctx.fill();
+    ctx.strokeStyle = '#442222';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var f2 = 0; f2 < floorPts.length; f2++) {
+      if (f2 === 0) ctx.moveTo(floorPts[f2].x, floorPts[f2].y);
+      else ctx.lineTo(floorPts[f2].x, floorPts[f2].y);
+    }
+    ctx.stroke();
+
+    // Obstacles
+    for (var ob = 0; ob < obstacles.length; ob++) {
+      var o = obstacles[ob];
+      ctx.fillStyle = '#882222';
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.fillStyle = '#aa3333';
+      ctx.fillRect(o.x + 2, o.y + 2, o.w - 4, 6);
+      ctx.fillStyle = '#661111';
+      ctx.fillRect(o.x, o.y, 3, o.h);
+    }
+
+    // Heli
+    if (state !== 'idle') {
+      drawHeli(HELI_X + HELI_W/2, heli.y);
+    }
+
+    // Overlay text
+    if (state === 'idle') {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'yellow';
+      ctx.font = 'bold 30px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('🚁 HELICOPTER', W/2, H/2 - 20);
+      ctx.fillStyle = '#ffaaaa';
+      ctx.font = '16px Courier New';
+      ctx.fillText('Hold Click/Tap/Space to fly up!', W/2, H/2 + 16);
+      ctx.textAlign = 'left';
+    }
+    if (state === 'dead') {
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0, H/2 - 50, W, 100);
+      ctx.fillStyle = '#ff4444';
+      ctx.font = 'bold 28px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('CRASHED!', W/2, H/2 - 8);
+      ctx.fillStyle = 'yellow';
+      ctx.font = '16px Courier New';
+      ctx.fillText('Distance: ' + dist + 'm   Best: ' + best + 'm', W/2, H/2 + 22);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  initSegments();
+  loop();
+})();
+</script>
+</body>
+</html>

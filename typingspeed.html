@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Typing Speed - Ender's Game World</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #1a0000;
+  font-family: Arial, sans-serif;
+  color: #fff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+}
+#home-btn {
+  position: absolute;
+  top: 10px; left: 10px;
+  background: darkred;
+  color: yellow;
+  border: 2px solid yellow;
+  padding: 6px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: bold;
+}
+#home-btn:hover { background: #8b0000; }
+h1 { color: yellow; font-size: 28px; margin: 10px 0 4px; }
+#subtitle { color: #ffaaaa; font-size: 13px; margin-bottom: 10px; }
+#controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.diff-btn {
+  background: #3a0000;
+  color: #ffaaaa;
+  border: 1px solid #ff6666;
+  border-radius: 6px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+.diff-btn.active, .diff-btn:hover { background: darkred; color: yellow; border-color: yellow; }
+#timer-display {
+  font-size: 36px;
+  font-weight: bold;
+  color: yellow;
+  margin-bottom: 10px;
+}
+#timer-display.urgent { color: #ff4444; }
+#text-box {
+  background: #2a0000;
+  border: 2px solid #8b0000;
+  border-radius: 10px;
+  padding: 16px;
+  font-size: 18px;
+  line-height: 1.7;
+  max-width: 680px;
+  width: 100%;
+  margin-bottom: 14px;
+  user-select: none;
+  letter-spacing: 0.02em;
+}
+.char-default { color: #aaa; }
+.char-correct { color: #7fff7f; }
+.char-wrong   { color: #ff5555; background: #5a0000; border-radius: 2px; }
+.char-cursor  { border-left: 2px solid yellow; }
+#input-area {
+  width: 100%;
+  max-width: 680px;
+  padding: 10px 14px;
+  background: #2a0000;
+  border: 2px solid #8b0000;
+  border-radius: 10px;
+  font-size: 16px;
+  color: white;
+  outline: none;
+  margin-bottom: 14px;
+  caret-color: yellow;
+}
+#input-area:focus { border-color: yellow; }
+#input-area:disabled { opacity: 0.5; }
+#stats-panel {
+  display: none;
+  background: #2a0000;
+  border: 2px solid #8b0000;
+  border-radius: 12px;
+  padding: 20px 30px;
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+}
+#stats-panel h2 { color: yellow; margin-bottom: 14px; }
+.stat-row { display: flex; justify-content: space-between; margin: 8px 0; font-size: 18px; }
+.stat-label { color: #ffaaaa; }
+.stat-value { color: yellow; font-weight: bold; font-size: 22px; }
+#start-btn, #retry-btn {
+  margin-top: 14px;
+  padding: 10px 28px;
+  background: darkred;
+  color: yellow;
+  border: 2px solid yellow;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+#start-btn:hover, #retry-btn:hover { background: #8b0000; }
+#status-bar {
+  color: #ffaaaa;
+  font-size: 14px;
+  margin-bottom: 8px;
+  min-height: 22px;
+}
+</style>
+</head>
+<body>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<h1>⌨️ Typing Speed</h1>
+<div id="subtitle">Type the text as fast and accurately as you can!</div>
+<div id="controls">
+  <button class="diff-btn active" data-diff="easy" onclick="setDiff('easy',this)">Easy</button>
+  <button class="diff-btn" data-diff="medium" onclick="setDiff('medium',this)">Medium</button>
+  <button class="diff-btn" data-diff="hard" onclick="setDiff('hard',this)">Hard</button>
+</div>
+<div id="timer-display">60</div>
+<div id="status-bar">Press Start to begin!</div>
+<div id="text-box"></div>
+<input type="text" id="input-area" placeholder="Start typing here..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" disabled>
+<button id="start-btn" onclick="startGame()">Start</button>
+<div id="stats-panel">
+  <h2>Results 🎉</h2>
+  <div class="stat-row"><span class="stat-label">WPM</span><span class="stat-value" id="res-wpm">0</span></div>
+  <div class="stat-row"><span class="stat-label">Accuracy</span><span class="stat-value" id="res-acc">0%</span></div>
+  <div class="stat-row"><span class="stat-label">Correct chars</span><span class="stat-value" id="res-correct">0</span></div>
+  <div class="stat-row"><span class="stat-label">Errors</span><span class="stat-value" id="res-errors">0</span></div>
+  <div class="stat-row"><span class="stat-label">Difficulty</span><span class="stat-value" id="res-diff">Easy</span></div>
+  <button id="retry-btn" onclick="resetGame()">Play Again</button>
+</div>
+
+<script>
+const TEXTS = {
+  easy: [
+    "The cat sat on the mat and looked at the big red ball.",
+    "A dog ran fast and jumped over the small brown fence.",
+    "The sun shines bright every day in the warm blue sky.",
+    "She ate a cake and drank some cold juice with ice.",
+    "He saw a bird fly high above the tall green tree.",
+    "The kids played games all day long in the soft green grass.",
+    "My dog likes to run and play fetch in the park."
+  ],
+  medium: [
+    "The quick brown fox jumps over the lazy sleeping dog by the river.",
+    "Learning to type quickly improves your productivity and saves valuable time each day.",
+    "Technology has changed the world in many amazing and unexpected ways over decades.",
+    "Reading books every day helps improve your vocabulary and overall writing skills greatly.",
+    "Scientists discovered a new planet orbiting a distant star in the Milky Way galaxy.",
+    "The mountain climbers reached the summit after three days of challenging steep terrain.",
+    "A balanced diet and regular exercise are the keys to a healthy active lifestyle."
+  ],
+  hard: [
+    "Extraordinary circumstances require extraordinary measures; perseverance through adversity defines true character and resilience.",
+    "The electromagnetic spectrum encompasses a vast range of wavelengths from radio waves to gamma rays.",
+    "Cryptography uses mathematical algorithms to encrypt and decrypt sensitive information securely across networks.",
+    "Mitochondria are the powerhouse of the cell, generating ATP through oxidative phosphorylation.",
+    "Quantum mechanics fundamentally challenges classical notions of determinism and objective physical reality.",
+    "The Renaissance period witnessed an unprecedented flourishing of art, science, and philosophical thought.",
+    "Biochemical pathways involve complex sequences of enzymatic reactions that regulate cellular metabolism."
+  ]
+};
+
+let difficulty = 'easy';
+let targetText = '';
+let typed = '';
+let timer = 60;
+let timerInterval = null;
+let started = false;
+let finished = false;
+let startTime = null;
+let totalCorrect = 0;
+let totalErrors = 0;
+
+function setDiff(d, btn) {
+  difficulty = d;
+  document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (!started) pickText();
+}
+
+function pickText() {
+  const arr = TEXTS[difficulty];
+  targetText = arr[Math.floor(Math.random() * arr.length)];
+  renderText();
+}
+
+function renderText() {
+  const box = document.getElementById('text-box');
+  if (!started || finished) {
+    box.innerHTML = targetText.split('').map(c => '<span class="char-default">' + escHTML(c) + '</span>').join('');
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < targetText.length; i++) {
+    const ch = escHTML(targetText[i]);
+    if (i < typed.length) {
+      if (typed[i] === targetText[i]) {
+        html += '<span class="char-correct">' + ch + '</span>';
+      } else {
+        html += '<span class="char-wrong">' + ch + '</span>';
+      }
+    } else if (i === typed.length) {
+      html += '<span class="char-default char-cursor">' + ch + '</span>';
+    } else {
+      html += '<span class="char-default">' + ch + '</span>';
+    }
+  }
+  box.innerHTML = html;
+}
+
+function escHTML(c) {
+  if (c === '<') return '&lt;';
+  if (c === '>') return '&gt;';
+  if (c === '&') return '&amp;';
+  return c;
+}
+
+function startGame() {
+  document.getElementById('start-btn').style.display = 'none';
+  document.getElementById('stats-panel').style.display = 'none';
+  document.getElementById('input-area').disabled = false;
+  document.getElementById('input-area').value = '';
+  document.getElementById('input-area').focus();
+  document.getElementById('status-bar').textContent = 'Type the text above!';
+  typed = '';
+  timer = 60;
+  started = true;
+  finished = false;
+  totalCorrect = 0;
+  totalErrors = 0;
+  startTime = null;
+  updateTimerDisplay();
+  pickText();
+  renderText();
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('timer-display');
+  el.textContent = timer;
+  el.className = timer <= 10 ? 'urgent' : '';
+}
+
+document.getElementById('input-area').addEventListener('input', function() {
+  if (!started || finished) return;
+  if (!startTime) {
+    startTime = Date.now();
+    timerInterval = setInterval(() => {
+      timer--;
+      updateTimerDisplay();
+      if (timer <= 0) endGame();
+    }, 1000);
+  }
+  typed = this.value;
+  renderText();
+  if (typed.length >= targetText.length) {
+    endGame();
+  }
+});
+
+function endGame() {
+  if (finished) return;
+  finished = true;
+  clearInterval(timerInterval);
+  document.getElementById('input-area').disabled = true;
+
+  const elapsed = startTime ? (Date.now() - startTime) / 1000 / 60 : 1;
+  let correct = 0;
+  let errors = 0;
+  for (let i = 0; i < typed.length; i++) {
+    if (i < targetText.length && typed[i] === targetText[i]) correct++;
+    else errors++;
+  }
+  const wpm = Math.round((correct / 5) / Math.max(elapsed, 1/60));
+  const acc = typed.length > 0 ? Math.round((correct / typed.length) * 100) : 0;
+
+  document.getElementById('res-wpm').textContent = wpm;
+  document.getElementById('res-acc').textContent = acc + '%';
+  document.getElementById('res-correct').textContent = correct;
+  document.getElementById('res-errors').textContent = errors;
+  document.getElementById('res-diff').textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+  document.getElementById('stats-panel').style.display = 'block';
+  document.getElementById('status-bar').textContent = '';
+}
+
+function resetGame() {
+  finished = false;
+  started = false;
+  clearInterval(timerInterval);
+  timer = 60;
+  typed = '';
+  document.getElementById('input-area').value = '';
+  document.getElementById('input-area').disabled = true;
+  document.getElementById('stats-panel').style.display = 'none';
+  document.getElementById('start-btn').style.display = 'inline-block';
+  document.getElementById('status-bar').textContent = 'Press Start to begin!';
+  updateTimerDisplay();
+  pickText();
+  renderText();
+}
+
+pickText();
+renderText();
+</script>
+</body>
+</html>
