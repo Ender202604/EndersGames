@@ -229,7 +229,7 @@ function addPickup(name,icon,x,y,z,pts,desc){
 // BUILD SHIP
 // ─────────────────────────────────────────────
 function buildShip(){
-  scene.add(new THREE.AmbientLight(0x223355,0.8));
+  scene.add(new THREE.AmbientLight(0x334466,1.2));
 
   // Ocean
   box(400,0.3,400,M.ocean,0,-2.1,28);
@@ -280,8 +280,9 @@ function buildShip(){
   box(0.15,3.2,2,   M.rich,  -2.45,1.5,7.5);
   box(0.15,3.2,2.5, M.rich,  -2.45,1.5,23.25);
   box(3.6,0.9,0.15, M.rich,  -2.45,2.75,15.5);
-  // Back wall (cabin end)
-  box(4.8,3.2,0.15, M.rich,   0,1.5,6.2);
+  // Corridor entrance arch (sides only, centre open for doorway)
+  box(1.4,3.2,0.15, M.rich,  -1.7,1.5,6.2);
+  box(1.4,3.2,0.15, M.rich,   1.7,1.5,6.2);
   // Sconces
   for(var sz=8;sz<=24;sz+=4){
     box(0.12,0.28,0.12,M.brass,-2.37,2.1,sz);
@@ -843,7 +844,7 @@ function beginGame(){
   document.getElementById('scr-start').classList.remove('show');
   document.getElementById('lock-screen').style.display='flex';
   gameOn=true;
-  camera.position.set(0,1.7,0.5); yaw=Math.PI; pitch=0;
+  camera.position.set(0,1.7,3.0); yaw=0; pitch=0;
   lockPointer();
   showHUD('⚓ Welcome aboard! Explore the ship and talk to people (E). Tonight holds secrets...','#aaddff');
   document.getElementById('home-btn').style.display='block';
