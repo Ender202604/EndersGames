@@ -92,8 +92,8 @@
       }
     </style>
     <script>
-      // Redirect to login page if not yet logged in this session
-      if (!sessionStorage.getItem('visitorLogged')) {
+      // Redirect to login page if never logged in (localStorage persists forever)
+      if (!localStorage.getItem('visitorLogged')) {
         location.href = 'login.html';
       }
     </script>
@@ -747,7 +747,7 @@
 
     </div>
     <script>
-      var name = sessionStorage.getItem('visitorName');
+      var name = localStorage.getItem('visitorName');
       if (name) document.getElementById('welcome').textContent = 'Welcome, ' + name + '! Pick a game!';
     </script>
   </body>

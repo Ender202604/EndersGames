@@ -69,10 +69,16 @@
   <div id="msg"></div>
 </div>
 
+<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
 <script>
+// ============================================================
+// STEP 1: Paste your Firebase config here.
+// Get it from: console.firebase.google.com
+//   > Your project > Project Settings > Your apps > Web app
+// ============================================================
 var firebaseConfig = {
   apiKey: "AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",
   authDomain: "enders-games.firebaseapp.com",
@@ -82,23 +88,39 @@ var firebaseConfig = {
   messagingSenderId: "87049074470",
   appId: "1:87049074470:web:bc38b35669b43aedceb3e7"
 };
+// ============================================================
 
+// Detect if Firebase is actually configured
 var firebaseReady = false;
 var db = null;
 try {
-  firebase.initializeApp(firebaseConfig);
-  db = firebase.database();
-  firebaseReady = true;
+  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== 'PASTE_API_KEY_HERE') {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    firebaseReady = true;
+  }
 } catch(e) { firebaseReady = false; }
 
-if (sessionStorage.getItem('visitorLogged')) {
-  location.href = 'index.html';
-}
-
-function goToGames(first) {
-  sessionStorage.setItem('visitorLogged', '1');
-  sessionStorage.setItem('visitorName', first);
-  window.location.href = 'index.html';
+// ── Returning visitor: skip form but still log the visit ──────────────
+var _savedFirst = localStorage.getItem('visitorName');
+var _savedLast  = localStorage.getItem('visitorLastName');
+if (_savedFirst && _savedLast) {
+  // They've been here before — log this return visit silently, then go straight in
+  if (firebaseReady) {
+    fetch('https://ipapi.co/json/')
+      .then(function(r){ return r.json(); })
+      .then(function(geo){
+        logVisitor(_savedFirst, _savedLast,
+          geo.ip || 'unknown',
+          [geo.city, geo.region, geo.country_name].filter(Boolean).join(', ') || 'unknown',
+          true);
+      })
+      .catch(function(){
+        logVisitor(_savedFirst, _savedLast, 'unavailable', 'unavailable', true);
+      });
+  } else {
+    location.href = 'index.html';
+  }
 }
 
 function submitName() {
@@ -113,44 +135,59 @@ function submitName() {
   document.getElementById('msg').textContent = 'Entering game world...';
 
   if (!firebaseReady) {
-    goToGames(first);
+    // Firebase not configured yet — let them in anyway
+    localStorage.setItem('visitorLogged', '1');
+    localStorage.setItem('visitorName', first);
+    localStorage.setItem('visitorLastName', last);
+    sessionStorage.setItem('visitorLogged', '1');
+    sessionStorage.setItem('visitorName', first);
+    window.location.href = 'index.html';
     return;
   }
-
-  // 5-second timeout — if Firebase doesn't respond, let them in anyway
-  var redirectTimer = setTimeout(function() { goToGames(first); }, 5000);
 
   fetch('https://ipapi.co/json/')
     .then(function(r) { return r.json(); })
     .then(function(geo) {
       logVisitor(first, last, geo.ip || 'unknown',
-        [geo.city, geo.region, geo.country_name].filter(Boolean).join(', ') || 'unknown', redirectTimer);
+        [geo.city, geo.region, geo.country_name].filter(Boolean).join(', ') || 'unknown',
+        false);
     })
     .catch(function() {
-      logVisitor(first, last, 'unavailable', 'unavailable', redirectTimer);
+      logVisitor(first, last, 'unavailable', 'unavailable', false);
     });
 }
 
-function logVisitor(first, last, ip, loc, redirectTimer) {
+function logVisitor(first, last, ip, loc, isReturn) {
   var now = new Date();
   var entry = {
-    firstName: first,
-    lastName:  last,
-    fullName:  first + ' ' + last,
-    ip:        ip,
-    location:  loc,
-    timestamp: now.getTime(),
-    date:      now.toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}),
-    time:      now.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit'})
+    firstName:  first,
+    lastName:   last,
+    fullName:   first + ' ' + last,
+    ip:         ip,
+    location:   loc,
+    returning:  isReturn ? true : false,
+    timestamp:  now.getTime(),
+    date:       now.toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}),
+    time:       now.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit'})
   };
   db.ref('visitors').push(entry)
     .then(function() {
-      clearTimeout(redirectTimer);
-      goToGames(first);
+      localStorage.setItem('visitorLogged', '1');
+      localStorage.setItem('visitorName', first);
+      localStorage.setItem('visitorLastName', last);
+      sessionStorage.setItem('visitorLogged', '1');
+      sessionStorage.setItem('visitorName', first);
+      window.location.href = 'index.html';
     })
-    .catch(function() {
-      clearTimeout(redirectTimer);
-      goToGames(first);
+    .catch(function(err) {
+      if (isReturn) {
+        // Don't block returning visitors on a log error — just send them in
+        window.location.href = 'index.html';
+      } else {
+        document.getElementById('msg').textContent = 'Error saving. Check Firebase config!';
+        document.getElementById('btn').disabled = false;
+        console.error(err);
+      }
     });
 }
 
