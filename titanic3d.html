@@ -191,7 +191,7 @@ function label(text,color){
   ctx.fillStyle=color||'#ffffff'; ctx.font='bold 19px Arial';
   ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
   var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
-  sp.scale.set(2.5,0.62,1); return sp;
+  sp.scale.set(1.0,0.25,1); return sp;
 }
 
 // ─────────────────────────────────────────────
