@@ -727,16 +727,16 @@ document.addEventListener('keydown',function(e){
 document.addEventListener('keyup',function(e){ keys[e.code]=false; });
 
 function setupMobile(){
-  var mob=/Android|iPhone|iPad/i.test(navigator.userAgent)||window.innerWidth<800;
-  if(mob){
-    document.getElementById('mobile-pad').style.display='block';
-    document.getElementById('e-btn').style.display='flex';
-  }
+  document.getElementById('mobile-pad').style.display='block';
+  document.getElementById('e-btn').style.display='flex';
   var bm={'m-up':'KeyW','m-dn':'KeyS','m-left':'KeyA','m-right':'KeyD'};
   Object.keys(bm).forEach(function(id){
     var code=bm[id], el=document.getElementById(id);
     el.addEventListener('touchstart',function(e){ keys[code]=true; e.preventDefault(); },{passive:false});
     el.addEventListener('touchend',function(e){ keys[code]=false; e.preventDefault(); },{passive:false});
+    el.addEventListener('mousedown',function(e){ keys[code]=true; e.preventDefault(); });
+    el.addEventListener('mouseup',function(e){ keys[code]=false; });
+    el.addEventListener('mouseleave',function(e){ keys[code]=false; });
   });
   document.getElementById('e-btn').addEventListener('click',interact);
   var ltx,lty;
