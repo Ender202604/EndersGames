@@ -41,11 +41,30 @@
   }
   #ui {
     display: flex;
-    gap: 20px;
+    gap: 16px;
     font-size: 15px;
     color: yellow;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
   }
+  #diff-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+    align-items: center;
+  }
+  .diff-btn {
+    background: #2a0000;
+    color: #ffcc00;
+    border: 2px solid #ff6600;
+    padding: 3px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+  }
+  .diff-btn.active { background: #cc0000; color: white; }
   #gameCanvas {
     border: 3px solid #ff6600;
     border-radius: 6px;
@@ -72,51 +91,89 @@
 <h1>🧱 Breakout</h1>
 <div id="ui">
   <span>Score: <span id="scoreEl">0</span></span>
+  <span>Best: <span id="bestEl">0</span></span>
   <span>Level: <span id="levelEl">1</span></span>
   <span>Lives: <span id="livesEl">♥♥♥</span></span>
   <span>Bricks: <span id="bricksEl">0</span></span>
+</div>
+<div id="diff-row">
+  <button class="diff-btn active" id="btn-easy" onclick="setDiff('easy')">Easy (3 lives)</button>
+  <button class="diff-btn" id="btn-hard" onclick="setDiff('hard')">Hard (1 life)</button>
 </div>
 <canvas id="gameCanvas" width="480" height="400"></canvas>
 <div id="msg">Click or press SPACE to launch!</div>
 <div id="instructions">Arrow Keys or Mouse to move paddle</div>
 
 <script>
+// --- Audio ---
+var AC = window.AudioContext || window.webkitAudioContext;
+var ac = AC ? new AC() : null;
+function snd(freq, dur, type, vol) {
+  if (!ac) return;
+  var o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.frequency.value = freq; o.type = type || 'square';
+  g.gain.setValueAtTime(vol || 0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.start(); o.stop(ac.currentTime + dur);
+}
+function sndBrickHit() { snd(440, 0.07, 'square', 0.12); }
+function sndPaddleHit() { snd(300, 0.1, 'sine', 0.18); setTimeout(function(){ snd(380, 0.08, 'sine', 0.12); }, 50); }
+function sndLevelUp() { [523,659,784,1047].forEach(function(f,i){ setTimeout(function(){ snd(f,0.18,'sine',0.2); },i*110); }); }
+function sndLifeLost() { snd(220, 0.18, 'square', 0.2); setTimeout(function(){ snd(165, 0.22, 'sine', 0.15); }, 150); setTimeout(function(){ snd(110, 0.3, 'sine', 0.12); }, 280); }
+
+// --- High Score ---
+var HS_KEY = 'hs_breakout';
+function getHiScore() { return parseInt(localStorage.getItem(HS_KEY) || '0'); }
+function saveHiScore(v) { if (v > getHiScore()) { localStorage.setItem(HS_KEY, v); return true; } return false; }
+
+// --- Difficulty ---
+var difficulty = 'easy';
+window.setDiff = function(d) {
+  difficulty = d;
+  document.getElementById('btn-easy').classList.toggle('active', d === 'easy');
+  document.getElementById('btn-hard').classList.toggle('active', d === 'hard');
+  // Trigger a full reset
+  triggerReset = true;
+};
+var triggerReset = false;
+
+function getDiffParams() {
+  return difficulty === 'hard'
+    ? { lives: 1, baseSpeed: 5, speedMult: 0.4 }
+    : { lives: 3, baseSpeed: 4, speedMult: 0.3 };
+}
+
 (function() {
   var canvas = document.getElementById('gameCanvas');
   var ctx = canvas.getContext('2d');
   var scoreEl = document.getElementById('scoreEl');
+  var bestElUI = document.getElementById('bestEl');
   var levelEl = document.getElementById('levelEl');
   var livesEl = document.getElementById('livesEl');
   var bricksEl = document.getElementById('bricksEl');
   var msgEl = document.getElementById('msg');
 
+  bestElUI.textContent = getHiScore();
+
   var W = canvas.width, H = canvas.height;
 
   var score = 0, level = 1, lives = 3;
-  var state = 'ready'; // ready, playing, dead, won
+  var state = 'ready';
 
-  // Paddle
   var PAD_W = 80, PAD_H = 10, PAD_Y = H - 30;
   var paddle = { x: W/2 - PAD_W/2, speed: 6 };
 
-  // Ball
   var BALL_R = 7;
   var ball = { x: W/2, y: PAD_Y - BALL_R - 5, vx: 3, vy: -4, attached: true };
 
-  // Bricks setup
   var BRICK_ROWS = 6, BRICK_COLS = 10;
   var BRICK_W = 44, BRICK_H = 18, BRICK_PAD = 2;
   var BRICK_TOP = 50;
   var bricks = [];
 
-  // Row colors from top (dark theme palette)
   var rowColors = [
-    '#ff2222', // row 0 - red (3 pts)
-    '#ff6600', // row 1 - orange (3 pts)
-    '#ffcc00', // row 2 - yellow (2 pts)
-    '#22ff88', // row 3 - green (2 pts)
-    '#22aaff', // row 4 - blue (1 pt)
-    '#aa44ff'  // row 5 - purple (1 pt)
+    '#ff2222','#ff6600','#ffcc00','#22ff88','#22aaff','#aa44ff'
   ];
   var rowPoints = [30, 25, 20, 15, 10, 10];
 
@@ -131,9 +188,7 @@
           w: BRICK_W, h: BRICK_H,
           color: rowColors[row],
           pts: rowPoints[row],
-          hp: hp,
-          flash: 0,
-          alive: true
+          hp: hp, flash: 0, alive: true
         });
       }
     }
@@ -147,10 +202,25 @@
   }
 
   function updateLives() {
+    var dp = getDiffParams();
+    var maxL = dp.lives;
     var s = '';
     for (var i = 0; i < lives; i++) s += '♥';
-    for (var j = lives; j < 3; j++) s += '♡';
+    for (var j = lives; j < Math.max(lives, maxL); j++) s += '♡';
     livesEl.textContent = s;
+  }
+
+  function fullReset() {
+    var dp = getDiffParams();
+    lives = dp.lives; score = 0; level = 1;
+    updateLives(); scoreEl.textContent = 0; levelEl.textContent = 1;
+    initBricks();
+    state = 'ready';
+    ball.attached = true;
+    ball.x = paddle.x + PAD_W/2;
+    ball.y = PAD_Y - BALL_R - 5;
+    msgEl.textContent = 'Click or press SPACE to launch!';
+    bestElUI.textContent = getHiScore();
   }
 
   var keys = {};
@@ -161,7 +231,6 @@
   });
   document.addEventListener('keyup', function(e) { keys[e.code] = false; });
 
-  // Mouse
   canvas.addEventListener('mousemove', function(e) {
     var rect = canvas.getBoundingClientRect();
     var mx = e.clientX - rect.left;
@@ -169,7 +238,6 @@
     if (ball.attached) ball.x = paddle.x + PAD_W/2;
   });
 
-  // Touch
   canvas.addEventListener('touchmove', function(e) {
     e.preventDefault();
     var rect = canvas.getBoundingClientRect();
@@ -190,14 +258,8 @@
 
   function launchBall() {
     if (state === 'dead') {
-      lives = 3; score = 0; level = 1;
-      updateLives(); scoreEl.textContent = 0; levelEl.textContent = 1;
-      initBricks();
-      state = 'ready';
-      ball.attached = true;
-      ball.x = paddle.x + PAD_W/2;
-      ball.y = PAD_Y - BALL_R - 5;
-      msgEl.textContent = '';
+      fullReset();
+      return;
     }
     if (state === 'won') {
       level++;
@@ -211,8 +273,9 @@
     }
     if (state === 'ready' && ball.attached) {
       ball.attached = false;
+      var dp = getDiffParams();
       var angle = -Math.PI/2 + (Math.random() - 0.5) * 0.8;
-      var spd = 4 + level * 0.3;
+      var spd = dp.baseSpeed + level * dp.speedMult;
       ball.vx = Math.cos(angle) * spd;
       ball.vy = Math.sin(angle) * spd;
       state = 'playing';
@@ -221,7 +284,8 @@
   }
 
   function update() {
-    // Paddle movement
+    if (triggerReset) { triggerReset = false; fullReset(); return; }
+
     if (keys['ArrowLeft']) paddle.x = Math.max(0, paddle.x - paddle.speed);
     if (keys['ArrowRight']) paddle.x = Math.min(W - PAD_W, paddle.x + paddle.speed);
 
@@ -234,36 +298,31 @@
     ball.x += ball.vx;
     ball.y += ball.vy;
 
-    // Speed cap
     var spd = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy);
     var maxSpd = 10 + level;
     if (spd > maxSpd) { ball.vx = ball.vx/spd*maxSpd; ball.vy = ball.vy/spd*maxSpd; }
 
-    // Wall bounces
     if (ball.x - BALL_R < 0) { ball.x = BALL_R; ball.vx = Math.abs(ball.vx); }
     if (ball.x + BALL_R > W) { ball.x = W - BALL_R; ball.vx = -Math.abs(ball.vx); }
     if (ball.y - BALL_R < 0) { ball.y = BALL_R; ball.vy = Math.abs(ball.vy); }
 
-    // Paddle bounce
     if (ball.y + BALL_R >= PAD_Y && ball.y + BALL_R <= PAD_Y + PAD_H + 5 &&
         ball.x >= paddle.x - 5 && ball.x <= paddle.x + PAD_W + 5 && ball.vy > 0) {
       ball.y = PAD_Y - BALL_R;
-      var hitPos = (ball.x - paddle.x) / PAD_W; // 0..1
+      var hitPos = (ball.x - paddle.x) / PAD_W;
       var angle2 = (hitPos - 0.5) * Math.PI * 0.75 - Math.PI/2;
       var spd2 = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy);
       ball.vx = Math.cos(angle2) * spd2;
       ball.vy = Math.sin(angle2) * spd2;
       if (ball.vy > -1) ball.vy = -1;
+      sndPaddleHit();
     }
 
-    // Brick collision
-    var hitAny = false;
     for (var i = 0; i < bricks.length; i++) {
       var br = bricks[i];
       if (!br.alive) continue;
       if (ball.x + BALL_R > br.x && ball.x - BALL_R < br.x + br.w &&
           ball.y + BALL_R > br.y && ball.y - BALL_R < br.y + br.h) {
-        // Determine bounce direction
         var overlapL = (ball.x + BALL_R) - br.x;
         var overlapR = (br.x + br.w) - (ball.x - BALL_R);
         var overlapT = (ball.y + BALL_R) - br.y;
@@ -274,37 +333,38 @@
 
         br.hp--;
         br.flash = 8;
+        sndBrickHit();
         if (br.hp <= 0) {
           br.alive = false;
           score += br.pts * level;
           scoreEl.textContent = score;
+          if (score > getHiScore()) { saveHiScore(score); bestElUI.textContent = score; }
           updateBrickCount();
         }
-        hitAny = true;
-        break; // one brick per frame
+        break;
       }
-      if (br.flash > 0) br.flash--;
     }
-    // Update remaining flashes
     for (var j = 0; j < bricks.length; j++) {
       if (bricks[j].flash > 0) bricks[j].flash--;
     }
 
-    // Check win
     var remaining = 0;
     for (var k = 0; k < bricks.length; k++) if (bricks[k].alive) remaining++;
     if (remaining === 0) {
       state = 'won';
+      sndLevelUp();
       msgEl.textContent = 'Level ' + level + ' cleared! Click/Space for next level!';
       return;
     }
 
-    // Ball lost
     if (ball.y - BALL_R > H) {
       lives--;
+      sndLifeLost();
       updateLives();
       if (lives <= 0) {
         state = 'dead';
+        saveHiScore(score);
+        bestElUI.textContent = getHiScore();
         msgEl.textContent = 'Game Over! Score: ' + score + ' | Click/Space to restart';
       } else {
         state = 'ready';
@@ -332,14 +392,11 @@
     }
     ctx.fillStyle = grad;
     ctx.fillRect(br.x, br.y, br.w, br.h);
-    // Highlight
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
     ctx.fillRect(br.x + 2, br.y + 2, br.w - 4, 4);
-    // Border
     ctx.strokeStyle = 'rgba(0,0,0,0.4)';
     ctx.lineWidth = 1;
     ctx.strokeRect(br.x, br.y, br.w, br.h);
-    // Crack if hp=1 (started at 2)
     if (br.hp === 1 && br.flash === 0) {
       ctx.strokeStyle = 'rgba(0,0,0,0.6)';
       ctx.lineWidth = 1;
@@ -366,23 +423,19 @@
   function draw() {
     ctx.clearRect(0, 0, W, H);
 
-    // Background
     var grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, '#05051a');
     grad.addColorStop(1, '#1a0505');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
-    // Grid lines
     ctx.strokeStyle = 'rgba(255,255,255,0.03)';
     ctx.lineWidth = 1;
     for (var gx = 0; gx < W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
     for (var gy = 0; gy < H; gy += 40) { ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
 
-    // Bricks
     for (var i = 0; i < bricks.length; i++) drawBrick(bricks[i]);
 
-    // Paddle
     var padGrad = ctx.createLinearGradient(paddle.x, PAD_Y, paddle.x, PAD_Y + PAD_H);
     padGrad.addColorStop(0, '#ffee44');
     padGrad.addColorStop(1, '#cc8800');
@@ -394,7 +447,6 @@
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Ball
     var bx = ball.attached ? paddle.x + PAD_W/2 : ball.x;
     var by = ball.attached ? PAD_Y - BALL_R - 5 : ball.y;
     var ballGrad = ctx.createRadialGradient(bx-2, by-2, 1, bx, by, BALL_R);
@@ -410,7 +462,6 @@
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Overlay
     if (state === 'dead') {
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
       ctx.fillRect(0, H/2 - 60, W, 120);

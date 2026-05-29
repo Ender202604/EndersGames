@@ -12,6 +12,7 @@ h1{color:yellow;font-size:22px;margin-bottom:4px}
 canvas{border-radius:10px;margin:4px 0;cursor:crosshair;touch-action:none}
 #msg{font-size:14px;color:#ffff88;min-height:20px;margin:3px 0;text-align:center}
 #hud{font-size:14px;color:#ffddaa;margin:2px 0}
+#hs-row{font-size:13px;color:#aaffaa;margin:2px 0}
 #scorecard{font-size:12px;color:#aaffaa;margin:2px 0}
 .btn{background:#8b0000;color:white;border:2px solid #ff6666;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:13px;margin:3px}
 .btn:hover{background:#cc0000}
@@ -21,17 +22,47 @@ canvas{border-radius:10px;margin:4px 0;cursor:crosshair;touch-action:none}
 <a href="index.html" id="home-btn">🏠 Home</a>
 <h1>⛳ Mini Golf</h1>
 <div id="hud">Hole <span id="hole-num">1</span>/9 &nbsp;|&nbsp; Par <span id="par">2</span> &nbsp;|&nbsp; Strokes: <span id="strokes">0</span></div>
+<div id="hs-row">Best Round: <span id="hs-val">--</span> strokes (lower is better)</div>
 <canvas id="c" width="360" height="300"></canvas>
 <div id="msg">Click and drag away from ball to aim and set power, release to putt!</div>
 <div id="scorecard"></div>
 <button class="btn" onclick="resetGame()">🔄 New Game</button>
 <script>
+// --- Audio ---
+var AC = window.AudioContext || window.webkitAudioContext;
+var ac = AC ? new AC() : null;
+function snd(freq, dur, type, vol) {
+  if (!ac) return;
+  var o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.frequency.value = freq; o.type = type || 'square';
+  g.gain.setValueAtTime(vol || 0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.start(); o.stop(ac.currentTime + dur);
+}
+function sndPutt() { snd(300, 0.1, 'sine', 0.18); setTimeout(function(){ snd(200, 0.08, 'sine', 0.1); }, 60); }
+function sndRoll() { if(ac){ var o=ac.createOscillator(),g=ac.createGain(); o.connect(g); g.connect(ac.destination); o.type='sine'; o.frequency.value=180; g.gain.setValueAtTime(0.05,ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.3); o.start(); o.stop(ac.currentTime+0.3); } }
+function sndHoleIn() { [523,659,784,1047].forEach(function(f,i){ setTimeout(function(){ snd(f,0.25,'sine',0.2); },i*120); }); }
+function sndBirdie() { [440,554,659].forEach(function(f,i){ setTimeout(function(){ snd(f,0.2,'sine',0.18); },i*100); }); }
+function sndEagle() { [330,415,523,659,784].forEach(function(f,i){ setTimeout(function(){ snd(f,0.2,'sine',0.2); },i*90); }); }
+
+// --- High Score (lower is better) ---
+var HS_KEY = 'hs_minigolf';
+function getHiScore() { var v=localStorage.getItem(HS_KEY); return v===null ? null : parseInt(v); }
+function saveHiScore(v) { var hi=getHiScore(); if(hi===null||v<hi){ localStorage.setItem(HS_KEY,v); return true; } return false; }
+function displayHiScore() {
+  var hi=getHiScore();
+  document.getElementById('hs-val').textContent = hi===null ? '--' : hi;
+}
+displayHiScore();
+
 var c=document.getElementById('c'),ctx=c.getContext('2d');
 var W=360,H=300;
 var ball={x:0,y:0,vx:0,vy:0,r:8};
 var dragging=false,dragX=0,dragY=0,aiming=false;
 var strokes=0,holeNum=0,scores=[];
 var animId=null,inHole=false;
+var rollSoundTimer=0;
 
 var holes=[
   {ball:{x:50,y:150},hole:{x:300,y:150},par:2,walls:[{x:0,y:0,w:360,h:10},{x:0,y:290,w:360,h:10},{x:0,y:0,w:10,h:300},{x:350,y:0,w:10,h:300}],obstacles:[]},
@@ -59,37 +90,29 @@ function loadHole(n){
 function draw(){
   ctx.clearRect(0,0,W,H);
   var h=holes[holeNum];
-  // Fairway
   ctx.fillStyle='#2d6a2d';ctx.fillRect(0,0,W,H);
-  // Walls
   ctx.fillStyle='#8B6914';
   for(var i=0;i<h.walls.length;i++){var w=h.walls[i];ctx.fillRect(w.x,w.y,w.w,w.h);}
-  // Obstacles
   ctx.fillStyle='#8B6914';
   for(var i=0;i<h.obstacles.length;i++){var o=h.obstacles[i];ctx.beginPath();ctx.arc(o.x,o.y,o.r,0,Math.PI*2);ctx.fill();}
-  // Hole shadow
   ctx.fillStyle='#000';
   ctx.beginPath();ctx.arc(h.hole.x,h.hole.y,10,0,Math.PI*2);ctx.fill();
   ctx.fillStyle='#111';
   ctx.beginPath();ctx.arc(h.hole.x,h.hole.y,8,0,Math.PI*2);ctx.fill();
-  // Flag
   ctx.strokeStyle='#fff';ctx.lineWidth=2;
   ctx.beginPath();ctx.moveTo(h.hole.x,h.hole.y-2);ctx.lineTo(h.hole.x,h.hole.y-20);ctx.stroke();
   ctx.fillStyle='#ff0000';
   ctx.beginPath();ctx.moveTo(h.hole.x,h.hole.y-20);ctx.lineTo(h.hole.x+12,h.hole.y-14);ctx.lineTo(h.hole.x,h.hole.y-8);ctx.fill();
-  // Aim line
   if(aiming){
     var dx=ball.x-dragX,dy=ball.y-dragY;
     ctx.strokeStyle='rgba(255,255,100,0.5)';ctx.lineWidth=2;ctx.setLineDash([4,4]);
     ctx.beginPath();ctx.moveTo(ball.x,ball.y);ctx.lineTo(ball.x+dx*2,ball.y+dy*2);ctx.stroke();
     ctx.setLineDash([]);
-    // Power indicator
     var power=Math.min(Math.sqrt(dx*dx+dy*dy),80);
     ctx.fillStyle='rgba(255,200,0,0.7)';
     ctx.fillRect(10,H-22,power*3.5,12);
     ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.strokeRect(10,H-22,280,12);
   }
-  // Ball
   var bgrad=ctx.createRadialGradient(ball.x-3,ball.y-3,1,ball.x,ball.y,ball.r);
   bgrad.addColorStop(0,'#ffffff');bgrad.addColorStop(1,'#cccccc');
   ctx.fillStyle=bgrad;
@@ -131,16 +154,23 @@ function collideWalls(){
 
 function gameLoop(){
   if(!inHole){
+    var wasMoving = Math.abs(ball.vx)>0.15||Math.abs(ball.vy)>0.15;
     ball.vx*=0.985;ball.vy*=0.985;
     ball.x+=ball.vx;ball.y+=ball.vy;
     collideWalls();
+    // Roll sound
+    if(wasMoving){ rollSoundTimer++; if(rollSoundTimer%18===0) sndRoll(); } else { rollSoundTimer=0; }
     var h=holes[holeNum];
     var dx=ball.x-h.hole.x,dy=ball.y-h.hole.y;
     if(Math.sqrt(dx*dx+dy*dy)<10&&Math.abs(ball.vx)<4&&Math.abs(ball.vy)<4){
       inHole=true;ball.vx=0;ball.vy=0;ball.x=h.hole.x;ball.y=h.hole.y;
       scores.push(strokes);
       var diff=strokes-h.par;
-      var label=diff<=-2?'Eagle! 🦅':diff===-1?'Birdie! 🐦':diff===0?'Par! ⛳':diff===1?'Bogey':'Double Bogey+';
+      var label;
+      if(diff<=-2){ label='Eagle! 🦅'; sndEagle(); }
+      else if(diff===-1){ label='Birdie! 🐦'; sndBirdie(); }
+      else if(diff===0){ label='Par! ⛳'; sndHoleIn(); }
+      else { label=(diff===1?'Bogey':'Double Bogey+'); sndHoleIn(); }
       document.getElementById('msg').textContent=label+' ('+strokes+' strokes)';
       updateScorecard();
       if(holeNum<8){setTimeout(function(){holeNum++;loadHole(holeNum);},1200);}
@@ -164,8 +194,10 @@ function endGame(){
   var total=scores.reduce(function(a,b){return a+b;},0);
   var parTotal=holes.reduce(function(a,h){return a+h.par;},0);
   var diff=total-parTotal;
+  var isNew = saveHiScore(total);
+  displayHiScore();
   document.getElementById('msg').textContent='Game over! '+total+' strokes ('+
-    (diff<0?diff:'+'+diff)+' vs par). '+(diff<=-5?'Champion! 🏆':diff<=0?'Great round! 🎉':'Good try! ⛳');
+    (diff<0?diff:'+'+diff)+' vs par). '+(diff<=-5?'Champion! 🏆':diff<=0?'Great round! 🎉':'Good try! ⛳')+(isNew?' NEW BEST!':'');
 }
 
 function getPos(e){
@@ -190,6 +222,7 @@ c.addEventListener('mouseup',function(e){
   if(power>0.02){
     ball.vx=dx*power*0.18;ball.vy=dy*power*0.18;
     strokes++;document.getElementById('strokes').textContent=strokes;
+    sndPutt();
   }
 });
 c.addEventListener('touchstart',function(e){e.preventDefault();
@@ -208,12 +241,13 @@ c.addEventListener('touchend',function(e){e.preventDefault();
   if(power>0.02){
     ball.vx=dx*power*0.18;ball.vy=dy*power*0.18;
     strokes++;document.getElementById('strokes').textContent=strokes;
+    sndPutt();
   }
 },{passive:false});
 
 function resetGame(){
   if(animId) cancelAnimationFrame(animId);
-  holeNum=0;scores=[];
+  holeNum=0;scores=[];rollSoundTimer=0;
   document.getElementById('scorecard').textContent='';
   loadHole(0);
   gameLoop();

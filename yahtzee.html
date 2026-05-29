@@ -8,7 +8,9 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:#0a0a1e;font-family:'Segoe UI',Arial,sans-serif;color:#e0e0ff;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:60px 12px 24px}
 h1{font-size:26px;color:#66aaff;text-shadow:0 0 12px #66aaff88;letter-spacing:2px;margin-bottom:4px}
-.subtitle{color:#5566aa;font-size:13px;margin-bottom:12px}
+.subtitle{color:#5566aa;font-size:13px;margin-bottom:8px}
+#stats-bar{font-size:13px;color:#7788bb;margin-bottom:10px}
+#stats-bar span{color:#ffd700;font-weight:bold}
 #game-wrap{display:flex;gap:16px;max-width:740px;width:100%;flex-wrap:wrap;justify-content:center}
 #dice-panel{background:#0e0e28;border:1px solid #2a2a6a;border-radius:14px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px;min-width:240px;flex:1}
 #dice-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
@@ -51,8 +53,10 @@ h1{font-size:26px;color:#66aaff;text-shadow:0 0 12px #66aaff88;letter-spacing:2p
 </head>
 <body>
 <a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
-<h1>🎲 YAHTZEE</h1>
+<h1>YAHTZEE</h1>
 <div class="subtitle">Roll dice, score categories — all 13 to finish!</div>
+
+<div id="stats-bar">Best Score: <span id="st-best">—</span></div>
 
 <div id="game-wrap">
   <div id="dice-panel">
@@ -72,21 +76,21 @@ h1{font-size:26px;color:#66aaff;text-shadow:0 0 12px #66aaff88;letter-spacing:2p
   <div id="scorecard">
     <h3>SCORECARD</h3>
     <div class="sc-section">Upper Section</div>
-    <div class="sc-row" id="sr-ones" onclick="score('ones')"><div class="sc-name">Ones</div><div class="sc-hint">Sum of 1s</div><div class="sc-val empty" id="sv-ones">—</div></div>
-    <div class="sc-row" id="sr-twos" onclick="score('twos')"><div class="sc-name">Twos</div><div class="sc-hint">Sum of 2s</div><div class="sc-val empty" id="sv-twos">—</div></div>
-    <div class="sc-row" id="sr-threes" onclick="score('threes')"><div class="sc-name">Threes</div><div class="sc-hint">Sum of 3s</div><div class="sc-val empty" id="sv-threes">—</div></div>
-    <div class="sc-row" id="sr-fours" onclick="score('fours')"><div class="sc-name">Fours</div><div class="sc-hint">Sum of 4s</div><div class="sc-val empty" id="sv-fours">—</div></div>
-    <div class="sc-row" id="sr-fives" onclick="score('fives')"><div class="sc-name">Fives</div><div class="sc-hint">Sum of 5s</div><div class="sc-val empty" id="sv-fives">—</div></div>
-    <div class="sc-row" id="sr-sixes" onclick="score('sixes')"><div class="sc-name">Sixes</div><div class="sc-hint">Sum of 6s</div><div class="sc-val empty" id="sv-sixes">—</div></div>
+    <div class="sc-row" id="sr-ones"   onclick="score('ones')">  <div class="sc-name">Ones</div>       <div class="sc-hint">Sum of 1s</div><div class="sc-val empty" id="sv-ones">—</div></div>
+    <div class="sc-row" id="sr-twos"   onclick="score('twos')">  <div class="sc-name">Twos</div>       <div class="sc-hint">Sum of 2s</div><div class="sc-val empty" id="sv-twos">—</div></div>
+    <div class="sc-row" id="sr-threes" onclick="score('threes')"><div class="sc-name">Threes</div>     <div class="sc-hint">Sum of 3s</div><div class="sc-val empty" id="sv-threes">—</div></div>
+    <div class="sc-row" id="sr-fours"  onclick="score('fours')"> <div class="sc-name">Fours</div>      <div class="sc-hint">Sum of 4s</div><div class="sc-val empty" id="sv-fours">—</div></div>
+    <div class="sc-row" id="sr-fives"  onclick="score('fives')"> <div class="sc-name">Fives</div>      <div class="sc-hint">Sum of 5s</div><div class="sc-val empty" id="sv-fives">—</div></div>
+    <div class="sc-row" id="sr-sixes"  onclick="score('sixes')"> <div class="sc-name">Sixes</div>      <div class="sc-hint">Sum of 6s</div><div class="sc-val empty" id="sv-sixes">—</div></div>
     <div class="sc-bonus" id="bonus-display">Bonus (≥63): 0/63</div>
     <div class="sc-section">Lower Section</div>
-    <div class="sc-row" id="sr-3oak" onclick="score('3oak')"><div class="sc-name">3 of a Kind</div><div class="sc-hint">Sum all</div><div class="sc-val empty" id="sv-3oak">—</div></div>
-    <div class="sc-row" id="sr-4oak" onclick="score('4oak')"><div class="sc-name">4 of a Kind</div><div class="sc-hint">Sum all</div><div class="sc-val empty" id="sv-4oak">—</div></div>
-    <div class="sc-row" id="sr-fh" onclick="score('fh')"><div class="sc-name">Full House</div><div class="sc-hint">25 pts</div><div class="sc-val empty" id="sv-fh">—</div></div>
-    <div class="sc-row" id="sr-ss" onclick="score('ss')"><div class="sc-name">Sm. Straight</div><div class="sc-hint">30 pts</div><div class="sc-val empty" id="sv-ss">—</div></div>
-    <div class="sc-row" id="sr-ls" onclick="score('ls')"><div class="sc-name">Lg. Straight</div><div class="sc-hint">40 pts</div><div class="sc-val empty" id="sv-ls">—</div></div>
-    <div class="sc-row" id="sr-yahtzee" onclick="score('yahtzee')"><div class="sc-name">Yahtzee!</div><div class="sc-hint">50 pts</div><div class="sc-val empty" id="sv-yahtzee">—</div></div>
-    <div class="sc-row" id="sr-chance" onclick="score('chance')"><div class="sc-name">Chance</div><div class="sc-hint">Sum all</div><div class="sc-val empty" id="sv-chance">—</div></div>
+    <div class="sc-row" id="sr-3oak"    onclick="score('3oak')">   <div class="sc-name">3 of a Kind</div><div class="sc-hint">Sum all</div><div class="sc-val empty" id="sv-3oak">—</div></div>
+    <div class="sc-row" id="sr-4oak"    onclick="score('4oak')">   <div class="sc-name">4 of a Kind</div><div class="sc-hint">Sum all</div><div class="sc-val empty" id="sv-4oak">—</div></div>
+    <div class="sc-row" id="sr-fh"      onclick="score('fh')">     <div class="sc-name">Full House</div> <div class="sc-hint">25 pts</div>  <div class="sc-val empty" id="sv-fh">—</div></div>
+    <div class="sc-row" id="sr-ss"      onclick="score('ss')">     <div class="sc-name">Sm. Straight</div><div class="sc-hint">30 pts</div> <div class="sc-val empty" id="sv-ss">—</div></div>
+    <div class="sc-row" id="sr-ls"      onclick="score('ls')">     <div class="sc-name">Lg. Straight</div><div class="sc-hint">40 pts</div> <div class="sc-val empty" id="sv-ls">—</div></div>
+    <div class="sc-row" id="sr-yahtzee" onclick="score('yahtzee')"><div class="sc-name">Yahtzee!</div>  <div class="sc-hint">50 pts</div>  <div class="sc-val empty" id="sv-yahtzee">—</div></div>
+    <div class="sc-row" id="sr-chance"  onclick="score('chance')"> <div class="sc-name">Chance</div>    <div class="sc-hint">Sum all</div> <div class="sc-val empty" id="sv-chance">—</div></div>
     <div class="sc-total"><div class="label">TOTAL</div><div class="val" id="total-score">0</div></div>
   </div>
 </div>
@@ -100,15 +104,48 @@ h1{font-size:26px;color:#66aaff;text-shadow:0 0 12px #66aaff88;letter-spacing:2p
 </div>
 
 <script>
+// ── Audio ──────────────────────────────────────────────
+var AC = window.AudioContext || window.webkitAudioContext;
+var ac = AC ? new AC() : null;
+function snd(freq, dur, type, vol) {
+  if (!ac) return;
+  var o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.frequency.value = freq; o.type = type || 'square';
+  g.gain.setValueAtTime(vol || 0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.start(); o.stop(ac.currentTime + dur);
+}
+function sndRoll(){
+  // rattle: rapid random clicks
+  for(var i=0;i<6;i++){
+    (function(delay){
+      setTimeout(function(){snd(200+Math.random()*400, 0.05,'square',0.08);},delay);
+    })(i*60);
+  }
+}
+function sndScore(){snd(660,0.08,'sine',0.12);setTimeout(function(){snd(880,0.1,'sine',0.12);},90);}
+function sndYahtzee(){[660,880,1100,1320,1760,1320,1100,880,1760].forEach(function(f,i){setTimeout(function(){snd(f,0.1,'sine',0.18);},i*70);});}
+function sndBust(){snd(300,0.1,'sawtooth',0.12);setTimeout(function(){snd(220,0.15,'sawtooth',0.12);},100);}
+
+// ── Stats / localStorage ───────────────────────────────
+function loadBest(){ var v=localStorage.getItem('hs_yahtzee'); return v?parseInt(v):null; }
+function saveBest(score){ var b=loadBest(); if(b===null||score>b) localStorage.setItem('hs_yahtzee',score); }
+function renderStatsBar(){
+  var b=loadBest();
+  document.getElementById('st-best').textContent=b!==null?b:'—';
+}
+
+// ── Game ───────────────────────────────────────────────
 const DICE_FACES=['','⚀','⚁','⚂','⚃','⚄','⚅'];
 const CATS=['ones','twos','threes','fours','fives','sixes','3oak','4oak','fh','ss','ls','yahtzee','chance'];
 
-let dice=[0,0,0,0,0],kept=[false,false,false,false,false],scores={},rollsLeft=3,turn=1,rolled=false;
+var dice=[0,0,0,0,0],kept=[false,false,false,false,false],scores={},rollsLeft=3,turn=1,rolled=false;
 
 function newGame(){
   dice=[0,0,0,0,0];kept=[false,false,false,false,false];scores={};rollsLeft=3;turn=1;rolled=false;
   document.getElementById('game-over').classList.remove('show');
-  CATS.forEach(c=>{
+  CATS.forEach(function(c){
     document.getElementById('sv-'+c).textContent='—';
     document.getElementById('sv-'+c).className='sc-val empty';
     document.getElementById('sr-'+c).classList.remove('scored','preview','no-roll');
@@ -120,29 +157,37 @@ function newGame(){
 }
 
 function rollDice(){
-  if(rollsLeft<=0)return;
+  if(rollsLeft<=0) return;
   rolled=true;
-  for(let i=0;i<5;i++){
-    if(!kept[i])dice[i]=Math.floor(Math.random()*6)+1;
+  for(var i=0;i<5;i++){
+    if(!kept[i]) dice[i]=Math.floor(Math.random()*6)+1;
   }
   rollsLeft--;
+  sndRoll();
+  // animate
+  for(var i=0;i<5;i++){
+    if(!kept[i]){
+      var d=document.getElementById('d'+i);
+      d.classList.add('rolling');
+      (function(di){setTimeout(function(){document.getElementById('d'+di).classList.remove('rolling');},500);})(i);
+    }
+  }
   renderDice();
   updateUI();
   showPreviews();
 }
 
 function renderDice(){
-  for(let i=0;i<5;i++){
-    const d=document.getElementById('d'+i);
+  for(var i=0;i<5;i++){
+    var d=document.getElementById('d'+i);
     d.textContent=dice[i]?DICE_FACES[dice[i]]:'?';
     d.className='die'+(kept[i]?' kept':'');
-    if(!rolled)d.textContent='?';
-    if(rollsLeft<3&&!rolled)d.textContent='?';
+    if(!rolled) d.textContent='?';
   }
 }
 
 function toggleKeep(i){
-  if(!rolled||rollsLeft<=0)return;
+  if(!rolled||rollsLeft<=0) return;
   kept[i]=!kept[i];
   renderDice();
 }
@@ -154,42 +199,52 @@ function updateUI(){
 }
 
 function counts(){
-  const c={};
-  for(let d of dice)c[d]=(c[d]||0)+1;
+  var c={};
+  for(var i=0;i<dice.length;i++) c[dice[i]]=(c[dice[i]]||0)+1;
   return c;
 }
 
-function sum(arr){return arr.reduce((a,b)=>a+b,0);}
+function sumDice(){return dice.reduce(function(a,b){return a+b;},0);}
 
 function calcScore(cat){
-  if(!rolled)return null;
-  const c=counts();
-  const vals=Object.values(c);
-  const s=sum(dice);
+  if(!rolled) return null;
+  var c=counts();
+  var vals=Object.values(c);
+  var s=sumDice();
   switch(cat){
-    case'ones':return (c[1]||0)*1;
-    case'twos':return (c[2]||0)*2;
-    case'threes':return (c[3]||0)*3;
-    case'fours':return (c[4]||0)*4;
-    case'fives':return (c[5]||0)*5;
-    case'sixes':return (c[6]||0)*6;
-    case'3oak':return vals.some(v=>v>=3)?s:0;
-    case'4oak':return vals.some(v=>v>=4)?s:0;
-    case'fh':{const sv=vals.sort((a,b)=>a-b);return(sv.length===2&&sv[0]>=2&&sv[1]>=2)?25:0;}
-    case'ss':{const u=[...new Set(dice)].sort((a,b)=>a-b);const str=u.join('');return/1234|2345|3456/.test(str)?30:0;}
-    case'ls':{const u=[...new Set(dice)].sort((a,b)=>a-b);return u.length===5&&u[4]-u[0]===4?40:0;}
-    case'yahtzee':return vals.some(v=>v===5)?50:0;
-    case'chance':return s;
+    case 'ones':   return (c[1]||0)*1;
+    case 'twos':   return (c[2]||0)*2;
+    case 'threes': return (c[3]||0)*3;
+    case 'fours':  return (c[4]||0)*4;
+    case 'fives':  return (c[5]||0)*5;
+    case 'sixes':  return (c[6]||0)*6;
+    case '3oak':   return vals.some(function(v){return v>=3;})?s:0;
+    case '4oak':   return vals.some(function(v){return v>=4;})?s:0;
+    case 'fh': {
+      var sv=vals.slice().sort(function(a,b){return a-b;});
+      return (sv.length===2&&sv[0]>=2&&sv[1]>=2)?25:0;
+    }
+    case 'ss': {
+      var u=[...new Set(dice)].sort(function(a,b){return a-b;});
+      var str=u.join('');
+      return /1234|2345|3456/.test(str)?30:0;
+    }
+    case 'ls': {
+      var u=[...new Set(dice)].sort(function(a,b){return a-b;});
+      return u.length===5&&u[4]-u[0]===4?40:0;
+    }
+    case 'yahtzee': return vals.some(function(v){return v===5;})?50:0;
+    case 'chance':  return s;
   }
   return 0;
 }
 
 function showPreviews(){
-  CATS.forEach(c=>{
-    if(scores.hasOwnProperty(c))return;
-    const sc=calcScore(c);
-    const el=document.getElementById('sv-'+c);
-    const row=document.getElementById('sr-'+c);
+  CATS.forEach(function(c){
+    if(scores.hasOwnProperty(c)) return;
+    var sc=calcScore(c);
+    var el=document.getElementById('sv-'+c);
+    var row=document.getElementById('sr-'+c);
     if(sc===null){el.textContent='—';el.className='sc-val empty';row.classList.remove('preview');return;}
     el.textContent=sc;
     el.className='sc-val '+(sc>0?'preview-val':'zero');
@@ -198,20 +253,25 @@ function showPreviews(){
 }
 
 function score(cat){
-  if(scores.hasOwnProperty(cat))return;
+  if(scores.hasOwnProperty(cat)) return;
   if(!rolled){alert('Roll the dice first!');return;}
-  const sc=calcScore(cat);
+  var sc=calcScore(cat);
   scores[cat]=sc;
-  const el=document.getElementById('sv-'+cat);
+  var el=document.getElementById('sv-'+cat);
   el.textContent=sc;
   el.className='sc-val scored'+(sc===0?' zero':'');
   document.getElementById('sr-'+cat).classList.add('scored');
   document.getElementById('sr-'+cat).classList.remove('preview');
-  // reset
+
+  // sounds
+  if(cat==='yahtzee'&&sc===50) sndYahtzee();
+  else if(sc===0) sndBust();
+  else sndScore();
+
+  // reset for next turn
   dice=[0,0,0,0,0];kept=[false,false,false,false,false];rollsLeft=3;rolled=false;
   renderDice();
-  // clear other previews
-  CATS.forEach(c=>{
+  CATS.forEach(function(c){
     if(!scores.hasOwnProperty(c)){
       document.getElementById('sv-'+c).textContent='—';
       document.getElementById('sv-'+c).className='sc-val empty';
@@ -221,33 +281,37 @@ function score(cat){
   updateTotals();
   turn++;
   updateUI();
-  if(Object.keys(scores).length===13)setTimeout(endGame,400);
+  if(Object.keys(scores).length===13) setTimeout(endGame,400);
 }
 
 function updateTotals(){
-  const upper=['ones','twos','threes','fours','fives','sixes'];
-  const upperSum=upper.filter(c=>scores.hasOwnProperty(c)).reduce((a,c)=>a+scores[c],0);
-  const bonus=upperSum>=63?35:0;
-  document.getElementById('bonus-display').textContent=`Bonus (≥63): ${upperSum}/63${bonus?` +35 ✓`:''}`;
-  const lower=['3oak','4oak','fh','ss','ls','yahtzee','chance'];
-  const lowerSum=lower.filter(c=>scores.hasOwnProperty(c)).reduce((a,c)=>a+scores[c],0);
-  const total=upperSum+bonus+lowerSum;
+  var upper=['ones','twos','threes','fours','fives','sixes'];
+  var upperSum=upper.filter(function(c){return scores.hasOwnProperty(c);}).reduce(function(a,c){return a+scores[c];},0);
+  var bonus=upperSum>=63?35:0;
+  document.getElementById('bonus-display').textContent='Bonus (≥63): '+upperSum+'/63'+(bonus?' +35':'');
+  var lower=['3oak','4oak','fh','ss','ls','yahtzee','chance'];
+  var lowerSum=lower.filter(function(c){return scores.hasOwnProperty(c);}).reduce(function(a,c){return a+scores[c];},0);
+  var total=upperSum+bonus+lowerSum;
   document.getElementById('total-score').textContent=total;
   return total;
 }
 
 function endGame(){
-  const total=updateTotals();
-  let msg=`Final Score: ${total} — `;
-  if(total>=300)msg+='AMAZING! Near perfect!';
-  else if(total>=250)msg+='Excellent game!';
-  else if(total>=200)msg+='Great job!';
-  else if(total>=150)msg+='Good game!';
+  var total=updateTotals();
+  saveBest(total);renderStatsBar();
+  var msg='Final Score: '+total+' — ';
+  if(total>=300) msg+='AMAZING! Near perfect!';
+  else if(total>=250) msg+='Excellent game!';
+  else if(total>=200) msg+='Great job!';
+  else if(total>=150) msg+='Good game!';
   else msg+='Keep practicing!';
+  var b=loadBest();
+  if(b!==null) msg+=' (Best: '+b+')';
   document.getElementById('go-msg').textContent=msg;
   document.getElementById('game-over').classList.add('show');
 }
 
+renderStatsBar();
 newGame();
 </script>
 </body>

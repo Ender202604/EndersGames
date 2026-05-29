@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Connect Four – Ender's Games</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a1a;font-family:'Segoe UI',Arial,sans-serif;color:#fff;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px 10px}
+a.back{position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999}
+h1{color:#ffdd00;font-size:2rem;margin:50px 0 6px;letter-spacing:2px}
+.info{color:#aaaacc;font-size:.85rem;margin-bottom:6px}
+#diff-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;justify-content:center}
+.diff-btn{padding:5px 14px;border-radius:8px;border:2px solid #3a3a7a;background:#0e0e2a;color:#aaaacc;font-size:12px;cursor:pointer;font-weight:bold;transition:all .15s}
+.diff-btn.active{background:#2a2a5a;border-color:#aaaaff;color:#ddddff}
+.diff-btn:hover{background:#1a1a3a}
+#stats-bar{font-size:13px;color:#aaaacc;margin-bottom:6px}
+#stats-bar span{color:#ffdd00;font-weight:bold}
+.status-row{display:flex;gap:20px;margin:8px 0;align-items:center;justify-content:center;flex-wrap:wrap}
+.turn-box{background:#1a1a3a;border:2px solid #4444aa;border-radius:10px;padding:8px 20px;font-size:1rem;text-align:center}
+.turn-box span{font-weight:bold;font-size:1.2rem}
+.yellow{color:#ffdd00}
+.red{color:#ff4444}
+button{background:#1a1a3a;color:#ffdd00;border:2px solid #ffdd00;border-radius:8px;padding:8px 20px;font-size:.95rem;cursor:pointer;margin:8px 0}
+button:hover{background:#2a2a4a}
+#board-wrap{position:relative;cursor:pointer;user-select:none}
+#arrow-row{display:flex;margin-bottom:2px;width:min(95vw,462px)}
+.arrow-btn{flex:1;text-align:center;font-size:1.3rem;color:#ffdd00;opacity:.4;transition:.2s;cursor:pointer;padding:4px 0}
+.arrow-btn:hover{opacity:1}
+#board{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;background:#1a1a66;border-radius:12px;padding:10px;width:min(95vw,462px);border:3px solid #4444aa}
+.cell{width:100%;aspect-ratio:1;border-radius:50%;background:#0a0a2a;border:2px solid #2222aa;transition:background .15s}
+.cell.p1{background:radial-gradient(circle at 35% 35%,#ffee66,#ffaa00);border-color:#ffcc00}
+.cell.p2{background:radial-gradient(circle at 35% 35%,#ff8888,#cc0000);border-color:#ff4444}
+.cell.win{animation:pulse .4s infinite alternate}
+@keyframes pulse{from{box-shadow:0 0 8px 2px currentColor}to{box-shadow:0 0 20px 6px currentColor}}
+.cell.win.p1{color:#ffdd00}
+.cell.win.p2{color:#ff4444}
+#msg{font-size:1.3rem;font-weight:bold;min-height:2rem;margin:8px 0;text-align:center}
+.score-row{display:flex;gap:24px;margin:4px 0}
+.score-item{text-align:center}
+.score-item .slabel{font-size:.7rem;color:#aaaacc;text-transform:uppercase}
+.score-item .sval{font-size:1.4rem;font-weight:bold}
+</style>
+</head>
+<body>
+<a href="index.html" class="back">← Back</a>
+<h1>Connect Four</h1>
+<div class="info">You are Yellow. Beat the AI!</div>
+
+<div id="diff-row">
+  <button class="diff-btn active" id="diff-easy"   onclick="setDiff('easy')">Easy</button>
+  <button class="diff-btn"        id="diff-medium" onclick="setDiff('medium')">Medium</button>
+  <button class="diff-btn"        id="diff-hard"   onclick="setDiff('hard')">Hard</button>
+</div>
+
+<div id="stats-bar">Wins vs AI: <span id="st-wins">0</span></div>
+
+<div class="score-row">
+  <div class="score-item"><div class="slabel">You</div><div class="sval yellow" id="s1">0</div></div>
+  <div class="score-item"><div class="slabel">Draws</div><div class="sval" style="color:#aaa" id="sd">0</div></div>
+  <div class="score-item"><div class="slabel">AI</div><div class="sval red" id="s2">0</div></div>
+</div>
+<div class="status-row">
+  <div class="turn-box">Turn: <span id="turn-label" class="yellow">Your Turn</span></div>
+</div>
+<div id="board-wrap">
+  <div id="arrow-row"></div>
+  <div id="board"></div>
+</div>
+<div id="msg"></div>
+<button onclick="newGame()">New Game</button>
+
+<script>
+// ── Audio ──────────────────────────────────────────────
+var AC = window.AudioContext || window.webkitAudioContext;
+var ac = AC ? new AC() : null;
+function snd(freq, dur, type, vol) {
+  if (!ac) return;
+  var o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.frequency.value = freq; o.type = type || 'square';
+  g.gain.setValueAtTime(vol || 0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.start(); o.stop(ac.currentTime + dur);
+}
+function sndDrop()  { snd(300,0.09,'square',0.12); setTimeout(function(){snd(200,0.07,'square',0.10);},60); }
+function sndWin()   { [660,880,1100,1320].forEach(function(f,i){setTimeout(function(){snd(f,0.14,'sine',0.16);},i*80);}); }
+function sndDraw()  { snd(440,0.12,'triangle',0.12); setTimeout(function(){snd(330,0.15,'triangle',0.10);},130); }
+
+// ── Stats ──────────────────────────────────────────────
+function loadWins(){ return parseInt(localStorage.getItem('hs_c4_wins')||'0'); }
+function saveWin(){ localStorage.setItem('hs_c4_wins', loadWins()+1); }
+function renderStatsBar(){ document.getElementById('st-wins').textContent = loadWins(); }
+
+// ── Difficulty ─────────────────────────────────────────
+var difficulty = 'easy';
+function setDiff(d){
+  difficulty = d;
+  ['easy','medium','hard'].forEach(function(x){ document.getElementById('diff-'+x).classList.toggle('active', x===d); });
+  newGame();
+}
+
+// ── Game ───────────────────────────────────────────────
+const ROWS=6,COLS=7;
+var board,currentPlayer,gameOver,scores={p1:0,p2:0,d:0};
+var aiThinking=false;
+
+function newGame(){
+  board=Array.from({length:ROWS},function(){return Array(COLS).fill(0);});
+  currentPlayer=1;gameOver=false;aiThinking=false;
+  document.getElementById('msg').textContent='';
+  document.getElementById('turn-label').textContent='Your Turn';
+  document.getElementById('turn-label').className='yellow';
+  render();
+}
+
+function render(){
+  var arrows=document.getElementById('arrow-row');
+  arrows.innerHTML='';
+  for(var c=0;c<COLS;c++){
+    var a=document.createElement('div');
+    a.className='arrow-btn';a.textContent='▼';
+    (function(col){a.addEventListener('click',function(){humanDrop(col);});})(c);
+    arrows.appendChild(a);
+  }
+  var b=document.getElementById('board');
+  b.innerHTML='';
+  for(var r=0;r<ROWS;r++) for(var cc=0;cc<COLS;cc++){
+    var cell=document.createElement('div');
+    cell.className='cell'+(board[r][cc]===1?' p1':board[r][cc]===2?' p2':'');
+    (function(col){cell.addEventListener('click',function(){humanDrop(col);});})(cc);
+    b.appendChild(cell);
+  }
+}
+
+function renderWin(winning){
+  var b=document.getElementById('board');
+  for(var i=0;i<winning.length;i++){
+    b.children[winning[i][0]*COLS+winning[i][1]].classList.add('win');
+  }
+}
+
+function drop(col,player){
+  for(var r=ROWS-1;r>=0;r--){
+    if(board[r][col]===0){board[r][col]=player;return r;}
+  }
+  return -1;
+}
+
+function humanDrop(col){
+  if(gameOver||currentPlayer!==1||aiThinking) return;
+  if(board[0][col]!==0) return;
+  drop(col,1);sndDrop();render();
+  var w=checkWin(1);
+  if(w){gameOver=true;scores.p1++;updateScores();sndWin();saveWin();renderStatsBar();
+    document.getElementById('msg').textContent='You win!';document.getElementById('msg').style.color='#ffdd00';renderWin(w);return;}
+  if(isFull()){gameOver=true;scores.d++;updateScores();sndDraw();document.getElementById('msg').textContent="It's a Draw!";return;}
+  currentPlayer=2;
+  document.getElementById('turn-label').textContent='AI Thinking...';
+  document.getElementById('turn-label').className='red';
+  aiThinking=true;
+  setTimeout(aiMove,300);
+}
+
+function aiMove(){
+  var col=getBestMove();
+  drop(col,2);sndDrop();render();
+  aiThinking=false;
+  var w=checkWin(2);
+  if(w){gameOver=true;scores.p2++;updateScores();sndWin();
+    document.getElementById('msg').textContent='AI wins!';document.getElementById('msg').style.color='#ff4444';renderWin(w);return;}
+  if(isFull()){gameOver=true;scores.d++;updateScores();sndDraw();document.getElementById('msg').textContent="It's a Draw!";return;}
+  currentPlayer=1;
+  document.getElementById('turn-label').textContent='Your Turn';
+  document.getElementById('turn-label').className='yellow';
+}
+
+function isFull(){for(var c=0;c<COLS;c++)if(board[0][c]===0)return false;return true;}
+
+function checkWin(p){
+  var dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(var r=0;r<ROWS;r++) for(var c=0;c<COLS;c++){
+    if(board[r][c]!==p) continue;
+    for(var d=0;d<dirs.length;d++){
+      var dr=dirs[d][0],dc=dirs[d][1];
+      var cells=[[r,c]];
+      for(var k=1;k<4;k++){
+        var nr=r+dr*k,nc=c+dc*k;
+        if(nr<0||nr>=ROWS||nc<0||nc>=COLS||board[nr][nc]!==p) break;
+        cells.push([nr,nc]);
+      }
+      if(cells.length===4) return cells;
+    }
+  }
+  return null;
+}
+
+function getBestMove(){
+  if(difficulty==='easy'){
+    // Mostly random — but still block immediate wins
+    var valid=[];for(var c=0;c<COLS;c++)if(board[0][c]===0)valid.push(c);
+    // 30% chance: block player win
+    if(Math.random()<0.3){
+      for(var i=0;i<valid.length;i++){
+        var r=drop(valid[i],1);
+        if(checkWin(1)){board[r][valid[i]]=0;return valid[i];}
+        board[r][valid[i]]=0;
+      }
+    }
+    return valid[Math.floor(Math.random()*valid.length)];
+  }
+  // medium / hard: full minimax
+  var depth=(difficulty==='hard')?7:5;
+  // Try to win first
+  for(var c=0;c<COLS;c++){if(board[0][c]!==0)continue;var r=drop(c,2);if(checkWin(2)){board[r][c]=0;return c;}board[r][c]=0;}
+  // Block player win
+  for(var c=0;c<COLS;c++){if(board[0][c]!==0)continue;var r=drop(c,1);if(checkWin(1)){board[r][c]=0;return c;}board[r][c]=0;}
+  var best=-Infinity,bestCol=3;
+  var valid=[];for(var c=0;c<COLS;c++)if(board[0][c]===0)valid.push(c);
+  valid.sort(function(){return Math.random()-.5;});
+  for(var i=0;i<valid.length;i++){
+    var c=valid[i];
+    var r=drop(c,2);
+    var sc=minimax(depth-1,false,-Infinity,Infinity);
+    board[r][c]=0;
+    if(sc>best){best=sc;bestCol=c;}
+  }
+  return bestCol;
+}
+
+function minimax(depth,isMax,alpha,beta){
+  if(checkWin(2)) return 100+depth;
+  if(checkWin(1)) return -(100+depth);
+  if(isFull()||depth===0) return evalBoard();
+  if(isMax){
+    var best=-Infinity;
+    for(var c=0;c<COLS;c++){
+      if(board[0][c]!==0) continue;
+      var r=drop(c,2);best=Math.max(best,minimax(depth-1,false,alpha,beta));board[r][c]=0;
+      alpha=Math.max(alpha,best);if(beta<=alpha)break;
+    }
+    return best;
+  }else{
+    var best=Infinity;
+    for(var c=0;c<COLS;c++){
+      if(board[0][c]!==0) continue;
+      var r=drop(c,1);best=Math.min(best,minimax(depth-1,true,alpha,beta));board[r][c]=0;
+      beta=Math.min(beta,best);if(beta<=alpha)break;
+    }
+    return best;
+  }
+}
+
+function evalBoard(){
+  var score=0;
+  var dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(var r=0;r<ROWS;r++) for(var c=0;c<COLS;c++){
+    for(var d=0;d<dirs.length;d++){
+      var dr=dirs[d][0],dc=dirs[d][1];
+      var p1=0,p2=0;
+      for(var k=0;k<4;k++){
+        var nr=r+dr*k,nc=c+dc*k;
+        if(nr<0||nr>=ROWS||nc<0||nc>=COLS) break;
+        if(board[nr][nc]===2) p2++; else if(board[nr][nc]===1) p1++;
+      }
+      if(p1===0) score+=p2*p2;if(p2===0) score-=p1*p1;
+    }
+  }
+  for(var r=0;r<ROWS;r++) if(board[r][3]===2)score+=2;else if(board[r][3]===1)score-=2;
+  return score;
+}
+
+function updateScores(){
+  document.getElementById('s1').textContent=scores.p1;
+  document.getElementById('s2').textContent=scores.p2;
+  document.getElementById('sd').textContent=scores.d;
+}
+
+renderStatsBar();
+newGame();
+</script>
+</body>
+</html>

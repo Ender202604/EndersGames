@@ -10,6 +10,7 @@ body{background:#1a0000;color:white;font-family:Arial,sans-serif;display:flex;fl
 h1{color:yellow;font-size:22px;margin-bottom:4px}
 #home-btn{position:fixed;top:8px;left:10px;color:#ff9999;text-decoration:none;font-size:13px;z-index:99}
 #scoreboard{font-size:18px;margin:6px 0;color:#ffddaa}
+#hs-display{font-size:13px;color:#aaffaa;margin:2px 0}
 #msg{font-size:15px;color:#ffff88;min-height:22px;margin:4px 0;text-align:center}
 #field{position:relative;background:#2d7a2d;border-radius:10px;width:360px;height:260px;border:3px solid #fff;cursor:crosshair;overflow:hidden}
 #goal{position:absolute;top:20px;left:50%;transform:translateX(-50%);width:180px;height:90px;border:4px solid white;border-bottom:none;background:rgba(255,255,255,0.08);pointer-events:none}
@@ -20,14 +21,20 @@ h1{color:yellow;font-size:22px;margin-bottom:4px}
 #power-fill{height:100%;width:0%;background:linear-gradient(90deg,#00cc00,#ffcc00,#ff0000);transition:width 0.05s}
 .btn{background:#8b0000;color:white;border:2px solid #ff6666;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:14px;margin:4px}
 .btn:hover{background:#cc0000}
-#mode-select{margin:6px 0;font-size:13px;color:#ffcccc}
-#mode-select label{cursor:pointer;margin:0 8px}
+#mode-row{display:flex;gap:6px;align-items:center;margin:4px 0}
+.diff-btn{background:#2a0000;color:#ffcc00;border:2px solid #ff6666;padding:4px 14px;border-radius:6px;font-size:13px;cursor:pointer}
+.diff-btn.active{background:#cc0000;color:white}
 </style>
 </head>
 <body>
 <a href="index.html" id="home-btn">🏠 Home</a>
 <h1>⚽ Penalty Kicks</h1>
 <div id="scoreboard">You: <span id="pscore">0</span> &nbsp;|&nbsp; Keeper: <span id="kscore">0</span> &nbsp;|&nbsp; Round <span id="rnd">1</span>/5</div>
+<div id="hs-display">Best: <span id="hs-val">0</span>/5</div>
+<div id="mode-row">
+  <button class="diff-btn active" id="btn-easy" onclick="setDiff('easy')">Easy</button>
+  <button class="diff-btn" id="btn-hard" onclick="setDiff('hard')">Hard</button>
+</div>
 <div id="field">
   <div id="goal"></div>
   <div id="goalkeeper"></div>
@@ -39,6 +46,38 @@ h1{color:yellow;font-size:22px;margin-bottom:4px}
 <button class="btn" id="shoot-btn" onmousedown="startPower()" onmouseup="shoot()" ontouchstart="startPower();event.preventDefault()" ontouchend="shoot();event.preventDefault()">⚡ Hold to Power Up</button>
 <button class="btn" onclick="resetGame()">🔄 New Game</button>
 <script>
+// --- Audio ---
+var AC = window.AudioContext || window.webkitAudioContext;
+var ac = AC ? new AC() : null;
+function snd(freq, dur, type, vol) {
+  if (!ac) return;
+  var o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.frequency.value = freq; o.type = type || 'square';
+  g.gain.setValueAtTime(vol || 0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.start(); o.stop(ac.currentTime + dur);
+}
+function sndKick() { snd(120, 0.12, 'square', 0.2); setTimeout(function(){ snd(80, 0.08, 'sine', 0.15); }, 80); }
+function sndGoal() { [400,500,600,700,800].forEach(function(f,i){ setTimeout(function(){ snd(f,0.2,'sine',0.18); },i*80); }); }
+function sndSave() { snd(300, 0.1, 'square', 0.18); setTimeout(function(){ snd(200, 0.15, 'sine', 0.12); }, 100); }
+
+// --- High Score (best goals scored out of 5) ---
+var HS_KEY = 'hs_soccer';
+function getHiScore() { return parseInt(localStorage.getItem(HS_KEY) || '0'); }
+function saveHiScore(v) { if (v > getHiScore()) localStorage.setItem(HS_KEY, v); }
+document.getElementById('hs-val').textContent = getHiScore();
+
+// --- Difficulty ---
+var difficulty = 'easy';
+function setDiff(d) {
+  difficulty = d;
+  document.getElementById('btn-easy').classList.toggle('active', d === 'easy');
+  document.getElementById('btn-hard').classList.toggle('active', d === 'hard');
+}
+function getKeeperSpeed() { return difficulty === 'hard' ? 0.45 : 0.28; }
+function getKeeperSmartness() { return difficulty === 'hard' ? 0.6 : 0.0; }
+
 var playerScore=0,keeperScore=0,round=1,maxRounds=5;
 var aiming=false,aimX=0,aimY=0,power=0,powering=false,powerTimer=null,shooting=false;
 var field=document.getElementById('field');
@@ -81,6 +120,7 @@ function shoot(){
   clearInterval(powerTimer); powering=false;
   if(round>maxRounds) return;
   shooting=true;
+  sndKick();
   var targetX=aimX||180, targetY=aimY||60;
   ball.style.transition='all 0.45s ease-out';
   ball.style.left=(targetX-13)+'px';
@@ -88,8 +128,18 @@ function shoot(){
   ball.style.bottom='auto';
   var goalLeft=90, goalRight=270, goalTop=20, goalBot=110;
   var inGoal = targetX>=goalLeft && targetX<=goalRight && targetY>=goalTop && targetY<=goalBot;
-  var keepLeft=parseInt(keeper.style.left);
-  var keeperDest = Math.random()<0.5 ? 90+Math.random()*60 : 160+Math.random()*60;
+  // Keeper AI: hard mode tracks target position somewhat
+  var keeperDest;
+  if(difficulty==='hard' && Math.random()<getKeeperSmartness()){
+    // Smart: move toward shot X with some error
+    keeperDest = targetX - 16 + (Math.random()-0.5)*40;
+    keeperDest = Math.max(90, Math.min(238, keeperDest));
+  } else {
+    keeperDest = Math.random()<0.5 ? 90+Math.random()*60 : 160+Math.random()*60;
+  }
+  // Animate keeper with difficulty speed
+  var kTransTime = difficulty==='hard' ? 0.18 : 0.3;
+  keeper.style.transition='left '+kTransTime+'s';
   keeper.style.left=keeperDest+'px';
   var keeperBlocked = Math.abs(targetX-(keeperDest+16))<28 && targetY>=28 && targetY<=96;
   setTimeout(function(){
@@ -97,10 +147,12 @@ function shoot(){
       playerScore++;
       document.getElementById('pscore').textContent=playerScore;
       showMsg('⚽ GOAL! Great kick!','#88ff88');
+      sndGoal();
     } else if(inGoal && keeperBlocked){
       keeperScore++;
       document.getElementById('kscore').textContent=keeperScore;
       showMsg('🧤 Saved! The keeper got it!','#ff8888');
+      sndSave();
     } else {
       showMsg('😬 Missed! Aim for the goal!','#ffaa44');
     }
@@ -108,6 +160,8 @@ function shoot(){
     document.getElementById('rnd').textContent=Math.min(round,maxRounds);
     if(round>maxRounds){
       setTimeout(function(){
+        saveHiScore(playerScore);
+        document.getElementById('hs-val').textContent=getHiScore();
         var winner=playerScore>keeperScore?'You win! 🎉':playerScore<keeperScore?'Keeper wins! 😅':'Draw! 🤝';
         showMsg('Game Over! '+winner+' Final: '+playerScore+'-'+keeperScore,'#ffff44');
       },600);

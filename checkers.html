@@ -8,6 +8,12 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:#1a0a00;font-family:'Segoe UI',Arial,sans-serif;color:#e8d8b0;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:60px 12px 24px}
 h1{font-size:26px;color:#ffaa44;text-shadow:0 0 10px #ffaa4466;letter-spacing:2px;margin-bottom:4px}
+#diff-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;justify-content:center}
+.diff-btn{padding:5px 14px;border-radius:8px;border:2px solid #7a4a1a;background:#2a1a00;color:#ccaa88;font-size:12px;cursor:pointer;font-weight:bold;transition:all .15s}
+.diff-btn.active{background:#5a2a00;border-color:#ffaa44;color:#ffcc88}
+.diff-btn:hover{background:#3a2a00}
+#stats-bar{font-size:13px;color:#ccaa88;margin-bottom:6px}
+#stats-bar span{color:#ffd700;font-weight:bold}
 #status{font-size:15px;color:#ffcc88;min-height:24px;margin:8px 0;text-align:center}
 #board-wrap{position:relative;display:inline-block;border:3px solid #8b5e2a;border-radius:4px;box-shadow:0 4px 24px #0008}
 #board{display:grid;grid-template-columns:repeat(8,1fr)}
@@ -35,6 +41,14 @@ h1{font-size:26px;color:#ffaa44;text-shadow:0 0 10px #ffaa4466;letter-spacing:2p
 <a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
 <h1>♟ Checkers</h1>
 
+<div id="diff-row">
+  <button class="diff-btn active" id="diff-easy"   onclick="setDiff('easy')">Easy AI</button>
+  <button class="diff-btn"        id="diff-medium" onclick="setDiff('medium')">Medium</button>
+  <button class="diff-btn"        id="diff-hard"   onclick="setDiff('hard')">Hard AI</button>
+</div>
+
+<div id="stats-bar">Wins vs AI: <span id="st-wins">0</span></div>
+
 <div id="score">
   <div class="sc">You (Red): <span id="p-score" style="color:#ff8866;font-weight:bold">12</span></div>
   <div class="sc">AI (Black): <span id="a-score" style="color:#aaaaaa;font-weight:bold">12</span></div>
@@ -47,19 +61,48 @@ h1{font-size:26px;color:#ffaa44;text-shadow:0 0 10px #ffaa4466;letter-spacing:2p
 </div>
 
 <script>
-// Board: 8x8, 0=empty, 1=red, 2=black, 3=red king, 4=black king
-// Red moves up (row decreasing), Black moves down (row increasing)
+// ── Audio ──────────────────────────────────────────────
+var AC = window.AudioContext || window.webkitAudioContext;
+var ac = AC ? new AC() : null;
+function snd(freq, dur, type, vol) {
+  if (!ac) return;
+  var o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.frequency.value = freq; o.type = type || 'square';
+  g.gain.setValueAtTime(vol || 0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.start(); o.stop(ac.currentTime + dur);
+}
+function sndMove()    { snd(440,0.08,'square',0.10); }
+function sndCapture() { snd(220,0.12,'sawtooth',0.15); setTimeout(function(){snd(180,0.1,'sawtooth',0.12);},80); }
+function sndKing()    { snd(880,0.1,'sine',0.15); setTimeout(function(){snd(1100,0.12,'sine',0.15);},120); }
+function sndWin()     { [660,880,1100,880,1320].forEach(function(f,i){setTimeout(function(){snd(f,0.12,'sine',0.16);},i*90);}); }
+
+// ── Stats ──────────────────────────────────────────────
+function loadWins(){ return parseInt(localStorage.getItem('hs_checkers_wins')||'0'); }
+function saveWin(){ localStorage.setItem('hs_checkers_wins', loadWins()+1); }
+function renderStatsBar(){ document.getElementById('st-wins').textContent = loadWins(); }
+
+// ── Difficulty ─────────────────────────────────────────
+var difficulty = 'easy';
+function setDiff(d) {
+  difficulty = d;
+  ['easy','medium','hard'].forEach(function(x){ document.getElementById('diff-'+x).classList.toggle('active', x===d); });
+  newGame();
+}
+
+// ── Game ───────────────────────────────────────────────
 const RED=1,BLACK=2,RED_K=3,BLACK_K=4;
-let board=[],selected=null,validMoves=[],turn='red',gameOver=false,mustCapture=false,chainPiece=null;
+var board=[],selected=null,validMoves=[],turn='red',gameOver=false,mustCapture=false,chainPiece=null;
 
 function newGame(){
   board=[];
-  for(let r=0;r<8;r++){
+  for(var r=0;r<8;r++){
     board.push([]);
-    for(let c=0;c<8;c++){
+    for(var c=0;c<8;c++){
       if((r+c)%2===1){
-        if(r<3)board[r].push(BLACK);
-        else if(r>4)board[r].push(RED);
+        if(r<3) board[r].push(BLACK);
+        else if(r>4) board[r].push(RED);
         else board[r].push(0);
       }else board[r].push(0);
     }
@@ -74,66 +117,73 @@ function isKing(v){return v===RED_K||v===BLACK_K;}
 function owns(v,t){return t==='red'?isRed(v):isBlack(v);}
 
 function getCaptures(r,c,b){
-  const v=b[r][c];if(!v)return[];
-  const dirs=[];
-  if(v===RED||v===RED_K)dirs.push([-1,-1],[-1,1]);
-  if(v===BLACK||v===BLACK_K)dirs.push([1,-1],[1,1]);
-  const res=[];
-  for(const[dr,dc]of dirs){
-    const mr=r+dr,mc=c+dc,lr=r+2*dr,lc=c+2*dc;
-    if(lr<0||lr>7||lc<0||lc>7)continue;
-    const mid=b[mr][mc];
-    if(!mid)continue;
-    if(isRed(v)&&isBlack(mid)&&!b[lr][lc])res.push({r:lr,c:lc,capR:mr,capC:mc});
-    if(isBlack(v)&&isRed(mid)&&!b[lr][lc])res.push({r:lr,c:lc,capR:mr,capC:mc});
+  var v=b[r][c];if(!v)return[];
+  var dirs=[];
+  if(v===RED||v===RED_K) dirs.push([-1,-1],[-1,1]);
+  if(v===BLACK||v===BLACK_K) dirs.push([1,-1],[1,1]);
+  var res=[];
+  for(var i=0;i<dirs.length;i++){
+    var dr=dirs[i][0],dc=dirs[i][1];
+    var mr=r+dr,mc=c+dc,lr=r+2*dr,lc=c+2*dc;
+    if(lr<0||lr>7||lc<0||lc>7) continue;
+    var mid=b[mr][mc];
+    if(!mid) continue;
+    if(isRed(v)&&isBlack(mid)&&!b[lr][lc]) res.push({r:lr,c:lc,capR:mr,capC:mc});
+    if(isBlack(v)&&isRed(mid)&&!b[lr][lc]) res.push({r:lr,c:lc,capR:mr,capC:mc});
   }
   return res;
 }
 
 function getMoves(r,c,b){
-  const v=b[r][c];if(!v)return[];
-  const dirs=[];
-  if(v===RED||v===RED_K)dirs.push([-1,-1],[-1,1]);
-  if(v===BLACK||v===BLACK_K)dirs.push([1,-1],[1,1]);
-  const res=[];
-  for(const[dr,dc]of dirs){
-    const nr=r+dr,nc=c+dc;
-    if(nr<0||nr>7||nc<0||nc>7)continue;
-    if(!b[nr][nc])res.push({r:nr,c:nc,capR:null,capC:null});
+  var v=b[r][c];if(!v)return[];
+  var dirs=[];
+  if(v===RED||v===RED_K) dirs.push([-1,-1],[-1,1]);
+  if(v===BLACK||v===BLACK_K) dirs.push([1,-1],[1,1]);
+  var res=[];
+  for(var i=0;i<dirs.length;i++){
+    var nr=r+dirs[i][0],nc=c+dirs[i][1];
+    if(nr<0||nr>7||nc<0||nc>7) continue;
+    if(!b[nr][nc]) res.push({r:nr,c:nc,capR:null,capC:null});
   }
   return res;
 }
 
 function allCaptures(t,b){
-  const res=[];
-  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-    if(owns(b[r][c],t))for(const m of getCaptures(r,c,b))res.push({sr:r,sc:c,...m});
+  var res=[];
+  for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+    if(owns(b[r][c],t)){
+      var caps=getCaptures(r,c,b);
+      for(var k=0;k<caps.length;k++) res.push(Object.assign({sr:r,sc:c},caps[k]));
+    }
   }
   return res;
 }
 
 function allMoves(t,b){
-  const res=[];
-  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-    if(owns(b[r][c],t))for(const m of getMoves(r,c,b))res.push({sr:r,sc:c,...m});
+  var res=[];
+  for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+    if(owns(b[r][c],t)){
+      var mvs=getMoves(r,c,b);
+      for(var k=0;k<mvs.length;k++) res.push(Object.assign({sr:r,sc:c},mvs[k]));
+    }
   }
   return res;
 }
 
 function applyMove(b,m){
-  const nb=b.map(r=>[...r]);
-  let v=nb[m.sr][m.sc];
+  var nb=b.map(function(row){return row.slice();});
+  var v=nb[m.sr][m.sc];
   nb[m.sr][m.sc]=0;
-  if(m.capR!==null)nb[m.capR][m.capC]=0;
-  if(v===RED&&m.r===0)v=RED_K;
-  if(v===BLACK&&m.r===7)v=BLACK_K;
+  if(m.capR!==null) nb[m.capR][m.capC]=0;
+  if(v===RED&&m.r===0) v=RED_K;
+  if(v===BLACK&&m.r===7) v=BLACK_K;
   nb[m.r][m.c]=v;
   return nb;
 }
 
 function updateScore(){
-  let r=0,bl=0;
-  for(let row of board)for(let v of row){if(isRed(v))r++;if(isBlack(v))bl++;}
+  var r=0,bl=0;
+  for(var row of board) for(var v of row){if(isRed(v))r++;if(isBlack(v))bl++;}
   document.getElementById('p-score').textContent=r;
   document.getElementById('a-score').textContent=bl;
 }
@@ -141,45 +191,41 @@ function updateScore(){
 function setStatus(s){document.getElementById('status').textContent=s;}
 
 function render(){
-  const el=document.getElementById('board');
+  var el=document.getElementById('board');
   el.innerHTML='';
-  const caps=chainPiece?getCaptures(chainPiece[0],chainPiece[1],board).map(m=>`${m.r},${m.c}`)
-    :(mustCapture&&turn==='red'?validMoves.map(m=>`${m.r},${m.c}`):[]);
-  const vmSet=new Set(validMoves.map(m=>`${m.r},${m.c}`));
-  for(let r=0;r<8;r++){
-    for(let c=0;c<8;c++){
-      const cell=document.createElement('div');
+  var vmSet=new Set(validMoves.map(function(m){return m.r+','+m.c;}));
+  for(var r=0;r<8;r++){
+    for(var c=0;c<8;c++){
+      var cell=document.createElement('div');
       cell.className='cell '+((r+c)%2===0?'light':'dark');
-      if(selected&&selected[0]===r&&selected[1]===c)cell.classList.add('highlight');
-      if(vmSet.has(`${r},${c}`))cell.classList.add('valid-move');
-      const v=board[r][c];
+      if(selected&&selected[0]===r&&selected[1]===c) cell.classList.add('highlight');
+      if(vmSet.has(r+','+c)) cell.classList.add('valid-move');
+      var v=board[r][c];
       if(v){
-        const p=document.createElement('div');
+        var p=document.createElement('div');
         p.className='piece '+(isRed(v)?'red':'black')+(isKing(v)?' king':'');
-        if(selected&&selected[0]===r&&selected[1]===c)p.classList.add('selected');
-        p.addEventListener('click',(e)=>{e.stopPropagation();clickCell(r,c);});
+        if(selected&&selected[0]===r&&selected[1]===c) p.classList.add('selected');
+        (function(rr,cc){p.addEventListener('click',function(e){e.stopPropagation();clickCell(rr,cc);});})(r,c);
         cell.appendChild(p);
       }
-      cell.addEventListener('click',()=>clickCell(r,c));
+      (function(rr,cc){cell.addEventListener('click',function(){clickCell(rr,cc);});})(r,c);
       el.appendChild(cell);
     }
   }
 }
 
 function clickCell(r,c){
-  if(gameOver||turn!=='red')return;
-  const v=board[r][c];
-  // If chain capture in progress
+  if(gameOver||turn!=='red') return;
+  var v=board[r][c];
   if(chainPiece){
-    const caps=getCaptures(chainPiece[0],chainPiece[1],board);
-    const mv=caps.find(m=>m.r===r&&m.c===c);
-    if(mv){doMove({sr:chainPiece[0],sc:chainPiece[1],...mv});return;}
+    var caps=getCaptures(chainPiece[0],chainPiece[1],board);
+    var mv=caps.find(function(m){return m.r===r&&m.c===c;});
+    if(mv){doMove({sr:chainPiece[0],sc:chainPiece[1],r:mv.r,c:mv.c,capR:mv.capR,capC:mv.capC});return;}
     return;
   }
-  // Click on own piece
   if(isRed(v)){
-    const caps=allCaptures('red',board);
-    const pieceCaps=getCaptures(r,c,board);
+    var caps=allCaptures('red',board);
+    var pieceCaps=getCaptures(r,c,board);
     if(caps.length>0&&pieceCaps.length===0){setStatus('You must capture!');return;}
     selected=[r,c];
     if(pieceCaps.length>0){validMoves=pieceCaps;mustCapture=true;}
@@ -187,21 +233,26 @@ function clickCell(r,c){
     else{validMoves=[];mustCapture=true;}
     render();return;
   }
-  // Click on destination
   if(selected){
-    const mv=validMoves.find(m=>m.r===r&&m.c===c);
-    if(mv){doMove({sr:selected[0],sc:selected[1],...mv});return;}
+    var mv=validMoves.find(function(m){return m.r===r&&m.c===c;});
+    if(mv){doMove({sr:selected[0],sc:selected[1],r:mv.r,c:mv.c,capR:mv.capR,capC:mv.capC});return;}
     selected=null;validMoves=[];render();
   }
 }
 
 function doMove(m){
+  var wasCapture=(m.capR!==null);
+  var prevPiece=board[m.sr][m.sc];
   board=applyMove(board,m);
+  // check king promotion
+  var becameKing=(prevPiece===RED&&m.r===0)||(prevPiece===BLACK&&m.r===7);
+  if(becameKing) sndKing();
+  else if(wasCapture) sndCapture();
+  else sndMove();
   selected=null;validMoves=[];
   updateScore();
-  // Check chain capture
   if(m.capR!==null){
-    const more=getCaptures(m.r,m.c,board);
+    var more=getCaptures(m.r,m.c,board);
     if(more.length>0){
       chainPiece=[m.r,m.c];
       validMoves=more;mustCapture=true;
@@ -210,90 +261,109 @@ function doMove(m){
   }
   chainPiece=null;mustCapture=false;
   render();
-  if(checkWin('red'))return;
+  if(checkWin('red')) return;
   turn='black';setStatus('AI is thinking...');
   setTimeout(aiMove,400);
 }
 
 function checkWin(lastMoved){
-  const rCount=board.flat().filter(isRed).length;
-  const bCount=board.flat().filter(isBlack).length;
-  if(rCount===0||allMoves('red',board).length+allCaptures('red',board).length===0){gameOver=true;setStatus('AI wins!');return true;}
-  if(bCount===0||allMoves('black',board).length+allCaptures('black',board).length===0){gameOver=true;setStatus('You win!');return true;}
+  var rCount=board.flat().filter(isRed).length;
+  var bCount=board.flat().filter(isBlack).length;
+  if(rCount===0||allMoves('red',board).length+allCaptures('red',board).length===0){
+    gameOver=true;setStatus('AI wins!');return true;
+  }
+  if(bCount===0||allMoves('black',board).length+allCaptures('black',board).length===0){
+    gameOver=true;sndWin();setStatus('You win!');
+    saveWin();renderStatsBar();
+    return true;
+  }
   return false;
 }
 
-// Minimax AI
+// ── Evaluation ─────────────────────────────────────────
 function evaluate(b){
-  let s=0;
-  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-    const v=b[r][c];
-    if(v===BLACK)s+=3+(r*.15);
-    else if(v===BLACK_K)s+=5;
-    else if(v===RED)s-=3+((7-r)*.15);
-    else if(v===RED_K)s-=5;
+  var s=0;
+  for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+    var v=b[r][c];
+    if(v===BLACK) s+=3+(r*.15);
+    else if(v===BLACK_K) s+=5;
+    else if(v===RED) s-=3+((7-r)*.15);
+    else if(v===RED_K) s-=5;
   }
   return s;
 }
 
 function minimax(b,depth,alpha,beta,maxing){
-  const t=maxing?'black':'red';
-  const caps=allCaptures(t,b);
-  const moves=caps.length>0?caps:allMoves(t,b);
-  if(depth===0||moves.length===0)return evaluate(b);
+  var t=maxing?'black':'red';
+  var caps=allCaptures(t,b);
+  var moves=caps.length>0?caps:allMoves(t,b);
+  if(depth===0||moves.length===0) return evaluate(b);
   if(maxing){
-    let best=-Infinity;
-    for(const m of moves){
-      const nb=applyMove(b,m);
+    var best=-Infinity;
+    for(var i=0;i<moves.length;i++){
+      var nb=applyMove(b,moves[i]);
       best=Math.max(best,minimax(nb,depth-1,alpha,beta,false));
       alpha=Math.max(alpha,best);
-      if(beta<=alpha)break;
+      if(beta<=alpha) break;
     }
     return best;
   }else{
-    let best=Infinity;
-    for(const m of moves){
-      const nb=applyMove(b,m);
+    var best=Infinity;
+    for(var i=0;i<moves.length;i++){
+      var nb=applyMove(b,moves[i]);
       best=Math.min(best,minimax(nb,depth-1,alpha,beta,true));
       beta=Math.min(beta,best);
-      if(beta<=alpha)break;
+      if(beta<=alpha) break;
     }
     return best;
   }
 }
 
 function aiMove(){
-  if(gameOver)return;
-  const caps=allCaptures('black',board);
-  const moves=caps.length>0?caps:allMoves('black',board);
-  if(moves.length===0){gameOver=true;setStatus('You win!');return;}
-  let best=-Infinity,bestMv=null;
-  for(const m of moves){
-    const nb=applyMove(board,m);
-    const score=minimax(nb,4,-Infinity,Infinity,false);
-    if(score>best){best=score;bestMv=m;}
+  if(gameOver) return;
+  var caps=allCaptures('black',board);
+  var moves=caps.length>0?caps:allMoves('black',board);
+  if(moves.length===0){gameOver=true;sndWin();setStatus('You win!');saveWin();renderStatsBar();return;}
+
+  var bestMv=null;
+
+  if(difficulty==='easy'){
+    // Random legal move
+    bestMv=moves[Math.floor(Math.random()*moves.length)];
+  } else {
+    var depth=(difficulty==='hard')?6:4;
+    var best=-Infinity;
+    for(var i=0;i<moves.length;i++){
+      var nb=applyMove(board,moves[i]);
+      var sc=minimax(nb,depth,-Infinity,Infinity,false);
+      if(sc>best){best=sc;bestMv=moves[i];}
+    }
   }
+
   if(bestMv){
     board=applyMove(board,bestMv);
+    var wasCapture=(bestMv.capR!==null);
+    if(wasCapture) sndCapture(); else sndMove();
     updateScore();
-    // Check AI chain capture
     if(bestMv.capR!==null){
-      let cur=bestMv;
+      var cur=bestMv;
       while(true){
-        const more=allCaptures('black',board).filter(m=>m.sr===cur.r&&m.sc===cur.c);
-        if(more.length===0)break;
+        var more=allCaptures('black',board).filter(function(m){return m.sr===cur.r&&m.sc===cur.c;});
+        if(more.length===0) break;
         cur=more[0];
         board=applyMove(board,cur);
+        sndCapture();
         updateScore();
       }
     }
     render();
-    if(checkWin('black'))return;
+    if(checkWin('black')) return;
     turn='red';
     setStatus('Your turn — click a red piece');
   }
 }
 
+renderStatsBar();
 newGame();
 </script>
 </body>

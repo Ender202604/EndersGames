@@ -21,6 +21,9 @@ body { background: #1a0000; color: #ff6600; font-family: Arial, sans-serif; disp
 #instruct { color: #ff9900; font-size: 0.8em; padding: 4px; text-align: center; }
 #challenge-btn { background: #cc0000; color: #ffcc00; border: 2px solid #ff6600; padding: 6px 16px; border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; }
 #challenge-btn:hover { background: #ff3300; }
+#diff-btns { display: flex; gap: 6px; align-items: center; }
+.diff-btn { background: #2a0800; color: #ffcc00; border: 2px solid #ff6600; padding: 4px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer; }
+.diff-btn.active { background: #ff6600; color: #1a0000; }
 </style>
 </head>
 <body>
@@ -32,7 +35,12 @@ body { background: #1a0000; color: #ff6600; font-family: Arial, sans-serif; disp
   <div class="ui-box"><div class="ui-label">Score</div><div class="ui-val" id="score-val">0</div></div>
   <div class="ui-box"><div class="ui-label">Streak</div><div class="ui-val" id="streak-val">0</div></div>
   <div class="ui-box"><div class="ui-label">Best</div><div class="ui-val" id="best-val">0</div></div>
+  <div class="ui-box"><div class="ui-label">Hi-Score</div><div class="ui-val" id="hi-val">0</div></div>
   <div class="ui-box" id="timer-box" style="display:none"><div class="ui-label">Time</div><div class="ui-val" id="timer-val">30</div></div>
+  <div id="diff-btns">
+    <button class="diff-btn active" id="btn-easy" onclick="setDiff('easy')">Easy</button>
+    <button class="diff-btn" id="btn-hard" onclick="setDiff('hard')">Hard</button>
+  </div>
   <button id="challenge-btn">&#9201; 30s Challenge</button>
 </div>
 <div id="instruct">Grab the ball and drag upward to shoot! Aim for the hoop.</div>
@@ -41,15 +49,57 @@ body { background: #1a0000; color: #ff6600; font-family: Arial, sans-serif; disp
   <div id="msg"></div>
 </div>
 <script>
+// --- Audio ---
+var AC = window.AudioContext || window.webkitAudioContext;
+var ac = AC ? new AC() : null;
+function snd(freq, dur, type, vol) {
+  if (!ac) return;
+  var o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.frequency.value = freq; o.type = type || 'square';
+  g.gain.setValueAtTime(vol || 0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.start(); o.stop(ac.currentTime + dur);
+}
+function sndSwish() {
+  snd(880, 0.08, 'sine', 0.2); setTimeout(function(){ snd(1100, 0.08, 'sine', 0.15); }, 80);
+  setTimeout(function(){ snd(660, 0.1, 'sine', 0.1); }, 160);
+}
+function sndBounce() { snd(220, 0.1, 'square', 0.1); }
+function sndCheer() {
+  [500,600,700,800,900,1000].forEach(function(f,i){ setTimeout(function(){ snd(f,0.15,'sine',0.12); },i*60); });
+}
+
+// --- High Score ---
+var HS_KEY = 'hs_basketball';
+function getHiScore() { return parseInt(localStorage.getItem(HS_KEY) || '0'); }
+function saveHiScore(v) { if (v > getHiScore()) localStorage.setItem(HS_KEY, v); }
+
+// --- Difficulty ---
+var difficulty = 'easy';
+function setDiff(d) {
+  difficulty = d;
+  document.getElementById('btn-easy').classList.toggle('active', d === 'easy');
+  document.getElementById('btn-hard').classList.toggle('active', d === 'hard');
+}
+function getDiffParams() {
+  return difficulty === 'hard'
+    ? { challengeTime: 20, hoopW: 46, moveSpeedMult: 1.8 }
+    : { challengeTime: 30, hoopW: 58, moveSpeedMult: 1.0 };
+}
+
 var canvas = document.getElementById('canvas');
 var ctx = canvas.getContext('2d');
 var msgEl = document.getElementById('msg');
 var scoreEl = document.getElementById('score-val');
 var streakEl = document.getElementById('streak-val');
 var bestEl = document.getElementById('best-val');
+var hiEl = document.getElementById('hi-val');
 var timerEl = document.getElementById('timer-val');
 var timerBox = document.getElementById('timer-box');
 var challengeBtn = document.getElementById('challenge-btn');
+
+hiEl.textContent = getHiScore();
 
 var W = 480, H = 500;
 canvas.width = W; canvas.height = H;
@@ -70,16 +120,18 @@ function resetBall() {
 
 function randomHoop() {
   var margin = 80;
+  var dp = getDiffParams();
   hoop = {
     x: margin + Math.random() * (W - margin * 2),
     y: 95 + Math.random() * 80,
-    w: 58, moving: false, moveDir: 1, moveSpeed: 0
+    w: dp.hoopW, moving: false, moveDir: 1, moveSpeed: 0
   };
 }
 
 function startHoopMoving() {
+  var dp = getDiffParams();
   hoop.moving = true;
-  hoop.moveSpeed = 1.2 + Math.random() * 1.5;
+  hoop.moveSpeed = (1.2 + Math.random() * 1.5) * dp.moveSpeedMult;
   hoop.moveDir = (Math.random() < 0.5) ? 1 : -1;
 }
 
@@ -142,11 +194,9 @@ function drawBackboard() {
   ctx.strokeRect(bx - 38, by - 58, 76, 46);
   ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2;
   ctx.strokeRect(bx - 13, by - 46, 26, 20);
-  // Rim
   ctx.strokeStyle = '#ff6600'; ctx.lineWidth = 5;
   var hw = hoop.w / 2;
   ctx.beginPath(); ctx.moveTo(bx - hw, by); ctx.lineTo(bx + hw, by); ctx.stroke();
-  // Net
   ctx.strokeStyle = 'rgba(220,220,220,0.55)'; ctx.lineWidth = 1.5;
   for (var i = 0; i <= 5; i++) {
     var nx = bx - hw + (hoop.w / 5) * i;
@@ -193,7 +243,6 @@ function drawAimGuide() {
     if (py > H + 20) break;
   }
   ctx.stroke(); ctx.setLineDash([]); ctx.restore();
-  // Power bar
   var power = Math.min(dist / 120, 1);
   var bw = 110, bh = 12, bx = W/2 - bw/2, by2 = H - 16;
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx-2, by2-2, bw+4, bh+4);
@@ -221,6 +270,9 @@ function checkScore() {
         score++; streak++;
         if (streak > bestStreak) bestStreak = streak;
         scoreEl.textContent = score; streakEl.textContent = streak; bestEl.textContent = bestStreak;
+        var hi = getHiScore();
+        if (score > hi) { saveHiScore(score); hiEl.textContent = score; sndCheer(); }
+        else { sndSwish(); }
         spawnParticles(bx, by2);
         var msgs = ['SWISH!', 'NICE SHOT!', 'MONEY!', 'BUCKETS!', 'PERFECT!'];
         if (streak >= 3) msgs.push('ON FIRE! x' + streak);
@@ -242,12 +294,11 @@ function update() {
     if (hoop.x < 70 || hoop.x > W - 70) hoop.moveDir *= -1;
   }
   checkScore();
-  if (ball.x - BALL_R < 0) { ball.x = BALL_R; ball.vx = Math.abs(ball.vx) * 0.55; }
-  if (ball.x + BALL_R > W) { ball.x = W - BALL_R; ball.vx = -Math.abs(ball.vx) * 0.55; }
-  // Backboard bounce
+  if (ball.x - BALL_R < 0) { ball.x = BALL_R; ball.vx = Math.abs(ball.vx) * 0.55; sndBounce(); }
+  if (ball.x + BALL_R > W) { ball.x = W - BALL_R; ball.vx = -Math.abs(ball.vx) * 0.55; sndBounce(); }
   var bbx = hoop.x, bby = hoop.y;
   if (ball.x > bbx - 38 && ball.x < bbx + 38 && ball.y + BALL_R > bby - 58 && ball.y - BALL_R < bby - 12) {
-    if (ball.vy < 0) { ball.vy = Math.abs(ball.vy) * 0.45; ball.vx *= 0.65; }
+    if (ball.vy < 0) { ball.vy = Math.abs(ball.vy) * 0.45; ball.vx *= 0.65; sndBounce(); }
   }
   if (ball.y > H + 30) {
     if (!scored) { streak = 0; streakEl.textContent = 0; showMsg('MISS! Try again...'); }
@@ -324,15 +375,16 @@ canvas.addEventListener('touchend', function(e) {
 }, { passive: false });
 
 challengeBtn.addEventListener('click', function() {
+  var dp = getDiffParams();
   if (challengeMode) {
-    clearInterval(challengeInterval); challengeMode = false; challengeTime = 30;
+    clearInterval(challengeInterval); challengeMode = false; challengeTime = dp.challengeTime;
     timerBox.style.display = 'none'; challengeBtn.textContent = '⏱ 30s Challenge';
     score = 0; streak = 0; scoreEl.textContent = 0; streakEl.textContent = 0;
     resetBall(); randomHoop(); return;
   }
-  challengeMode = true; score = 0; streak = 0; challengeTime = 30;
+  challengeMode = true; score = 0; streak = 0; challengeTime = dp.challengeTime;
   scoreEl.textContent = 0; streakEl.textContent = 0;
-  timerBox.style.display = 'block'; timerEl.textContent = 30;
+  timerBox.style.display = 'block'; timerEl.textContent = challengeTime;
   challengeBtn.textContent = '✖ Stop';
   resetBall(); randomHoop();
   challengeInterval = setInterval(function() {
@@ -340,6 +392,7 @@ challengeBtn.addEventListener('click', function() {
     if (challengeTime <= 0) {
       clearInterval(challengeInterval); challengeMode = false;
       timerBox.style.display = 'none'; challengeBtn.textContent = '⏱ 30s Challenge';
+      saveHiScore(score); hiEl.textContent = getHiScore();
       showMsg('TIME! Score: ' + score, 3000); ballInFlight = false; resetBall();
     }
   }, 1000);
