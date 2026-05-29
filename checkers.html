@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkers – Ender's Games</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#1a0a00;font-family:'Segoe UI',Arial,sans-serif;color:#e8d8b0;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:60px 12px 24px}
+h1{font-size:26px;color:#ffaa44;text-shadow:0 0 10px #ffaa4466;letter-spacing:2px;margin-bottom:4px}
+#status{font-size:15px;color:#ffcc88;min-height:24px;margin:8px 0;text-align:center}
+#board-wrap{position:relative;display:inline-block;border:3px solid #8b5e2a;border-radius:4px;box-shadow:0 4px 24px #0008}
+#board{display:grid;grid-template-columns:repeat(8,1fr)}
+.cell{width:60px;height:60px;display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer}
+.cell.light{background:#f0d9b5}
+.cell.dark{background:#8b6240}
+.cell.highlight{background:#5a9a5a !important}
+.cell.valid-move{background:#4a7a2a !important}
+.cell.valid-move::after{content:'';width:20px;height:20px;border-radius:50%;background:#88ff8877;position:absolute}
+.piece{width:44px;height:44px;border-radius:50%;cursor:pointer;position:relative;transition:transform .1s;box-shadow:2px 3px 6px #0007}
+.piece.red{background:radial-gradient(circle at 35% 35%,#ff6644,#cc2200);border:3px solid #ff4422}
+.piece.black{background:radial-gradient(circle at 35% 35%,#666,#222);border:3px solid #888}
+.piece.selected{transform:scale(1.15);box-shadow:0 0 0 3px #ffd700,2px 3px 6px #0007}
+.piece.king::after{content:'♛';position:absolute;top:50%;left:50%;transform:translate(-50%,-52%);font-size:22px;color:rgba(255,215,0,0.9);text-shadow:0 1px 2px #0007}
+@media(max-width:520px){.cell{width:42px;height:42px}.piece{width:32px;height:32px}.piece.king::after{font-size:16px}}
+#controls{display:flex;gap:12px;margin:12px 0;flex-wrap:wrap;justify-content:center}
+.btn{padding:10px 22px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer}
+.btn-new{background:#5a2a00;color:#ffcc88;border:2px solid #aa6622}
+.btn-new:hover{background:#7a3a00}
+#score{display:flex;gap:20px;font-size:14px;color:#ccaa88;margin-bottom:8px}
+.sc{padding:4px 14px;border-radius:8px;background:#2a1a00}
+</style>
+</head>
+<body>
+<a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
+<h1>♟ Checkers</h1>
+
+<div id="score">
+  <div class="sc">You (Red): <span id="p-score" style="color:#ff8866;font-weight:bold">12</span></div>
+  <div class="sc">AI (Black): <span id="a-score" style="color:#aaaaaa;font-weight:bold">12</span></div>
+</div>
+
+<div id="status">Your turn — click a red piece</div>
+<div id="board-wrap"><div id="board"></div></div>
+<div id="controls">
+  <button class="btn btn-new" onclick="newGame()">New Game</button>
+</div>
+
+<script>
+// Board: 8x8, 0=empty, 1=red, 2=black, 3=red king, 4=black king
+// Red moves up (row decreasing), Black moves down (row increasing)
+const RED=1,BLACK=2,RED_K=3,BLACK_K=4;
+let board=[],selected=null,validMoves=[],turn='red',gameOver=false,mustCapture=false,chainPiece=null;
+
+function newGame(){
+  board=[];
+  for(let r=0;r<8;r++){
+    board.push([]);
+    for(let c=0;c<8;c++){
+      if((r+c)%2===1){
+        if(r<3)board[r].push(BLACK);
+        else if(r>4)board[r].push(RED);
+        else board[r].push(0);
+      }else board[r].push(0);
+    }
+  }
+  selected=null;validMoves=[];turn='red';gameOver=false;mustCapture=false;chainPiece=null;
+  updateScore();render();setStatus('Your turn — click a red piece');
+}
+
+function isRed(v){return v===RED||v===RED_K;}
+function isBlack(v){return v===BLACK||v===BLACK_K;}
+function isKing(v){return v===RED_K||v===BLACK_K;}
+function owns(v,t){return t==='red'?isRed(v):isBlack(v);}
+
+function getCaptures(r,c,b){
+  const v=b[r][c];if(!v)return[];
+  const dirs=[];
+  if(v===RED||v===RED_K)dirs.push([-1,-1],[-1,1]);
+  if(v===BLACK||v===BLACK_K)dirs.push([1,-1],[1,1]);
+  const res=[];
+  for(const[dr,dc]of dirs){
+    const mr=r+dr,mc=c+dc,lr=r+2*dr,lc=c+2*dc;
+    if(lr<0||lr>7||lc<0||lc>7)continue;
+    const mid=b[mr][mc];
+    if(!mid)continue;
+    if(isRed(v)&&isBlack(mid)&&!b[lr][lc])res.push({r:lr,c:lc,capR:mr,capC:mc});
+    if(isBlack(v)&&isRed(mid)&&!b[lr][lc])res.push({r:lr,c:lc,capR:mr,capC:mc});
+  }
+  return res;
+}
+
+function getMoves(r,c,b){
+  const v=b[r][c];if(!v)return[];
+  const dirs=[];
+  if(v===RED||v===RED_K)dirs.push([-1,-1],[-1,1]);
+  if(v===BLACK||v===BLACK_K)dirs.push([1,-1],[1,1]);
+  const res=[];
+  for(const[dr,dc]of dirs){
+    const nr=r+dr,nc=c+dc;
+    if(nr<0||nr>7||nc<0||nc>7)continue;
+    if(!b[nr][nc])res.push({r:nr,c:nc,capR:null,capC:null});
+  }
+  return res;
+}
+
+function allCaptures(t,b){
+  const res=[];
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    if(owns(b[r][c],t))for(const m of getCaptures(r,c,b))res.push({sr:r,sc:c,...m});
+  }
+  return res;
+}
+
+function allMoves(t,b){
+  const res=[];
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    if(owns(b[r][c],t))for(const m of getMoves(r,c,b))res.push({sr:r,sc:c,...m});
+  }
+  return res;
+}
+
+function applyMove(b,m){
+  const nb=b.map(r=>[...r]);
+  let v=nb[m.sr][m.sc];
+  nb[m.sr][m.sc]=0;
+  if(m.capR!==null)nb[m.capR][m.capC]=0;
+  if(v===RED&&m.r===0)v=RED_K;
+  if(v===BLACK&&m.r===7)v=BLACK_K;
+  nb[m.r][m.c]=v;
+  return nb;
+}
+
+function updateScore(){
+  let r=0,bl=0;
+  for(let row of board)for(let v of row){if(isRed(v))r++;if(isBlack(v))bl++;}
+  document.getElementById('p-score').textContent=r;
+  document.getElementById('a-score').textContent=bl;
+}
+
+function setStatus(s){document.getElementById('status').textContent=s;}
+
+function render(){
+  const el=document.getElementById('board');
+  el.innerHTML='';
+  const caps=chainPiece?getCaptures(chainPiece[0],chainPiece[1],board).map(m=>`${m.r},${m.c}`)
+    :(mustCapture&&turn==='red'?validMoves.map(m=>`${m.r},${m.c}`):[]);
+  const vmSet=new Set(validMoves.map(m=>`${m.r},${m.c}`));
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const cell=document.createElement('div');
+      cell.className='cell '+((r+c)%2===0?'light':'dark');
+      if(selected&&selected[0]===r&&selected[1]===c)cell.classList.add('highlight');
+      if(vmSet.has(`${r},${c}`))cell.classList.add('valid-move');
+      const v=board[r][c];
+      if(v){
+        const p=document.createElement('div');
+        p.className='piece '+(isRed(v)?'red':'black')+(isKing(v)?' king':'');
+        if(selected&&selected[0]===r&&selected[1]===c)p.classList.add('selected');
+        p.addEventListener('click',(e)=>{e.stopPropagation();clickCell(r,c);});
+        cell.appendChild(p);
+      }
+      cell.addEventListener('click',()=>clickCell(r,c));
+      el.appendChild(cell);
+    }
+  }
+}
+
+function clickCell(r,c){
+  if(gameOver||turn!=='red')return;
+  const v=board[r][c];
+  // If chain capture in progress
+  if(chainPiece){
+    const caps=getCaptures(chainPiece[0],chainPiece[1],board);
+    const mv=caps.find(m=>m.r===r&&m.c===c);
+    if(mv){doMove({sr:chainPiece[0],sc:chainPiece[1],...mv});return;}
+    return;
+  }
+  // Click on own piece
+  if(isRed(v)){
+    const caps=allCaptures('red',board);
+    const pieceCaps=getCaptures(r,c,board);
+    if(caps.length>0&&pieceCaps.length===0){setStatus('You must capture!');return;}
+    selected=[r,c];
+    if(pieceCaps.length>0){validMoves=pieceCaps;mustCapture=true;}
+    else if(caps.length===0){validMoves=getMoves(r,c,board);mustCapture=false;}
+    else{validMoves=[];mustCapture=true;}
+    render();return;
+  }
+  // Click on destination
+  if(selected){
+    const mv=validMoves.find(m=>m.r===r&&m.c===c);
+    if(mv){doMove({sr:selected[0],sc:selected[1],...mv});return;}
+    selected=null;validMoves=[];render();
+  }
+}
+
+function doMove(m){
+  board=applyMove(board,m);
+  selected=null;validMoves=[];
+  updateScore();
+  // Check chain capture
+  if(m.capR!==null){
+    const more=getCaptures(m.r,m.c,board);
+    if(more.length>0){
+      chainPiece=[m.r,m.c];
+      validMoves=more;mustCapture=true;
+      render();setStatus('Continue capturing!');return;
+    }
+  }
+  chainPiece=null;mustCapture=false;
+  render();
+  if(checkWin('red'))return;
+  turn='black';setStatus('AI is thinking...');
+  setTimeout(aiMove,400);
+}
+
+function checkWin(lastMoved){
+  const rCount=board.flat().filter(isRed).length;
+  const bCount=board.flat().filter(isBlack).length;
+  if(rCount===0||allMoves('red',board).length+allCaptures('red',board).length===0){gameOver=true;setStatus('AI wins!');return true;}
+  if(bCount===0||allMoves('black',board).length+allCaptures('black',board).length===0){gameOver=true;setStatus('You win!');return true;}
+  return false;
+}
+
+// Minimax AI
+function evaluate(b){
+  let s=0;
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const v=b[r][c];
+    if(v===BLACK)s+=3+(r*.15);
+    else if(v===BLACK_K)s+=5;
+    else if(v===RED)s-=3+((7-r)*.15);
+    else if(v===RED_K)s-=5;
+  }
+  return s;
+}
+
+function minimax(b,depth,alpha,beta,maxing){
+  const t=maxing?'black':'red';
+  const caps=allCaptures(t,b);
+  const moves=caps.length>0?caps:allMoves(t,b);
+  if(depth===0||moves.length===0)return evaluate(b);
+  if(maxing){
+    let best=-Infinity;
+    for(const m of moves){
+      const nb=applyMove(b,m);
+      best=Math.max(best,minimax(nb,depth-1,alpha,beta,false));
+      alpha=Math.max(alpha,best);
+      if(beta<=alpha)break;
+    }
+    return best;
+  }else{
+    let best=Infinity;
+    for(const m of moves){
+      const nb=applyMove(b,m);
+      best=Math.min(best,minimax(nb,depth-1,alpha,beta,true));
+      beta=Math.min(beta,best);
+      if(beta<=alpha)break;
+    }
+    return best;
+  }
+}
+
+function aiMove(){
+  if(gameOver)return;
+  const caps=allCaptures('black',board);
+  const moves=caps.length>0?caps:allMoves('black',board);
+  if(moves.length===0){gameOver=true;setStatus('You win!');return;}
+  let best=-Infinity,bestMv=null;
+  for(const m of moves){
+    const nb=applyMove(board,m);
+    const score=minimax(nb,4,-Infinity,Infinity,false);
+    if(score>best){best=score;bestMv=m;}
+  }
+  if(bestMv){
+    board=applyMove(board,bestMv);
+    updateScore();
+    // Check AI chain capture
+    if(bestMv.capR!==null){
+      let cur=bestMv;
+      while(true){
+        const more=allCaptures('black',board).filter(m=>m.sr===cur.r&&m.sc===cur.c);
+        if(more.length===0)break;
+        cur=more[0];
+        board=applyMove(board,cur);
+        updateScore();
+      }
+    }
+    render();
+    if(checkWin('black'))return;
+    turn='red';
+    setStatus('Your turn — click a red piece');
+  }
+}
+
+newGame();
+</script>
+</body>
+</html>

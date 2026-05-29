@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Match – Ender's Games</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0d0d2e;font-family:'Segoe UI',Arial,sans-serif;color:#e0e0ff;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:60px 12px 24px}
+h1{font-size:26px;color:#aa88ff;text-shadow:0 0 12px #aa88ff88;letter-spacing:2px;margin-bottom:4px}
+.subtitle{color:#7777aa;font-size:13px;margin-bottom:16px}
+#top-bar{display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap;justify-content:center}
+.stat{font-size:14px;color:#9988cc}
+.stat span{color:#ffd700;font-weight:bold;font-size:16px}
+#diff-bar{display:flex;gap:8px;margin-bottom:16px}
+.diff-btn{padding:8px 18px;border-radius:8px;border:2px solid #4444aa;background:#0a0a20;color:#9988cc;cursor:pointer;font-size:13px;transition:all .15s}
+.diff-btn.active,.diff-btn:hover{background:#2a2a6a;color:#cc99ff;border-color:#8866cc}
+#grid{display:grid;gap:8px;margin-bottom:16px}
+.card{aspect-ratio:1;border-radius:10px;cursor:pointer;transition:transform .35s cubic-bezier(.4,0,.2,1);transform-style:preserve-3d;position:relative}
+.card-inner{width:100%;height:100%;transform-style:preserve-3d;transition:transform .35s cubic-bezier(.4,0,.2,1);position:relative}
+.card.flipped .card-inner,.card.matched .card-inner{transform:rotateY(180deg)}
+.card-front,.card-back{position:absolute;inset:0;border-radius:10px;backface-visibility:hidden;display:flex;align-items:center;justify-content:center}
+.card-back{background:linear-gradient(135deg,#1a1a4a 0%,#2a1a6a 50%,#1a1a4a 100%);border:2px solid #4444aa;font-size:22px}
+.card-front{background:#1a1a3a;border:2px solid #6644cc;transform:rotateY(180deg);font-size:36px}
+.card.matched .card-front{background:#1a2a1a;border-color:#44aa66;box-shadow:0 0 12px #44aa6644}
+#new-btn{background:#2a1a5a;border:2px solid #6644cc;color:#cc99ff;padding:10px 24px;border-radius:10px;cursor:pointer;font-size:14px;transition:all .15s}
+#new-btn:hover{background:#3a2a7a}
+#win-screen{display:none;position:fixed;inset:0;background:#00000099;justify-content:center;align-items:center;z-index:999;flex-direction:column}
+#win-screen.show{display:flex}
+#win-box{background:#0d0d2e;border:2px solid #8866cc;border-radius:16px;padding:40px;text-align:center;max-width:320px;box-shadow:0 0 40px #8866cc44}
+#win-box h2{font-size:30px;color:#ffd700;margin-bottom:8px}
+#win-box p{color:#9988cc;margin-bottom:20px;font-size:15px}
+#win-play-btn{background:#2a1a5a;border:2px solid #8866cc;color:#cc99ff;padding:12px 28px;border-radius:10px;cursor:pointer;font-size:15px}
+</style>
+</head>
+<body>
+<a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
+<h1>✨ Memory Match</h1>
+<div class="subtitle">Flip cards to find matching pairs</div>
+
+<div id="diff-bar">
+  <button class="diff-btn active" id="d-easy" onclick="setDiff('easy')">Easy 4×4</button>
+  <button class="diff-btn" id="d-hard" onclick="setDiff('hard')">Hard 6×6</button>
+</div>
+
+<div id="top-bar">
+  <div class="stat">Moves: <span id="move-count">0</span></div>
+  <div class="stat">Pairs: <span id="pairs-found">0</span> / <span id="pairs-total">8</span></div>
+  <div class="stat">Time: <span id="timer">0:00</span></div>
+</div>
+
+<div id="grid"></div>
+<button id="new-btn" onclick="newGame()">New Game</button>
+
+<div id="win-screen">
+  <div id="win-box">
+    <h2>You Won!</h2>
+    <p id="win-msg"></p>
+    <button id="win-play-btn" onclick="newGame()">Play Again</button>
+  </div>
+</div>
+
+<script>
+const EMOJIS_ALL=['🐶','🐱','🦊','🐻','🐼','🦁','🐯','🐸','🦋','🐙','🦄','🐉','🌸','🍄','⚡','🎭','🎪','🚀','🌙','⭐','🎸','🎺','🎨','🏆','💎','🔮','🌈','🍕'];
+
+let difficulty='easy',cards=[],flipped=[],matched=[],moves=0,pairsFound=0,lock=false;
+let startTime=null,timerInterval=null,gameStarted=false;
+
+function setDiff(d){
+  difficulty=d;
+  document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('d-'+d).classList.add('active');
+  newGame();
+}
+
+function newGame(){
+  const size=difficulty==='easy'?4:6;
+  const total=(size*size)/2;
+  const emojis=EMOJIS_ALL.slice(0,total);
+  let pool=[...emojis,...emojis];
+  pool.sort(()=>Math.random()-.5);
+  cards=pool.map((e,i)=>({id:i,emoji:e,flipped:false,matched:false}));
+  flipped=[];matched=[];moves=0;pairsFound=0;lock=false;gameStarted=false;
+  document.getElementById('move-count').textContent=0;
+  document.getElementById('pairs-found').textContent=0;
+  document.getElementById('pairs-total').textContent=total;
+  document.getElementById('win-screen').classList.remove('show');
+  if(timerInterval)clearInterval(timerInterval);
+  document.getElementById('timer').textContent='0:00';
+  const grid=document.getElementById('grid');
+  grid.style.gridTemplateColumns=`repeat(${size}, 1fr)`;
+  const maxW=Math.min(window.innerWidth-24,500);
+  const cardSize=Math.floor((maxW-8*(size-1))/size);
+  grid.style.width=maxW+'px';
+  document.querySelectorAll('.card .card-front').forEach(el=>{el.style.fontSize=Math.floor(cardSize*.45)+'px';});
+  renderGrid(size,cardSize);
+}
+
+function renderGrid(size,cardSize){
+  const grid=document.getElementById('grid');
+  grid.innerHTML='';
+  cards.forEach((c,i)=>{
+    const div=document.createElement('div');
+    div.className='card'+(c.flipped?' flipped':'')+(c.matched?' matched':'');
+    div.style.width=cardSize+'px';
+    div.style.height=cardSize+'px';
+    div.innerHTML=`<div class="card-inner"><div class="card-back">❓</div><div class="card-front">${c.emoji}</div></div>`;
+    div.addEventListener('click',()=>flipCard(i));
+    grid.appendChild(div);
+  });
+}
+
+function getCardEl(i){return document.getElementById('grid').children[i];}
+
+function flipCard(i){
+  if(lock||cards[i].flipped||cards[i].matched)return;
+  if(!gameStarted){
+    gameStarted=true;
+    startTime=Date.now();
+    timerInterval=setInterval(()=>{
+      const s=Math.floor((Date.now()-startTime)/1000);
+      document.getElementById('timer').textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;
+    },1000);
+  }
+  cards[i].flipped=true;
+  getCardEl(i).classList.add('flipped');
+  flipped.push(i);
+  if(flipped.length===2){
+    lock=true;
+    moves++;
+    document.getElementById('move-count').textContent=moves;
+    const [a,b]=flipped;
+    if(cards[a].emoji===cards[b].emoji){
+      setTimeout(()=>{
+        cards[a].matched=cards[b].matched=true;
+        getCardEl(a).classList.add('matched');
+        getCardEl(b).classList.add('matched');
+        pairsFound++;
+        document.getElementById('pairs-found').textContent=pairsFound;
+        flipped=[];lock=false;
+        const total=cards.length/2;
+        if(pairsFound===total)setTimeout(showWin,400);
+      },400);
+    }else{
+      setTimeout(()=>{
+        cards[a].flipped=cards[b].flipped=false;
+        getCardEl(a).classList.remove('flipped');
+        getCardEl(b).classList.remove('flipped');
+        flipped=[];lock=false;
+      },900);
+    }
+  }
+}
+
+function showWin(){
+  clearInterval(timerInterval);
+  const s=Math.floor((Date.now()-startTime)/1000);
+  const tStr=Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;
+  document.getElementById('win-msg').textContent=`${difficulty==='easy'?'Easy':'Hard'} mode · ${moves} moves · ${tStr}`;
+  document.getElementById('win-screen').classList.add('show');
+}
+
+newGame();
+</script>
+</body>
+</html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Invaders — Ender's Games</title>
+<style>
+* { margin:0;padding:0;box-sizing:border-box; }
+body { background:#080810;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;overflow:hidden;font-family:'Courier New',monospace; }
+canvas { display:block;touch-action:none; }
+#overlay { position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,8,.88);color:#33ff88;z-index:10; }
+#overlay h1 { font-size:46px;text-shadow:0 0 22px #33ff88;letter-spacing:5px;margin-bottom:14px; }
+#overlay p { color:#99bbaa;font-size:14px;margin:3px 0; }
+.final { font-size:26px;color:#ffcc00;text-shadow:0 0 12px #ffcc00;margin:16px 0 4px; }
+#startBtn { margin-top:16px;padding:12px 36px;font-size:18px;font-family:'Courier New',monospace;background:transparent;color:#33ff88;border:2px solid #33ff88;border-radius:8px;cursor:pointer;letter-spacing:2px;transition:all .2s; }
+#startBtn:hover,#startBtn:active { background:#33ff88;color:#080810;box-shadow:0 0 20px #33ff88; }
+#tc { position:fixed;bottom:12px;left:0;right:0;display:flex;justify-content:space-between;padding:0 18px;pointer-events:none; }
+.cb { width:60px;height:60px;border-radius:12px;border:2px solid rgba(50,255,136,.35);background:rgba(50,255,136,.1);color:#33ff88;font-size:26px;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;touch-action:manipulation;cursor:pointer;pointer-events:all; }
+.cb:active { background:rgba(50,255,136,.3); }
+</style>
+</head>
+<body>
+<a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
+<canvas id="c"></canvas>
+<div id="overlay">
+  <h1>SPACE INVADERS</h1>
+  <p>Arrow / A D — move &nbsp;|&nbsp; Space — shoot</p>
+  <p>Mobile: use on-screen buttons</p>
+  <div class="final" id="fs" style="display:none"></div>
+  <div class="final" id="msg" style="font-size:20px;color:#33ff88;display:none"></div>
+  <button id="startBtn" onclick="startGame()">START GAME</button>
+</div>
+<div id="tc">
+  <div class="cb" id="bL">&#8592;</div>
+  <div class="cb" id="bF" style="border-color:rgba(255,100,100,.45);background:rgba(255,100,100,.12);color:#ff6060;">FIRE</div>
+  <div class="cb" id="bR">&#8594;</div>
+</div>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d');
+const W=Math.min(window.innerWidth,540),H=Math.min(window.innerHeight,680);
+C.width=W;C.height=H;
+
+const keys={},tch={};
+window.addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();});
+window.addEventListener('keyup',e=>keys[e.code]=false);
+['bL','bR','bF'].forEach(id=>{
+  const el=document.getElementById(id);
+  ['touchstart','mousedown'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();tch[id]=true;},{passive:false}));
+  ['touchend','mouseup','mouseleave'].forEach(ev=>el.addEventListener(ev,()=>tch[id]=false));
+});
+
+const ROWS=5,COLS=11;
+let cannon,aliens,abulls,cbulls,parts,score,lives,level,running,raf,dir=1;
+let alienSpeed,alienTimer,alienShootTimer,shootCD=0,alienStep=0;
+let shieldBlocks=[];
+
+const ALIEN_COLORS=['#ff5588','#ff9933','#ffff44','#88ff44','#44aaff'];
+const ALIEN_SHAPES=[
+  [[0,1,0],[1,1,1],[1,0,1]],// row0
+  [[1,0,1],[0,1,0],[1,1,1]],// row1
+  [[0,1,1],[1,1,0],[0,1,1]],// row2
+  [[1,1,0],[0,1,1],[1,0,0]],// row3
+  [[1,0,1],[1,1,1],[0,1,0]] // row4
+];
+
+function startGame(){
+  document.getElementById('overlay').style.display='none';
+  score=0;lives=3;level=1;running=true;
+  alienSpeed=0.8;alienTimer=0;alienShootTimer=0;dir=1;alienStep=0;
+  initAliens();initCannon();initShields();parts=[];cbulls=[];abulls=[];
+  if(raf)cancelAnimationFrame(raf);requestAnimationFrame(loop);
+}
+
+function initCannon(){cannon={x:W/2,y:H-36,w:32,h:18,vx:0};}
+
+function initAliens(){
+  aliens=[];
+  const startX=(W-(COLS*38))/2;
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    aliens.push({x:startX+c*38,y:70+r*36,w:24,h:16,r,c,frame:0,alive:true});
+  }
+}
+
+function initShields(){
+  shieldBlocks=[];
+  const positions=[W*.18,W*.38,W*.58,W*.78];
+  positions.forEach(sx=>{
+    for(let row=0;row<4;row++)for(let col=0;col<8;col++){
+      if(row===3&&(col<2||col>5))continue;
+      shieldBlocks.push({x:sx+col*8,y:H-90+row*8,w:8,h:8,hp:3});
+    }
+  });
+}
+
+let last=0;
+function loop(ts){
+  raf=requestAnimationFrame(loop);
+  const dt=Math.min((ts-last)/16.67,2.5);last=ts;
+  if(running)update(dt);render();
+}
+
+function update(dt){
+  shootCD=Math.max(0,shootCD-dt);
+  const L=keys['ArrowLeft']||keys['KeyA']||tch['bL'];
+  const R=keys['ArrowRight']||keys['KeyD']||tch['bR'];
+  const S=keys['Space']||tch['bF'];
+  if(L)cannon.x=Math.max(16,cannon.x-4*dt);
+  if(R)cannon.x=Math.min(W-16,cannon.x+4*dt);
+  if(S&&shootCD<=0){cbulls.push({x:cannon.x,y:cannon.y-10,vy:-10});shootCD=18;}
+
+  for(let b of cbulls){b.y+=b.vy*dt;}
+  cbulls=cbulls.filter(b=>b.y>-10);
+  for(let b of abulls){b.y+=b.vy*dt;}
+  abulls=abulls.filter(b=>b.y<H+10);
+
+  // particles
+  for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;if(p.life<=0)parts.splice(i,1);}
+
+  // alien movement
+  alienTimer+=dt;
+  const live=aliens.filter(a=>a.alive);
+  const moveInterval=Math.max(.15,alienSpeed-live.length*.015);
+  if(alienTimer>=moveInterval){
+    alienTimer=0;alienStep++;
+    let edgeHit=false;
+    for(const a of aliens){if(!a.alive)continue;a.x+=dir*16;if(a.x<8||a.x>W-32)edgeHit=true;}
+    if(edgeHit){dir*=-1;for(const a of aliens){if(!a.alive)continue;a.y+=12;}}
+    for(const a of aliens)if(a.alive)a.frame^=1;
+  }
+
+  // alien shooting
+  alienShootTimer+=dt;
+  if(alienShootTimer>30){
+    alienShootTimer=0;
+    const cols={};
+    for(const a of aliens)if(a.alive){if(!cols[a.c]||cols[a.c].y<a.y)cols[a.c]=a;}
+    const shooters=Object.values(cols);
+    if(shooters.length){const s=shooters[Math.floor(Math.random()*shooters.length)];abulls.push({x:s.x+12,y:s.y+18,vy:4+level*.5});}
+  }
+
+  // cbulls hit aliens
+  for(let bi=cbulls.length-1;bi>=0;bi--){
+    let hit=false;
+    for(let ai=aliens.length-1;ai>=0;ai--){
+      const b=cbulls[bi],a=aliens[ai];if(!a.alive)continue;
+      if(b.x>a.x&&b.x<a.x+a.w&&b.y>a.y&&b.y<a.y+a.h){
+        a.alive=false;burst(a.x+12,a.y+8,ALIEN_COLORS[a.r],10);
+        score+=([10,20,20,30,30])[a.r];cbulls.splice(bi,1);hit=true;break;
+      }
+    }
+    if(hit)continue;
+    // hit shield
+    for(let si=shieldBlocks.length-1;si>=0;si--){
+      const b=cbulls[bi];if(!b)break;const s=shieldBlocks[si];
+      if(b.x>s.x&&b.x<s.x+s.w&&b.y>s.y&&b.y<s.y+s.h){s.hp--;if(s.hp<=0)shieldBlocks.splice(si,1);cbulls.splice(bi,1);break;}
+    }
+  }
+
+  // abulls hit cannon/shields
+  for(let bi=abulls.length-1;bi>=0;bi--){
+    const b=abulls[bi];
+    if(Math.abs(b.x-cannon.x)<20&&Math.abs(b.y-cannon.y)<14){
+      burst(cannon.x,cannon.y,'#00ff88',18);lives--;abulls.splice(bi,1);
+      if(lives<=0){endGame(false);return;}continue;
+    }
+    for(let si=shieldBlocks.length-1;si>=0;si--){
+      const s=shieldBlocks[si];
+      if(b.x>s.x&&b.x<s.x+s.w&&b.y>s.y&&b.y<s.y+s.h){s.hp--;if(s.hp<=0)shieldBlocks.splice(si,1);abulls.splice(bi,1);break;}
+    }
+  }
+
+  // aliens reach bottom
+  for(const a of aliens){if(a.alive&&a.y+a.h>cannon.y-10){endGame(false);return;}}
+
+  // all aliens dead -> win
+  if(!aliens.some(a=>a.alive)){
+    level++;alienSpeed=Math.max(.15,alienSpeed-.12);
+    initAliens();alienStep=0;dir=1;
+    burst(W/2,H/2,'#33ff88',30);
+    initShields();
+  }
+}
+
+function burst(x,y,col,n){for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=1+Math.random()*3.5;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:35+Math.random()*30,ml:65,col});}}
+
+function endGame(win){
+  running=false;
+  const ov=document.getElementById('overlay');ov.style.display='flex';
+  ov.querySelector('h1').textContent=win?'YOU WIN!':'GAME OVER';
+  const fs=document.getElementById('fs');fs.style.display='block';fs.textContent='SCORE: '+score;
+  const msg=document.getElementById('msg');msg.style.display='block';msg.textContent=win?'All invaders defeated!':'They reached Earth...';
+  document.getElementById('startBtn').textContent='PLAY AGAIN';
+}
+
+function drawAlien(a){
+  const shape=ALIEN_SHAPES[a.r];const px=4;const col=ALIEN_COLORS[a.r];
+  ctx.fillStyle=col;ctx.shadowColor=col;ctx.shadowBlur=6;
+  for(let row=0;row<3;row++)for(let col2=0;col2<3;col2++){
+    if(shape[(row+(a.frame?0:0))%3][col2]){ctx.fillRect(a.x+col2*px,a.y+row*px,px-1,px-1);}
+  }
+  // antennae + legs based on frame
+  ctx.fillRect(a.x+1,a.y-3,2,3);ctx.fillRect(a.x+a.w-3,a.y-3,2,3);
+  if(a.frame===0){ctx.fillRect(a.x,a.y+a.h,3,3);ctx.fillRect(a.x+a.w-3,a.y+a.h,3,3);}
+  else{ctx.fillRect(a.x+2,a.y+a.h,3,3);ctx.fillRect(a.x+a.w-5,a.y+a.h,3,3);}
+  ctx.shadowBlur=0;
+}
+
+function render(){
+  ctx.fillStyle='#07080f';ctx.fillRect(0,0,W,H);
+  // HUD
+  ctx.fillStyle='#33ff88';ctx.font='14px "Courier New"';ctx.textAlign='left';
+  ctx.shadowColor='#33ff88';ctx.shadowBlur=8;
+  ctx.fillText('SCORE: '+score,10,28);
+  ctx.textAlign='right';ctx.fillText('LIVES: '+'♥'.repeat(lives),W-10,28);
+  ctx.textAlign='center';ctx.fillStyle='#ffcc00';ctx.shadowColor='#ffcc00';
+  ctx.fillText('LEVEL '+level,W/2,28);ctx.shadowBlur=0;
+  // ground line
+  ctx.strokeStyle='rgba(0,255,100,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,H-22);ctx.lineTo(W,H-22);ctx.stroke();
+  // shields
+  for(const s of shieldBlocks){
+    const a=s.hp/3;ctx.fillStyle=`rgba(0,200,100,${a})`;ctx.fillRect(s.x,s.y,s.w,s.h);
+  }
+  // cannon
+  ctx.shadowColor='#00ff88';ctx.shadowBlur=10;ctx.fillStyle='#00ff88';
+  ctx.beginPath();ctx.rect(cannon.x-16,cannon.y-4,32,12);ctx.fill();
+  ctx.beginPath();ctx.rect(cannon.x-6,cannon.y-14,12,14);ctx.fill();
+  ctx.beginPath();ctx.rect(cannon.x-3,cannon.y-20,6,8);ctx.fill();
+  ctx.shadowBlur=0;
+  // aliens
+  for(const a of aliens)if(a.alive)drawAlien(a);
+  // bullets
+  ctx.shadowColor='#00ff88';ctx.shadowBlur=8;ctx.fillStyle='#88ffcc';
+  for(const b of cbulls){ctx.fillRect(b.x-2,b.y-8,4,10);}
+  ctx.shadowColor='#ff4444';ctx.shadowBlur=8;ctx.fillStyle='#ff8888';
+  for(const b of abulls){ctx.fillRect(b.x-2,b.y-6,4,9);}
+  ctx.shadowBlur=0;
+  // particles
+  for(const p of parts){ctx.globalAlpha=p.life/p.ml;ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,2.5,0,Math.PI*2);ctx.fill();}
+  ctx.globalAlpha=1;
+}
+render();
+</script>
+</body>
+</html>
