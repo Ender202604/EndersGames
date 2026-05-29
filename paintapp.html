@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Paint App - Ender's Game World</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: #1a0000; }
+body { display: flex; flex-direction: column; font-family: Arial, sans-serif; color: white; }
+.toolbar {
+  background: #220000;
+  border-bottom: 2px solid #660000;
+  padding: 6px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.home-btn {
+  background: darkred; color: yellow;
+  border: 2px solid yellow; border-radius: 6px;
+  padding: 4px 10px; font-size: 13px;
+  text-decoration: none; white-space: nowrap;
+}
+.toolbar-group {
+  display: flex; gap: 4px; align-items: center;
+  border-right: 1px solid #550000; padding-right: 8px;
+}
+.toolbar-group:last-child { border-right: none; }
+.tool-btn {
+  background: #3a0000; color: yellow;
+  border: 2px solid #880000; border-radius: 6px;
+  padding: 4px 8px; font-size: 13px;
+  cursor: pointer; transition: all 0.1s; white-space: nowrap;
+}
+.tool-btn:hover { background: #550000; }
+.tool-btn.active { background: #880000; border-color: yellow; box-shadow: 0 0 6px yellow; }
+.color-swatch {
+  width: 26px; height: 26px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.1s;
+  flex-shrink: 0;
+}
+.color-swatch:hover { transform: scale(1.2); }
+.color-swatch.active { border-color: white; transform: scale(1.2); box-shadow: 0 0 6px white; }
+.current-color {
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  border: 2px solid white;
+  flex-shrink: 0;
+}
+label { font-size: 12px; color: #ffaaaa; white-space: nowrap; }
+input[type=range] { width: 70px; accent-color: yellow; }
+#sizeVal { font-size: 12px; color: yellow; min-width: 20px; }
+#canvas-wrap { flex: 1; overflow: hidden; position: relative; }
+#canvas { display: block; cursor: crosshair; touch-action: none; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <div class="toolbar-group">
+    <a href="index.html" class="home-btn">&#127968; Home</a>
+  </div>
+  <div class="toolbar-group">
+    <button class="tool-btn active" id="btn-pencil" onclick="setTool('pencil')">&#9999; Pencil</button>
+    <button class="tool-btn" id="btn-brush" onclick="setTool('brush')">&#127768; Brush</button>
+    <button class="tool-btn" id="btn-spray" onclick="setTool('spray')">&#128166; Spray</button>
+    <button class="tool-btn" id="btn-fill" onclick="setTool('fill')">&#127863; Fill</button>
+    <button class="tool-btn" id="btn-eraser" onclick="setTool('eraser')">&#9003; Eraser</button>
+  </div>
+  <div class="toolbar-group">
+    <label>Size:</label>
+    <input type="range" id="sizeSlider" min="1" max="60" value="8" oninput="updateSize()">
+    <span id="sizeVal">8</span>
+  </div>
+  <div class="toolbar-group" id="palette" style="flex-wrap:wrap;max-width:260px;">
+  </div>
+  <div class="toolbar-group">
+    <div class="current-color" id="currentColorBox"></div>
+  </div>
+  <div class="toolbar-group">
+    <button class="tool-btn" onclick="undoAction()">&#8617; Undo</button>
+    <button class="tool-btn" onclick="clearCanvas()">&#128465; Clear</button>
+    <button class="tool-btn" onclick="saveImage()">&#128190; Save</button>
+  </div>
+</div>
+<div id="canvas-wrap">
+  <canvas id="canvas"></canvas>
+</div>
+
+<script>
+var canvas = document.getElementById('canvas');
+var ctx = canvas.getContext('2d');
+var wrap = document.getElementById('canvas-wrap');
+
+function resizeCanvas() {
+  var img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.putImageData(img, 0, 0);
+}
+
+var colors = [
+  '#000000','#ffffff','#ff0000','#00cc00','#0000ff','#ffff00',
+  '#ff8800','#ff00ff','#00ccff','#884400','#008800','#000088',
+  '#ff6699','#66ffcc','#ffcc66','#cc66ff','#ff4444','#44ff44',
+  '#4444ff','#888888','#444444','#ffddbb'
+];
+
+var curColor = '#000000';
+var curTool = 'pencil';
+var curSize = 8;
+var drawing = false;
+var lastX = 0, lastY = 0;
+var undoStack = [];
+
+var palette = document.getElementById('palette');
+colors.forEach(function(c, i) {
+  var sw = document.createElement('div');
+  sw.className = 'color-swatch' + (c === curColor ? ' active' : '');
+  sw.style.background = c;
+  sw.dataset.color = c;
+  sw.onclick = function() { selectColor(c); };
+  palette.appendChild(sw);
+  if (c === curColor) document.getElementById('currentColorBox').style.background = c;
+});
+
+function selectColor(c) {
+  curColor = c;
+  document.getElementById('currentColorBox').style.background = c;
+  document.querySelectorAll('.color-swatch').forEach(function(sw) {
+    sw.classList.toggle('active', sw.dataset.color === c);
+  });
+  if (curTool === 'eraser') setTool('pencil');
+}
+
+function setTool(t) {
+  curTool = t;
+  ['pencil','brush','spray','fill','eraser'].forEach(function(name) {
+    document.getElementById('btn-' + name).classList.toggle('active', name === t);
+  });
+}
+
+function updateSize() {
+  curSize = parseInt(document.getElementById('sizeSlider').value);
+  document.getElementById('sizeVal').textContent = curSize;
+}
+
+function saveUndo() {
+  undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+  if (undoStack.length > 10) undoStack.shift();
+}
+
+function undoAction() {
+  if (undoStack.length === 0) return;
+  ctx.putImageData(undoStack.pop(), 0, 0);
+}
+
+function clearCanvas() {
+  saveUndo();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function saveImage() {
+  var link = document.createElement('a');
+  link.download = 'painting.png';
+  link.href = canvas.toDataURL();
+  link.click();
+}
+
+function getPos(e) {
+  var rect = canvas.getBoundingClientRect();
+  if (e.touches) {
+    return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+  }
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function floodFill(startX, startY, fillColorHex) {
+  startX = Math.round(startX); startY = Math.round(startY);
+  var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  var data = imgData.data;
+  var w = canvas.width, h = canvas.height;
+  var idx = (startY * w + startX) * 4;
+  var tr = data[idx], tg = data[idx+1], tb = data[idx+2], ta = data[idx+3];
+  var fc = parseInt(fillColorHex.slice(1), 16);
+  var fr = (fc >> 16) & 255, fg = (fc >> 8) & 255, fb = fc & 255;
+  if (tr===fr && tg===fg && tb===fb) return;
+  var stack = [[startX, startY]];
+  while (stack.length) {
+    var p = stack.pop();
+    var x = p[0], y = p[1];
+    if (x < 0 || x >= w || y < 0 || y >= h) continue;
+    var i = (y * w + x) * 4;
+    if (data[i]!==tr || data[i+1]!==tg || data[i+2]!==tb || data[i+3]!==ta) continue;
+    data[i]=fr; data[i+1]=fg; data[i+2]=fb; data[i+3]=255;
+    stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+var sprayInterval = null;
+
+function startDraw(e) {
+  e.preventDefault();
+  var pos = getPos(e);
+  if (curTool === 'fill') {
+    saveUndo();
+    floodFill(pos.x, pos.y, curColor);
+    return;
+  }
+  saveUndo();
+  drawing = true;
+  lastX = pos.x; lastY = pos.y;
+  if (curTool === 'spray') {
+    doSpray(pos.x, pos.y);
+    sprayInterval = setInterval(function(){ doSpray(lastX, lastY); }, 30);
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    doDraw(pos.x, pos.y);
+  }
+}
+
+function doMove(e) {
+  e.preventDefault();
+  if (!drawing) return;
+  var pos = getPos(e);
+  lastX = pos.x; lastY = pos.y;
+  if (curTool === 'spray') return;
+  doDraw(pos.x, pos.y);
+}
+
+function doDraw(x, y) {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (curTool === 'eraser') {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = curSize * 3;
+  } else if (curTool === 'brush') {
+    ctx.strokeStyle = curColor;
+    ctx.lineWidth = curSize * 2;
+    ctx.globalAlpha = 0.6;
+  } else {
+    ctx.strokeStyle = curColor;
+    ctx.lineWidth = curSize;
+    ctx.globalAlpha = 1.0;
+  }
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.globalAlpha = 1.0;
+}
+
+function doSpray(x, y) {
+  ctx.fillStyle = curColor;
+  var density = 20;
+  var radius = curSize * 2;
+  for (var i = 0; i < density; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var r = Math.random() * radius;
+    ctx.fillRect(x + r * Math.cos(angle), y + r * Math.sin(angle), 1.5, 1.5);
+  }
+}
+
+function endDraw(e) {
+  if (e) e.preventDefault();
+  drawing = false;
+  if (sprayInterval) { clearInterval(sprayInterval); sprayInterval = null; }
+  ctx.beginPath();
+  ctx.globalAlpha = 1.0;
+}
+
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', doMove);
+canvas.addEventListener('mouseup', endDraw);
+canvas.addEventListener('mouseleave', endDraw);
+canvas.addEventListener('touchstart', startDraw, {passive:false});
+canvas.addEventListener('touchmove', doMove, {passive:false});
+canvas.addEventListener('touchend', endDraw, {passive:false});
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+</script>
+</body>
+</html>

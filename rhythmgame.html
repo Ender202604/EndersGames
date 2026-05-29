@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Rhythm Game - Ender's Game World</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: #1a0000; }
+body {
+  font-family: Arial, sans-serif;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  user-select: none;
+}
+.home-btn {
+  position: fixed; top: 10px; left: 10px;
+  background: darkred; color: yellow;
+  border: 2px solid yellow; border-radius: 8px;
+  padding: 6px 12px; font-size: 14px;
+  text-decoration: none; z-index: 100;
+}
+.hud {
+  display: flex; gap: 20px; align-items: center;
+  padding: 8px 16px; background: #220000;
+  width: 100%; justify-content: center;
+  border-bottom: 2px solid #660000;
+  flex-wrap: wrap; flex-shrink: 0;
+}
+.hud-item { text-align: center; }
+.hud-label { font-size: 11px; color: #ffaaaa; }
+.hud-val { font-size: 20px; font-weight: bold; color: yellow; }
+#gameArea {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  overflow: hidden;
+}
+#gameCanvas { display: block; width: 100%; height: 100%; }
+.overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.85); gap: 14px; z-index: 10;
+}
+.overlay h2 { color: yellow; font-size: 28px; text-shadow: 0 0 10px #ff6600; }
+.overlay p { color: #ffaaaa; font-size: 14px; text-align: center; padding: 0 20px; }
+.btn {
+  background: darkred; color: yellow;
+  border: 2px solid yellow; border-radius: 8px;
+  padding: 10px 24px; font-size: 16px;
+  cursor: pointer; transition: all 0.1s;
+}
+.btn:hover { background: #8b0000; }
+.diff-btns { display: flex; gap: 10px; }
+.diff-btn { background: #330000; color: white; border: 2px solid #880000; border-radius: 8px; padding: 8px 16px; font-size: 14px; cursor: pointer; }
+.diff-btn.active { background: darkred; border-color: yellow; color: yellow; }
+.key-hint {
+  display: flex; gap: 0; position: absolute; bottom: 0; width: 100%; z-index: 5;
+}
+.key-label {
+  flex: 1; text-align: center;
+  padding: 8px 0; font-size: 18px; font-weight: bold;
+  opacity: 0.7; border-top: 3px solid;
+}
+#judge-text {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 22px; font-weight: bold;
+  opacity: 0; transition: opacity 0.1s;
+  pointer-events: none; top: 40%;
+  text-shadow: 0 0 10px currentColor;
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+<a href="index.html" class="home-btn">&#127968; Home</a>
+<div class="hud">
+  <div class="hud-item"><div class="hud-label">SCORE</div><div class="hud-val" id="scoreVal">0</div></div>
+  <div class="hud-item"><div class="hud-label">COMBO</div><div class="hud-val" id="comboVal">0x</div></div>
+  <div class="hud-item"><div class="hud-label">TIME</div><div class="hud-val" id="timeVal">0:30</div></div>
+  <div class="hud-item"><div class="hud-label">HITS</div><div class="hud-val" id="hitsVal">0</div></div>
+  <div class="hud-item"><div class="hud-label">MISSES</div><div class="hud-val" id="missVal">0</div></div>
+</div>
+<div id="gameArea">
+  <canvas id="gameCanvas"></canvas>
+  <div id="judge-text"></div>
+  <div class="key-hint">
+    <div class="key-label" style="color:#ff4466;border-color:#ff4466;">D</div>
+    <div class="key-label" style="color:#44ff66;border-color:#44ff66;">F</div>
+    <div class="key-label" style="color:#66aaff;border-color:#66aaff;">J</div>
+    <div class="key-label" style="color:#ffcc00;border-color:#ffcc00;">K</div>
+  </div>
+  <div class="overlay" id="menuOverlay">
+    <h2>&#127925; Rhythm Game</h2>
+    <p>Press D F J K keys (or tap) when notes reach the hit line!</p>
+    <div class="diff-btns">
+      <button class="diff-btn active" id="diff-easy" onclick="setDiff('easy')">Easy</button>
+      <button class="diff-btn" id="diff-normal" onclick="setDiff('normal')">Normal</button>
+      <button class="diff-btn" id="diff-hard" onclick="setDiff('hard')">Hard</button>
+    </div>
+    <button class="btn" onclick="startGame()">&#9654; Start Game</button>
+  </div>
+  <div class="overlay" id="endOverlay" style="display:none;">
+    <h2 id="endTitle">Game Over!</h2>
+    <p id="endMsg"></p>
+    <button class="btn" onclick="showMenu()">&#127968; Menu</button>
+    <button class="btn" onclick="startGame()">&#9654; Play Again</button>
+  </div>
+</div>
+
+<script>
+var canvas = document.getElementById('gameCanvas');
+var ctx = canvas.getContext('2d');
+var area = document.getElementById('gameArea');
+
+function resize() {
+  canvas.width = area.clientWidth;
+  canvas.height = area.clientHeight;
+}
+resize();
+window.addEventListener('resize', function(){ resize(); });
+
+var COLS = 4;
+var colColors = ['#ff4466','#44ff66','#66aaff','#ffcc00'];
+var colKeys = ['d','f','j','k'];
+var SONG_DURATION = 30;
+var HIT_Y_RATIO = 0.82;
+var NOTE_W_RATIO = 0.18;
+
+var difficulty = 'easy';
+var diffSettings = {
+  easy:   { speed: 200, spawnRate: 1.0 },
+  normal: { speed: 320, spawnRate: 1.5 },
+  hard:   { speed: 480, spawnRate: 2.2 }
+};
+
+var notes = [], effects = [];
+var score = 0, combo = 0, hits = 0, misses = 0;
+var gameRunning = false;
+var startTime = 0;
+var lastSpawn = 0;
+var spawnAccum = 0;
+var lastFrame = 0;
+var animId = null;
+
+var AudioCtx = window.AudioContext || window.webkitAudioContext;
+var aCtx = new AudioCtx();
+
+function playHitSound(good) {
+  aCtx.resume();
+  var osc = aCtx.createOscillator();
+  var g = aCtx.createGain();
+  osc.frequency.value = good ? 660 : 220;
+  g.gain.setValueAtTime(0.3, aCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, aCtx.currentTime + 0.12);
+  osc.connect(g); g.connect(aCtx.destination);
+  osc.start(); osc.stop(aCtx.currentTime + 0.12);
+}
+
+function setDiff(d) {
+  difficulty = d;
+  ['easy','normal','hard'].forEach(function(n) {
+    document.getElementById('diff-' + n).classList.toggle('active', n === d);
+  });
+}
+
+function showMenu() {
+  document.getElementById('menuOverlay').style.display = 'flex';
+  document.getElementById('endOverlay').style.display = 'none';
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+  gameRunning = false;
+}
+
+function startGame() {
+  document.getElementById('menuOverlay').style.display = 'none';
+  document.getElementById('endOverlay').style.display = 'none';
+  notes = []; effects = [];
+  score = 0; combo = 0; hits = 0; misses = 0;
+  startTime = performance.now();
+  lastSpawn = 0; spawnAccum = 0; lastFrame = startTime;
+  gameRunning = true;
+  updateHUD();
+  if (animId) cancelAnimationFrame(animId);
+  animId = requestAnimationFrame(gameLoop);
+}
+
+function updateHUD() {
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('comboVal').textContent = combo + 'x';
+  document.getElementById('hitsVal').textContent = hits;
+  document.getElementById('missVal').textContent = misses;
+  var elapsed = (performance.now() - startTime) / 1000;
+  var rem = Math.max(0, SONG_DURATION - elapsed);
+  var s = Math.ceil(rem);
+  document.getElementById('timeVal').textContent = '0:' + (s < 10 ? '0' : '') + s;
+}
+
+function spawnNote(dt) {
+  var settings = diffSettings[difficulty];
+  spawnAccum += dt * settings.spawnRate;
+  while (spawnAccum >= 1) {
+    spawnAccum -= 1;
+    var col = Math.floor(Math.random() * COLS);
+    notes.push({ col: col, y: -30, hit: false, missed: false });
+  }
+}
+
+function showJudge(text, color) {
+  var el = document.getElementById('judge-text');
+  el.textContent = text;
+  el.style.color = color;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.style.opacity = '0'; }, 400);
+}
+
+function hitCol(col) {
+  if (!gameRunning) return;
+  var hitY = canvas.height * HIT_Y_RATIO;
+  var best = null, bestDist = 999;
+  notes.forEach(function(n) {
+    if (n.col !== col || n.hit || n.missed) return;
+    var dist = Math.abs(n.y - hitY);
+    if (dist < bestDist) { bestDist = dist; best = n; }
+  });
+  if (best && bestDist < 60) {
+    best.hit = true;
+    var perfect = bestDist < 20;
+    combo++;
+    hits++;
+    var pts = perfect ? 300 : 100;
+    pts *= Math.min(combo, 8);
+    score += pts;
+    playHitSound(true);
+    var label = perfect ? 'PERFECT!' : 'GOOD!';
+    var color = perfect ? '#ffff00' : '#44ff66';
+    showJudge(label, color);
+    effects.push({ x: getColX(col), y: hitY, r: 0, col: colColors[col], life: 1 });
+  } else {
+    combo = 0;
+    playHitSound(false);
+    showJudge('MISS', '#ff4444');
+    misses++;
+  }
+  updateHUD();
+}
+
+function getColX(col) {
+  return (col + 0.5) * (canvas.width / COLS);
+}
+
+function gameLoop(ts) {
+  var dt = Math.min((ts - lastFrame) / 1000, 0.05);
+  lastFrame = ts;
+  var elapsed = (ts - startTime) / 1000;
+  if (elapsed >= SONG_DURATION) { endGame(); return; }
+
+  spawnNote(dt);
+  var speed = diffSettings[difficulty].speed;
+  var hitY = canvas.height * HIT_Y_RATIO;
+  var colW = canvas.width / COLS;
+  var noteW = colW * NOTE_W_RATIO * 3;
+
+  notes.forEach(function(n) {
+    if (!n.hit) n.y += speed * dt;
+    if (!n.hit && !n.missed && n.y > hitY + 50) {
+      n.missed = true;
+      combo = 0;
+      misses++;
+      showJudge('MISS', '#ff4444');
+      updateHUD();
+    }
+  });
+  notes = notes.filter(function(n){ return n.y < canvas.height + 60 && !(n.hit && n.y > canvas.height); });
+
+  effects.forEach(function(ef) { ef.r += 60 * dt; ef.life -= 3 * dt; });
+  effects = effects.filter(function(ef){ return ef.life > 0; });
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = '#0d0005';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (var c = 0; c < COLS; c++) {
+    ctx.fillStyle = c % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0)';
+    ctx.fillRect(c * colW, 0, colW, canvas.height);
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(c * colW, 0); ctx.lineTo(c * colW, canvas.height); ctx.stroke();
+  }
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, hitY); ctx.lineTo(canvas.width, hitY); ctx.stroke();
+
+  for (var c2 = 0; c2 < COLS; c2++) {
+    ctx.strokeStyle = colColors[c2];
+    ctx.lineWidth = 3;
+    ctx.shadowColor = colColors[c2];
+    ctx.shadowBlur = 6;
+    ctx.strokeRect(c2 * colW + 8, hitY + 4, colW - 16, 28);
+    ctx.shadowBlur = 0;
+  }
+
+  notes.forEach(function(n) {
+    if (n.hit) return;
+    var x = n.col * colW;
+    var col = colColors[n.col];
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = n.missed ? '#ff0000' : col;
+    var rx = x + 8, ry = n.y - 15, rw = colW - 16, rh = 30;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(rx, ry, rw, rh, 6) : ctx.rect(rx, ry, rw, rh);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+
+  effects.forEach(function(ef) {
+    ctx.beginPath();
+    ctx.arc(ef.x, ef.y, ef.r, 0, Math.PI * 2);
+    ctx.strokeStyle = ef.col;
+    ctx.globalAlpha = ef.life;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  });
+
+  var barW = (elapsed / SONG_DURATION) * canvas.width;
+  ctx.fillStyle = 'rgba(255,200,0,0.4)';
+  ctx.fillRect(0, canvas.height - 4, barW, 4);
+
+  updateHUD();
+  animId = requestAnimationFrame(gameLoop);
+}
+
+function endGame() {
+  gameRunning = false;
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+  var total = hits + misses;
+  var acc = total > 0 ? Math.round((hits / total) * 100) : 0;
+  document.getElementById('endTitle').textContent = acc >= 70 ? 'Awesome!' : 'Game Over!';
+  document.getElementById('endMsg').textContent =
+    'Score: ' + score + ' | Hits: ' + hits + ' | Misses: ' + misses + ' | Accuracy: ' + acc + '%';
+  document.getElementById('endOverlay').style.display = 'flex';
+}
+
+document.addEventListener('keydown', function(e) {
+  var col = colKeys.indexOf(e.key.toLowerCase());
+  if (col !== -1) { e.preventDefault(); hitCol(col); }
+});
+
+var gameAreaEl = document.getElementById('gameArea');
+gameAreaEl.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  var w = canvas.width / COLS;
+  Array.from(e.changedTouches).forEach(function(t) {
+    var rect = canvas.getBoundingClientRect();
+    var x = t.clientX - rect.left;
+    var col = Math.floor(x / (rect.width / COLS));
+    if (col >= 0 && col < COLS) hitCol(col);
+  });
+}, {passive: false});
+</script>
+</body>
+</html>

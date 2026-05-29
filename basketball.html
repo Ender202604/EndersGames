@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Basketball Free Throw | Ender's Game World</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a0000; color: #ff6600; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; overflow: hidden; }
+#header { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #2a0800; border-bottom: 2px solid #ff6600; }
+#header h1 { font-size: 1.2em; color: #ffaa00; }
+.home-btn { background: #ff6600; color: #1a0000; border: none; padding: 6px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 0.9em; }
+.home-btn:hover { background: #ffaa00; }
+#ui { display: flex; gap: 12px; padding: 8px 16px; background: #200500; width: 100%; justify-content: center; flex-wrap: wrap; align-items: center; }
+.ui-box { background: #2a0800; border: 1px solid #ff6600; border-radius: 8px; padding: 4px 14px; text-align: center; }
+.ui-label { font-size: 0.65em; color: #ff9900; text-transform: uppercase; }
+.ui-val { font-size: 1.3em; font-weight: bold; color: #ffcc00; }
+#canvas { display: block; cursor: crosshair; touch-action: none; }
+#wrap { position: relative; display: inline-block; }
+#msg { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); font-size: 1.8em; font-weight: bold; color: #ffcc00; text-shadow: 0 0 20px #ff6600; pointer-events: none; opacity: 0; transition: opacity 0.4s; background: rgba(26,0,0,0.8); padding: 8px 24px; border-radius: 12px; border: 2px solid #ff6600; white-space: nowrap; z-index: 10; }
+#instruct { color: #ff9900; font-size: 0.8em; padding: 4px; text-align: center; }
+#challenge-btn { background: #cc0000; color: #ffcc00; border: 2px solid #ff6600; padding: 6px 16px; border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; }
+#challenge-btn:hover { background: #ff3300; }
+</style>
+</head>
+<body>
+<div id="header">
+  <h1>&#127936; Basketball Free Throw</h1>
+  <a href="index.html" class="home-btn">&#127968; Home</a>
+</div>
+<div id="ui">
+  <div class="ui-box"><div class="ui-label">Score</div><div class="ui-val" id="score-val">0</div></div>
+  <div class="ui-box"><div class="ui-label">Streak</div><div class="ui-val" id="streak-val">0</div></div>
+  <div class="ui-box"><div class="ui-label">Best</div><div class="ui-val" id="best-val">0</div></div>
+  <div class="ui-box" id="timer-box" style="display:none"><div class="ui-label">Time</div><div class="ui-val" id="timer-val">30</div></div>
+  <button id="challenge-btn">&#9201; 30s Challenge</button>
+</div>
+<div id="instruct">Grab the ball and drag upward to shoot! Aim for the hoop.</div>
+<div id="wrap">
+  <canvas id="canvas"></canvas>
+  <div id="msg"></div>
+</div>
+<script>
+var canvas = document.getElementById('canvas');
+var ctx = canvas.getContext('2d');
+var msgEl = document.getElementById('msg');
+var scoreEl = document.getElementById('score-val');
+var streakEl = document.getElementById('streak-val');
+var bestEl = document.getElementById('best-val');
+var timerEl = document.getElementById('timer-val');
+var timerBox = document.getElementById('timer-box');
+var challengeBtn = document.getElementById('challenge-btn');
+
+var W = 480, H = 500;
+canvas.width = W; canvas.height = H;
+
+var score = 0, streak = 0, bestStreak = 0;
+var challengeMode = false, challengeTime = 30, challengeInterval = null;
+var GRAVITY = 0.38, BALL_R = 17;
+var ball = {}, hoop = {};
+var dragging = false, dragCur = null;
+var ballInFlight = false, scored = false;
+var msgTimeout;
+var particles = [];
+
+function resetBall() {
+  ball = { x: W / 2, y: H - 65, vx: 0, vy: 0, spin: 0 };
+  dragging = false; dragCur = null; ballInFlight = false; scored = false;
+}
+
+function randomHoop() {
+  var margin = 80;
+  hoop = {
+    x: margin + Math.random() * (W - margin * 2),
+    y: 95 + Math.random() * 80,
+    w: 58, moving: false, moveDir: 1, moveSpeed: 0
+  };
+}
+
+function startHoopMoving() {
+  hoop.moving = true;
+  hoop.moveSpeed = 1.2 + Math.random() * 1.5;
+  hoop.moveDir = (Math.random() < 0.5) ? 1 : -1;
+}
+
+resetBall(); randomHoop();
+
+function spawnParticles(x, y) {
+  for (var i = 0; i < 18; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 1.5 + Math.random() * 3;
+    particles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      life: 40, maxLife: 40,
+      color: ['#ffcc00','#ff6600','#ff3300','#ffaa00'][Math.floor(Math.random()*4)],
+      r: 3 + Math.random() * 3
+    });
+  }
+}
+
+function updateParticles() {
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.15;
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    ctx.save();
+    ctx.globalAlpha = p.life / p.maxLife;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawCourt() {
+  var bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0d0400');
+  bg.addColorStop(1, '#3a1800');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,140,0,0.25)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(60, H - 15); ctx.lineTo(W - 60, H - 15); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W/2, H - 15, 75, Math.PI, 0); ctx.stroke();
+}
+
+function drawBackboard() {
+  var bx = hoop.x, by = hoop.y;
+  ctx.strokeStyle = '#666'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(bx, by - 25); ctx.lineTo(bx, H); ctx.stroke();
+  ctx.fillStyle = '#ccc';
+  ctx.fillRect(bx - 38, by - 58, 76, 46);
+  ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+  ctx.strokeRect(bx - 38, by - 58, 76, 46);
+  ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2;
+  ctx.strokeRect(bx - 13, by - 46, 26, 20);
+  // Rim
+  ctx.strokeStyle = '#ff6600'; ctx.lineWidth = 5;
+  var hw = hoop.w / 2;
+  ctx.beginPath(); ctx.moveTo(bx - hw, by); ctx.lineTo(bx + hw, by); ctx.stroke();
+  // Net
+  ctx.strokeStyle = 'rgba(220,220,220,0.55)'; ctx.lineWidth = 1.5;
+  for (var i = 0; i <= 5; i++) {
+    var nx = bx - hw + (hoop.w / 5) * i;
+    ctx.beginPath(); ctx.moveTo(nx, by); ctx.lineTo(bx + (nx - bx) * 0.4, by + 36); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.moveTo(bx-hw, by+10); ctx.lineTo(bx+hw, by+10); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx-hw+5, by+22); ctx.lineTo(bx+hw-5, by+22); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx-hw+11, by+35); ctx.lineTo(bx+hw-11, by+35); ctx.stroke();
+}
+
+function drawBall(x, y, spin) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath(); ctx.ellipse(x + 3, H - 58, BALL_R * 0.75, 5, 0, 0, Math.PI*2); ctx.fill();
+  var grad = ctx.createRadialGradient(x - 5, y - 5, 2, x, y, BALL_R);
+  grad.addColorStop(0, '#ff9944');
+  grad.addColorStop(0.6, '#cc5500');
+  grad.addColorStop(1, '#551a00');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(x, y, BALL_R, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 1.5;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(spin);
+  ctx.beginPath(); ctx.arc(0, 0, BALL_R, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-BALL_R, 0); ctx.bezierCurveTo(-BALL_R*0.5, -7, BALL_R*0.5, -7, BALL_R, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-BALL_R, 0); ctx.bezierCurveTo(-BALL_R*0.5, 7, BALL_R*0.5, 7, BALL_R, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, -BALL_R); ctx.bezierCurveTo(-7, -BALL_R*0.5, -7, BALL_R*0.5, 0, BALL_R); ctx.stroke();
+  ctx.restore(); ctx.restore();
+}
+
+function drawAimGuide() {
+  if (!dragging || !dragCur || ballInFlight) return;
+  var dx = ball.x - dragCur.x, dy = ball.y - dragCur.y;
+  var dist = Math.sqrt(dx*dx+dy*dy);
+  if (dist < 5) return;
+  var speed = Math.min(dist * 0.22, 18);
+  var angle = Math.atan2(dy, dx);
+  var vx = Math.cos(angle) * speed, vy = Math.sin(angle) * speed;
+  ctx.save(); ctx.strokeStyle = 'rgba(255,200,50,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([5,6]);
+  ctx.beginPath(); ctx.moveTo(ball.x, ball.y);
+  var px = ball.x, py = ball.y;
+  for (var t = 0; t < 40; t++) {
+    px += vx; py += vy; vy += GRAVITY;
+    ctx.lineTo(px, py);
+    if (py > H + 20) break;
+  }
+  ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+  // Power bar
+  var power = Math.min(dist / 120, 1);
+  var bw = 110, bh = 12, bx = W/2 - bw/2, by2 = H - 16;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx-2, by2-2, bw+4, bh+4);
+  var c = power < 0.5 ? '#00ff88' : power < 0.8 ? '#ffaa00' : '#ff2200';
+  ctx.fillStyle = c; ctx.fillRect(bx, by2, bw * power, bh);
+  ctx.strokeStyle = '#ff6600'; ctx.lineWidth = 1; ctx.strokeRect(bx, by2, bw, bh);
+  ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center';
+  ctx.fillText('POWER', bx + bw/2, by2 + 10); ctx.textAlign = 'left';
+}
+
+function showMsg(text, dur) {
+  dur = dur || 1200;
+  msgEl.textContent = text; msgEl.style.opacity = '1';
+  if (msgTimeout) clearTimeout(msgTimeout);
+  msgTimeout = setTimeout(function() { msgEl.style.opacity = '0'; }, dur);
+}
+
+function checkScore() {
+  var hw = hoop.w / 2;
+  var bx = ball.x, by2 = ball.y;
+  if (ball.vy > 0 && by2 >= hoop.y - 4 && by2 <= hoop.y + 10) {
+    if (bx >= hoop.x - hw + BALL_R * 0.5 && bx <= hoop.x + hw - BALL_R * 0.5) {
+      if (!scored) {
+        scored = true;
+        score++; streak++;
+        if (streak > bestStreak) bestStreak = streak;
+        scoreEl.textContent = score; streakEl.textContent = streak; bestEl.textContent = bestStreak;
+        spawnParticles(bx, by2);
+        var msgs = ['SWISH!', 'NICE SHOT!', 'MONEY!', 'BUCKETS!', 'PERFECT!'];
+        if (streak >= 3) msgs.push('ON FIRE! x' + streak);
+        if (streak >= 5) msgs.push('UNSTOPPABLE! x' + streak);
+        showMsg(msgs[Math.floor(Math.random() * msgs.length)]);
+        if (score >= 3 && !hoop.moving) startHoopMoving();
+        setTimeout(function() { resetBall(); if (!challengeMode) { randomHoop(); if (score >= 3) startHoopMoving(); } }, 750);
+      }
+    }
+  }
+}
+
+function update() {
+  if (!ballInFlight) return;
+  ball.x += ball.vx; ball.y += ball.vy; ball.vy += GRAVITY;
+  ball.spin += ball.vx * 0.03;
+  if (hoop.moving) {
+    hoop.x += hoop.moveSpeed * hoop.moveDir;
+    if (hoop.x < 70 || hoop.x > W - 70) hoop.moveDir *= -1;
+  }
+  checkScore();
+  if (ball.x - BALL_R < 0) { ball.x = BALL_R; ball.vx = Math.abs(ball.vx) * 0.55; }
+  if (ball.x + BALL_R > W) { ball.x = W - BALL_R; ball.vx = -Math.abs(ball.vx) * 0.55; }
+  // Backboard bounce
+  var bbx = hoop.x, bby = hoop.y;
+  if (ball.x > bbx - 38 && ball.x < bbx + 38 && ball.y + BALL_R > bby - 58 && ball.y - BALL_R < bby - 12) {
+    if (ball.vy < 0) { ball.vy = Math.abs(ball.vy) * 0.45; ball.vx *= 0.65; }
+  }
+  if (ball.y > H + 30) {
+    if (!scored) { streak = 0; streakEl.textContent = 0; showMsg('MISS! Try again...'); }
+    setTimeout(function() { if (!ballInFlight) return; resetBall(); if (!challengeMode) { randomHoop(); if (score >= 3) startHoopMoving(); } }, 300);
+    ballInFlight = false;
+  }
+}
+
+function loop() {
+  update(); updateParticles();
+  ctx.clearRect(0, 0, W, H);
+  drawCourt(); drawBackboard();
+  if (!ballInFlight) drawAimGuide();
+  drawParticles();
+  drawBall(ball.x, ball.y, ball.spin);
+  requestAnimationFrame(loop);
+}
+loop();
+
+function getPos(e) {
+  var rect = canvas.getBoundingClientRect();
+  var src = e.touches ? e.touches[0] : e;
+  return { x: (src.clientX - rect.left) * (W / rect.width), y: (src.clientY - rect.top) * (H / rect.height) };
+}
+
+canvas.addEventListener('mousedown', function(e) {
+  if (ballInFlight) return;
+  var pos = getPos(e);
+  var dx = pos.x - ball.x, dy = pos.y - ball.y;
+  if (dx*dx + dy*dy < (BALL_R + 22) * (BALL_R + 22)) {
+    dragging = true; dragCur = { x: pos.x, y: pos.y }; e.preventDefault();
+  }
+});
+canvas.addEventListener('mousemove', function(e) {
+  if (!dragging) return;
+  dragCur = getPos(e); e.preventDefault();
+});
+canvas.addEventListener('mouseup', function(e) {
+  if (!dragging) return;
+  dragging = false;
+  var pos = dragCur;
+  var dx = ball.x - pos.x, dy = ball.y - pos.y;
+  var dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist < 5) return;
+  var speed = Math.min(dist * 0.22, 18);
+  var angle = Math.atan2(dy, dx);
+  ball.vx = Math.cos(angle) * speed; ball.vy = Math.sin(angle) * speed;
+  ballInFlight = true; scored = false; dragCur = null;
+});
+canvas.addEventListener('touchstart', function(e) {
+  if (ballInFlight) return;
+  var pos = getPos(e);
+  var dx = pos.x - ball.x, dy = pos.y - ball.y;
+  if (dx*dx + dy*dy < (BALL_R + 22) * (BALL_R + 22)) {
+    dragging = true; dragCur = { x: pos.x, y: pos.y }; e.preventDefault();
+  }
+}, { passive: false });
+canvas.addEventListener('touchmove', function(e) {
+  if (!dragging) return;
+  dragCur = getPos(e); e.preventDefault();
+}, { passive: false });
+canvas.addEventListener('touchend', function(e) {
+  if (!dragging) return;
+  dragging = false;
+  var pos = dragCur;
+  var dx = ball.x - pos.x, dy = ball.y - pos.y;
+  var dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist < 5) return;
+  var speed = Math.min(dist * 0.22, 18);
+  var angle = Math.atan2(dy, dx);
+  ball.vx = Math.cos(angle) * speed; ball.vy = Math.sin(angle) * speed;
+  ballInFlight = true; scored = false; dragCur = null;
+  e.preventDefault();
+}, { passive: false });
+
+challengeBtn.addEventListener('click', function() {
+  if (challengeMode) {
+    clearInterval(challengeInterval); challengeMode = false; challengeTime = 30;
+    timerBox.style.display = 'none'; challengeBtn.textContent = '⏱ 30s Challenge';
+    score = 0; streak = 0; scoreEl.textContent = 0; streakEl.textContent = 0;
+    resetBall(); randomHoop(); return;
+  }
+  challengeMode = true; score = 0; streak = 0; challengeTime = 30;
+  scoreEl.textContent = 0; streakEl.textContent = 0;
+  timerBox.style.display = 'block'; timerEl.textContent = 30;
+  challengeBtn.textContent = '✖ Stop';
+  resetBall(); randomHoop();
+  challengeInterval = setInterval(function() {
+    challengeTime--; timerEl.textContent = challengeTime;
+    if (challengeTime <= 0) {
+      clearInterval(challengeInterval); challengeMode = false;
+      timerBox.style.display = 'none'; challengeBtn.textContent = '⏱ 30s Challenge';
+      showMsg('TIME! Score: ' + score, 3000); ballInFlight = false; resetBall();
+    }
+  }, 1000);
+});
+</script>
+</body>
+</html>

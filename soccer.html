@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Penalty Kicks - Ender's Game World</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a0000;color:white;font-family:Arial,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:10px}
+h1{color:yellow;font-size:22px;margin-bottom:4px}
+#home-btn{position:fixed;top:8px;left:10px;color:#ff9999;text-decoration:none;font-size:13px;z-index:99}
+#scoreboard{font-size:18px;margin:6px 0;color:#ffddaa}
+#msg{font-size:15px;color:#ffff88;min-height:22px;margin:4px 0;text-align:center}
+#field{position:relative;background:#2d7a2d;border-radius:10px;width:360px;height:260px;border:3px solid #fff;cursor:crosshair;overflow:hidden}
+#goal{position:absolute;top:20px;left:50%;transform:translateX(-50%);width:180px;height:90px;border:4px solid white;border-bottom:none;background:rgba(255,255,255,0.08);pointer-events:none}
+#aim{position:absolute;width:20px;height:20px;border:2px solid yellow;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);display:none}
+#ball{position:absolute;width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff,#aaa);border:2px solid #555;bottom:30px;left:50%;transform:translateX(-50%);transition:all 0.5s ease-out}
+#goalkeeper{position:absolute;top:28px;width:32px;height:68px;background:#ff6600;border-radius:6px;transition:left 0.3s}
+#power-bar{width:300px;background:#333;border-radius:6px;height:18px;margin:6px 0;overflow:hidden;border:2px solid #666}
+#power-fill{height:100%;width:0%;background:linear-gradient(90deg,#00cc00,#ffcc00,#ff0000);transition:width 0.05s}
+.btn{background:#8b0000;color:white;border:2px solid #ff6666;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:14px;margin:4px}
+.btn:hover{background:#cc0000}
+#mode-select{margin:6px 0;font-size:13px;color:#ffcccc}
+#mode-select label{cursor:pointer;margin:0 8px}
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>⚽ Penalty Kicks</h1>
+<div id="scoreboard">You: <span id="pscore">0</span> &nbsp;|&nbsp; Keeper: <span id="kscore">0</span> &nbsp;|&nbsp; Round <span id="rnd">1</span>/5</div>
+<div id="field">
+  <div id="goal"></div>
+  <div id="goalkeeper"></div>
+  <div id="aim"></div>
+  <div id="ball"></div>
+</div>
+<div id="msg">Click in the goal area to aim, then hold SPACE (or hold button) to power up!</div>
+<div id="power-bar"><div id="power-fill"></div></div>
+<button class="btn" id="shoot-btn" onmousedown="startPower()" onmouseup="shoot()" ontouchstart="startPower();event.preventDefault()" ontouchend="shoot();event.preventDefault()">⚡ Hold to Power Up</button>
+<button class="btn" onclick="resetGame()">🔄 New Game</button>
+<script>
+var playerScore=0,keeperScore=0,round=1,maxRounds=5;
+var aiming=false,aimX=0,aimY=0,power=0,powering=false,powerTimer=null,shooting=false;
+var field=document.getElementById('field');
+var ball=document.getElementById('ball');
+var aim=document.getElementById('aim');
+var keeper=document.getElementById('goalkeeper');
+var powerFill=document.getElementById('power-fill');
+var msg=document.getElementById('msg');
+keeper.style.left='164px';
+keeper.style.top='28px';
+
+field.addEventListener('mousemove',function(e){
+  var r=field.getBoundingClientRect();
+  var x=e.clientX-r.left, y=e.clientY-r.top;
+  aim.style.left=x+'px'; aim.style.top=y+'px'; aim.style.display='block';
+  aimX=x; aimY=y;
+});
+field.addEventListener('mouseleave',function(){aim.style.display='none';});
+field.addEventListener('click',function(e){
+  var r=field.getBoundingClientRect();
+  aimX=e.clientX-r.left; aimY=e.clientY-r.top;
+});
+field.addEventListener('touchmove',function(e){
+  e.preventDefault();
+  var r=field.getBoundingClientRect();
+  aimX=e.touches[0].clientX-r.left; aimY=e.touches[0].clientY-r.top;
+  aim.style.left=aimX+'px'; aim.style.top=aimY+'px'; aim.style.display='block';
+},{passive:false});
+
+function startPower(){
+  if(shooting||round>maxRounds) return;
+  powering=true; power=0;
+  powerTimer=setInterval(function(){
+    power=Math.min(power+3,100);
+    powerFill.style.width=power+'%';
+  },30);
+}
+function shoot(){
+  if(!powering||shooting) return;
+  clearInterval(powerTimer); powering=false;
+  if(round>maxRounds) return;
+  shooting=true;
+  var targetX=aimX||180, targetY=aimY||60;
+  ball.style.transition='all 0.45s ease-out';
+  ball.style.left=(targetX-13)+'px';
+  ball.style.top=(targetY-13)+'px';
+  ball.style.bottom='auto';
+  var goalLeft=90, goalRight=270, goalTop=20, goalBot=110;
+  var inGoal = targetX>=goalLeft && targetX<=goalRight && targetY>=goalTop && targetY<=goalBot;
+  var keepLeft=parseInt(keeper.style.left);
+  var keeperDest = Math.random()<0.5 ? 90+Math.random()*60 : 160+Math.random()*60;
+  keeper.style.left=keeperDest+'px';
+  var keeperBlocked = Math.abs(targetX-(keeperDest+16))<28 && targetY>=28 && targetY<=96;
+  setTimeout(function(){
+    if(inGoal && !keeperBlocked){
+      playerScore++;
+      document.getElementById('pscore').textContent=playerScore;
+      showMsg('⚽ GOAL! Great kick!','#88ff88');
+    } else if(inGoal && keeperBlocked){
+      keeperScore++;
+      document.getElementById('kscore').textContent=keeperScore;
+      showMsg('🧤 Saved! The keeper got it!','#ff8888');
+    } else {
+      showMsg('😬 Missed! Aim for the goal!','#ffaa44');
+    }
+    round++;
+    document.getElementById('rnd').textContent=Math.min(round,maxRounds);
+    if(round>maxRounds){
+      setTimeout(function(){
+        var winner=playerScore>keeperScore?'You win! 🎉':playerScore<keeperScore?'Keeper wins! 😅':'Draw! 🤝';
+        showMsg('Game Over! '+winner+' Final: '+playerScore+'-'+keeperScore,'#ffff44');
+      },600);
+    } else {
+      setTimeout(function(){
+        ball.style.transition='none';
+        ball.style.left='167px'; ball.style.top='auto'; ball.style.bottom='30px';
+        keeper.style.left='164px';
+        powerFill.style.width='0%';
+        shooting=false; power=0;
+      },700);
+    }
+  },500);
+}
+document.addEventListener('keydown',function(e){if(e.code==='Space'){e.preventDefault();if(!powering)startPower();}});
+document.addEventListener('keyup',function(e){if(e.code==='Space')shoot();});
+function showMsg(t,c){msg.textContent=t;msg.style.color=c||'#ffff88';}
+function resetGame(){
+  playerScore=0;keeperScore=0;round=1;shooting=false;powering=false;power=0;
+  clearInterval(powerTimer);
+  document.getElementById('pscore').textContent=0;
+  document.getElementById('kscore').textContent=0;
+  document.getElementById('rnd').textContent=1;
+  powerFill.style.width='0%';
+  ball.style.transition='none';
+  ball.style.left='167px';ball.style.top='auto';ball.style.bottom='30px';
+  keeper.style.left='164px';
+  showMsg('Click in the goal area to aim, then hold button to power up!','#ffff88');
+}
+</script>
+</body>
+</html>

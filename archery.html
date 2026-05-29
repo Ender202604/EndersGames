@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Archery - Ender's Game World</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a0000;color:white;font-family:Arial,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{color:yellow;font-size:22px;margin-bottom:4px}
+#home-btn{position:fixed;top:8px;left:10px;color:#ff9999;text-decoration:none;font-size:13px;z-index:99}
+canvas{border-radius:10px;margin:6px 0;cursor:crosshair}
+#msg{font-size:14px;color:#ffff88;min-height:20px;margin:4px 0;text-align:center}
+#hud{font-size:15px;color:#ffddaa;margin:3px 0}
+#power-bar{width:300px;background:#333;border-radius:6px;height:16px;overflow:hidden;border:2px solid #666;margin:4px 0}
+#power-fill{height:100%;width:0%;background:linear-gradient(90deg,#00cc00,#ffcc00,#ff0000)}
+.btn{background:#8b0000;color:white;border:2px solid #ff6666;padding:7px 18px;border-radius:8px;cursor:pointer;font-size:13px;margin:3px}
+.btn:hover{background:#cc0000}
+#wind{font-size:12px;color:#aaccff;margin:2px}
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🏹 Archery</h1>
+<div id="hud">Round <span id="rnd">1</span>/10 &nbsp;|&nbsp; Score: <span id="score">0</span></div>
+<div id="wind"></div>
+<canvas id="c" width="360" height="300"></canvas>
+<div id="msg">Aim with mouse, hold button to charge, release to shoot!</div>
+<div id="power-bar"><div id="power-fill"></div></div>
+<button class="btn" id="shoot-btn" onmousedown="startCharge()" onmouseup="release()" ontouchstart="startCharge();event.preventDefault()" ontouchend="release();event.preventDefault()">🏹 Hold to Charge</button>
+<button class="btn" onclick="resetGame()">🔄 New Game</button>
+<script>
+var c=document.getElementById('c'),ctx=c.getContext('2d');
+var W=360,H=300;
+var aimX=180,aimY=150;
+var charging=false,power=0,chargeTimer=null,shooting=false;
+var round=1,maxRounds=10,score=0;
+var windX=0,windY=0;
+var arrowX,arrowY,arrowVX,arrowVY,arrowFlying=false;
+var arrowTrail=[];
+
+function newRound(){
+  windX=(Math.random()-0.5)*3;
+  windY=(Math.random()-0.5)*1.5;
+  var wd=document.getElementById('wind');
+  var dir=windX>0?'→':'←';
+  wd.textContent='Wind: '+dir+' '+Math.abs(windX).toFixed(1)+'  Vertical: '+(windY>0?'↓':'↑')+Math.abs(windY).toFixed(1);
+  arrowFlying=false;arrowTrail=[];
+  draw();
+}
+
+function drawTarget(){
+  var tx=290,ty=150;
+  var rings=[[50,'#ffffff'],[40,'#000000'],[30,'#0033cc'],[20,'#cc0000'],[10,'#ffff00']];
+  for(var i=0;i<rings.length;i++){
+    ctx.fillStyle=rings[i][1];
+    ctx.beginPath();ctx.arc(tx,ty,rings[i][0],0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#888';ctx.lineWidth=1;ctx.stroke();
+  }
+  // Bullseye
+  ctx.fillStyle='#ffff00';
+  ctx.beginPath();ctx.arc(tx,ty,6,0,Math.PI*2);ctx.fill();
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // Sky/grass
+  var grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#1a3a5c');grad.addColorStop(0.6,'#2a6a2a');
+  ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+  // Ground
+  ctx.fillStyle='#1a4a1a';ctx.fillRect(0,210,W,90);
+  // Archer silhouette
+  ctx.fillStyle='#333';
+  ctx.fillRect(28,140,12,60); // body
+  ctx.beginPath();ctx.arc(34,138,10,0,Math.PI*2);ctx.fill(); // head
+  // Bow
+  ctx.strokeStyle='#8B4513';ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(46,165,22,-Math.PI*0.6,Math.PI*0.6);ctx.stroke();
+  // Bowstring
+  ctx.strokeStyle='#ccc';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(50,146);ctx.lineTo(50,184);ctx.stroke();
+  drawTarget();
+  // Aim dot
+  if(!arrowFlying){
+    ctx.strokeStyle='rgba(255,255,0,0.6)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(aimX,aimY,8,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(aimX-14,aimY);ctx.lineTo(aimX+14,aimY);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(aimX,aimY-14);ctx.lineTo(aimX,aimY+14);ctx.stroke();
+  }
+  // Arrow trail
+  if(arrowTrail.length>1){
+    ctx.strokeStyle='rgba(255,200,0,0.3)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(arrowTrail[0].x,arrowTrail[0].y);
+    for(var i=1;i<arrowTrail.length;i++) ctx.lineTo(arrowTrail[i].x,arrowTrail[i].y);
+    ctx.stroke();
+  }
+  // Arrow
+  if(arrowFlying||arrowTrail.length){
+    var ax=arrowFlying?arrowX:(arrowTrail[arrowTrail.length-1]||{x:arrowX,y:arrowY}).x;
+    var ay=arrowFlying?arrowY:(arrowTrail[arrowTrail.length-1]||{x:arrowX,y:arrowY}).y;
+    ctx.fillStyle='#cc8800';
+    var angle=arrowFlying?Math.atan2(arrowVY,arrowVX):0;
+    ctx.save();ctx.translate(ax,ay);ctx.rotate(angle);
+    ctx.fillRect(-15,-2,30,4);
+    ctx.fillStyle='#ff4444';
+    ctx.fillRect(13,-4,4,8);
+    ctx.restore();
+  }
+}
+
+function startCharge(){
+  if(arrowFlying||round>maxRounds) return;
+  charging=true;power=0;
+  chargeTimer=setInterval(function(){
+    power=Math.min(power+2.5,100);
+    document.getElementById('power-fill').style.width=power+'%';
+  },30);
+}
+function release(){
+  if(!charging) return;
+  clearInterval(chargeTimer);charging=false;
+  if(arrowFlying||round>maxRounds) return;
+  // Fire arrow toward aim point
+  arrowX=55;arrowY=165;
+  var dx=aimX-arrowX,dy=aimY-arrowY;
+  var dist=Math.sqrt(dx*dx+dy*dy);
+  var spd=power*0.15+3;
+  arrowVX=dx/dist*spd;arrowVY=dy/dist*spd;
+  arrowFlying=true;arrowTrail=[];
+  document.getElementById('power-fill').style.width='0%';
+  flyArrow();
+}
+function flyArrow(){
+  if(!arrowFlying) return;
+  arrowX+=arrowVX+windX*0.1;
+  arrowY+=arrowVY+windY*0.1;
+  arrowVY+=0.06; // gravity
+  arrowTrail.push({x:arrowX,y:arrowY});
+  if(arrowTrail.length>20) arrowTrail.shift();
+  // Hit target check
+  var tx=290,ty=150;
+  var dx=arrowX-tx,dy=arrowY-ty;
+  var dist=Math.sqrt(dx*dx+dy*dy);
+  if(dist<52){
+    arrowFlying=false;
+    var pts=dist<6?10:dist<10?9:dist<20?8:dist<30?6:dist<40?4:dist<50?2:1;
+    score+=pts;
+    document.getElementById('score').textContent=score;
+    var msg=pts===10?'Bullseye! 10pts! 🎯':pts>=8?'Excellent! '+pts+'pts!':pts>=6?'Great! '+pts+'pts!':'Hit! '+pts+'pts';
+    document.getElementById('msg').textContent=msg;
+    draw();
+    round++;document.getElementById('rnd').textContent=Math.min(round,maxRounds);
+    if(round>maxRounds){setTimeout(function(){document.getElementById('msg').textContent='Game over! Final score: '+score+'/100 '+(score>=80?'Expert! 🏆':score>=60?'Good! 👍':'Keep practicing! 🏹');},500);}
+    else{setTimeout(newRound,800);}
+    return;
+  }
+  // Off screen
+  if(arrowX>W+20||arrowY>H+20||arrowX<-20){
+    arrowFlying=false;
+    document.getElementById('msg').textContent='Missed! Adjust your aim and wind.';
+    round++;document.getElementById('rnd').textContent=Math.min(round,maxRounds);
+    if(round>maxRounds){setTimeout(function(){document.getElementById('msg').textContent='Game over! Final score: '+score+'/100';},500);}
+    else{setTimeout(newRound,600);}
+    return;
+  }
+  draw();
+  requestAnimationFrame(flyArrow);
+}
+
+c.addEventListener('mousemove',function(e){
+  if(arrowFlying) return;
+  var r=c.getBoundingClientRect();
+  aimX=e.clientX-r.left;aimY=e.clientY-r.top;draw();
+});
+c.addEventListener('touchmove',function(e){
+  e.preventDefault();
+  if(arrowFlying) return;
+  var r=c.getBoundingClientRect();
+  aimX=e.touches[0].clientX-r.left;aimY=e.touches[0].clientY-r.top;draw();
+},{passive:false});
+
+function resetGame(){
+  round=1;score=0;arrowFlying=false;arrowTrail=[];charging=false;power=0;
+  clearInterval(chargeTimer);
+  document.getElementById('rnd').textContent=1;
+  document.getElementById('score').textContent=0;
+  document.getElementById('power-fill').style.width='0%';
+  document.getElementById('msg').textContent='Aim with mouse, hold button to charge, release to shoot!';
+  newRound();
+}
+resetGame();
+</script>
+</body>
+</html>

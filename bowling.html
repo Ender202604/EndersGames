@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bowling - Ender's Game World</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a0000;color:white;font-family:Arial,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{color:yellow;font-size:22px;margin-bottom:4px}
+#home-btn{position:fixed;top:8px;left:10px;color:#ff9999;text-decoration:none;font-size:13px;z-index:99}
+canvas{border-radius:10px;background:#1a2a3a;margin:6px 0;cursor:col-resize}
+#msg{font-size:15px;color:#ffff88;min-height:22px;margin:4px 0;text-align:center}
+#scorecard{font-size:13px;color:#ffddaa;margin:4px 0;text-align:center}
+.btn{background:#8b0000;color:white;border:2px solid #ff6666;padding:7px 18px;border-radius:8px;cursor:pointer;font-size:14px;margin:3px}
+.btn:hover{background:#cc0000}
+#frame-display{display:flex;gap:4px;margin:4px 0;flex-wrap:wrap;justify-content:center}
+.frame-box{background:#333;border-radius:6px;padding:4px 8px;font-size:11px;text-align:center;min-width:44px;border:1px solid #555}
+.frame-box.active{border-color:yellow}
+.frame-roll{font-size:13px;font-weight:bold;color:#ffff88}
+.frame-total{font-size:11px;color:#aaffaa}
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🎳 Bowling</h1>
+<div id="frame-display" id="frames"></div>
+<canvas id="c" width="360" height="300"></canvas>
+<div id="msg">Move mouse (or drag) to aim, then click to bowl!</div>
+<div id="scorecard">Frame 1 | Total: 0</div>
+<button class="btn" onclick="resetGame()">🔄 New Game</button>
+<script>
+var c=document.getElementById('c'),ctx=c.getContext('2d');
+var W=360,H=300;
+var ballX=180,ballY=260,ballR=14,ballMoving=false;
+var ballVX=0,ballVY=0;
+var aimX=180;
+var pins=[],pinR=8;
+var frames=[],curFrame=0,curRoll=0,pinsStanding=10;
+var totalScore=0;
+var animFrame=null;
+
+function initPins(){
+  pins=[];
+  var startX=180,startY=60,gap=22;
+  var row=0,col=0,count=0;
+  var positions=[];
+  for(var r=0;r<4;r++){
+    for(var c2=0;c2<=r;c2++){
+      positions.push({x:startX+(c2-r/2)*gap, y:startY+r*24, standing:true, vx:0, vy:0, fallen:false});
+    }
+  }
+  pins=positions;
+  pinsStanding=10;
+}
+
+function initFrames(){
+  frames=[];
+  for(var i=0;i<10;i++) frames.push({rolls:[],total:null,display:''});
+  curFrame=0;curRoll=0;totalScore=0;
+  renderFrames();
+}
+
+function renderFrames(){
+  var d=document.getElementById('frame-display');
+  d.innerHTML='';
+  var running=0;
+  for(var i=0;i<10;i++){
+    var f=frames[i];
+    var box=document.createElement('div');
+    box.className='frame-box'+(i===curFrame?' active':'');
+    var r1=f.rolls[0]!==undefined?f.rolls[0]:'';
+    var r2=f.rolls[1]!==undefined?f.rolls[1]:'';
+    var r3=f.rolls[2]!==undefined?f.rolls[2]:'';
+    var disp1=r1===10?'X':(r1===''?'':r1);
+    var disp2='';
+    if(r2!==''){
+      if(i<9){disp2=(r1===10)?'X':(r1+r2===10?'/':r2);}
+      else{disp2=(r2===10?'X':(r1+r2===10?'/':r2));}
+    }
+    var disp3=r3!==''?(r3===10?'X':(r2+r3===10?'/':r3)):'';
+    if(i<9) box.innerHTML='<div class="frame-roll">'+disp1+' '+disp2+'</div>';
+    else box.innerHTML='<div class="frame-roll">'+disp1+' '+disp2+' '+disp3+'</div>';
+    if(f.total!==null) box.innerHTML+='<div class="frame-total">'+f.total+'</div>';
+    d.appendChild(box);
+  }
+  document.getElementById('scorecard').textContent='Frame '+(curFrame+1)+' | Total: '+totalScore;
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // Lane
+  ctx.fillStyle='#c8a87a';
+  ctx.fillRect(80,0,200,H);
+  ctx.strokeStyle='#a07850';ctx.lineWidth=2;
+  ctx.strokeRect(80,0,200,H);
+  // Gutters
+  ctx.fillStyle='#555';
+  ctx.fillRect(0,0,80,H);ctx.fillRect(280,0,80,H);
+  // Aim line
+  if(!ballMoving){
+    ctx.strokeStyle='rgba(255,255,0,0.4)';ctx.lineWidth=1;ctx.setLineDash([5,5]);
+    ctx.beginPath();ctx.moveTo(ballX,ballY);ctx.lineTo(aimX,60);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // Pins
+  for(var i=0;i<pins.length;i++){
+    var p=pins[i];
+    if(p.standing){
+      ctx.fillStyle='#ffffff';
+      ctx.beginPath();ctx.arc(p.x,p.y,pinR,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#cc0000';ctx.lineWidth=2;ctx.stroke();
+    } else {
+      ctx.fillStyle='rgba(200,200,200,0.3)';
+      ctx.beginPath();ctx.arc(p.x,p.y,pinR,0,Math.PI*2);ctx.fill();
+    }
+  }
+  // Ball
+  var grad=ctx.createRadialGradient(ballX-4,ballY-4,2,ballX,ballY,ballR);
+  grad.addColorStop(0,'#aa44ff');grad.addColorStop(1,'#330066');
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(ballX,ballY,ballR,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#cc88ff';ctx.lineWidth=1;ctx.stroke();
+}
+
+function update(){
+  if(!ballMoving) return;
+  ballX+=ballVX;ballY+=ballVY;
+  // Check pin collisions
+  for(var i=0;i<pins.length;i++){
+    var p=pins[i];
+    if(!p.standing) continue;
+    var dx=ballX-p.x,dy=ballY-p.y;
+    var dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist<ballR+pinR){
+      p.standing=false;
+      pinsStanding--;
+      // Knock nearby pins
+      for(var j=0;j<pins.length;j++){
+        if(j===i||!pins[j].standing) continue;
+        var dx2=pins[j].x-p.x,dy2=pins[j].y-p.y;
+        if(Math.sqrt(dx2*dx2+dy2*dy2)<pinR*2.8){
+          if(Math.random()<0.55){pins[j].standing=false;pinsStanding--;}
+        }
+      }
+    }
+  }
+  // Off top
+  if(ballY<40||ballX<80||ballX>280){
+    ballMoving=false;
+    recordRoll();
+    return;
+  }
+  draw();
+  animFrame=requestAnimationFrame(update);
+}
+
+function bowl(){
+  if(ballMoving||curFrame>=10) return;
+  var dx=aimX-ballX,dy=60-ballY;
+  var len=Math.sqrt(dx*dx+dy*dy);
+  var speed=7;
+  ballVX=dx/len*speed;ballVY=dy/len*speed;
+  ballMoving=true;
+  update();
+}
+
+function recordRoll(){
+  var knocked=10-pinsStanding;
+  var f=frames[curFrame];
+  f.rolls.push(knocked);
+  // Determine strike/spare
+  var isDone=false;
+  if(curFrame<9){
+    if(curRoll===0&&knocked===10){isDone=true;} // strike
+    else if(curRoll===1){isDone=true;}
+  } else {
+    // 10th frame: up to 3 rolls
+    if(f.rolls.length===3) isDone=true;
+    else if(f.rolls.length===2&&f.rolls[0]!==10&&f.rolls[0]+f.rolls[1]<10) isDone=true;
+  }
+  if(isDone){
+    var sum=f.rolls.reduce(function(a,b){return a+b;},0);
+    // Simplified scoring
+    totalScore+=sum;
+    f.total=totalScore;
+    curFrame++;curRoll=0;
+    if(curFrame<10){initPins();resetBall();}
+    else{endGame();}
+  } else {
+    curRoll++;
+    resetBall();
+    // Don't reset pins between rolls
+  }
+  renderFrames();
+  if(curFrame<10) document.getElementById('msg').textContent='Frame '+(curFrame+1)+', Roll '+(curRoll+1)+' — '+pinsStanding+' pins standing';
+}
+
+function resetBall(){
+  ballX=180;ballY=260;ballMoving=false;
+  draw();
+}
+
+function endGame(){
+  document.getElementById('msg').textContent='Game Over! Final score: '+totalScore+' '+(totalScore>=200?'Amazing! 🎉':totalScore>=150?'Great game! 👍':'Nice try! 🎳');
+  renderFrames();
+}
+
+c.addEventListener('mousemove',function(e){
+  if(ballMoving) return;
+  var r=c.getBoundingClientRect();
+  aimX=Math.max(90,Math.min(270,e.clientX-r.left));
+  draw();
+});
+c.addEventListener('click',bowl);
+c.addEventListener('touchstart',function(e){
+  e.preventDefault();
+  var r=c.getBoundingClientRect();
+  aimX=Math.max(90,Math.min(270,e.touches[0].clientX-r.left));
+  bowl();
+},{passive:false});
+c.addEventListener('touchmove',function(e){
+  e.preventDefault();
+  if(ballMoving) return;
+  var r=c.getBoundingClientRect();
+  aimX=Math.max(90,Math.min(270,e.touches[0].clientX-r.left));
+  draw();
+},{passive:false});
+
+function resetGame(){
+  if(animFrame) cancelAnimationFrame(animFrame);
+  initPins();initFrames();resetBall();
+  document.getElementById('msg').textContent='Move mouse to aim, then click to bowl!';
+}
+resetGame();
+</script>
+</body>
+</html>

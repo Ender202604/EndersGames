@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Jigsaw Puzzle - Ender's Game World</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: #1a0000; }
+body {
+  font-family: Arial, sans-serif;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  user-select: none;
+  overflow: auto;
+}
+.home-btn {
+  position: fixed; top: 10px; left: 10px;
+  background: darkred; color: yellow;
+  border: 2px solid yellow; border-radius: 8px;
+  padding: 6px 12px; font-size: 14px;
+  text-decoration: none; z-index: 200;
+}
+.hud {
+  display: flex; gap: 20px; align-items: center;
+  padding: 8px 60px 8px 100px;
+  background: #220000; width: 100%;
+  border-bottom: 2px solid #660000;
+  flex-wrap: wrap; justify-content: center;
+  flex-shrink: 0;
+}
+.hud-item { text-align: center; }
+.hud-label { font-size: 11px; color: #ffaaaa; }
+.hud-val { font-size: 18px; font-weight: bold; color: yellow; }
+.btn {
+  background: darkred; color: yellow;
+  border: 2px solid yellow; border-radius: 8px;
+  padding: 6px 14px; font-size: 13px;
+  cursor: pointer; transition: all 0.1s;
+}
+.btn:hover { background: #8b0000; }
+#gameArea {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+}
+#boardCanvas {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+#boardCanvas.dragging { cursor: grabbing; }
+.overlay {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.9); gap: 16px; z-index: 100;
+}
+.overlay h2 { color: yellow; font-size: 30px; text-shadow: 0 0 12px #ff6600; }
+.overlay p { color: #ffaaaa; font-size: 14px; text-align: center; padding: 0 20px; }
+.win-stars { font-size: 40px; letter-spacing: 6px; }
+</style>
+</head>
+<body>
+<a href="index.html" class="home-btn">&#127968; Home</a>
+<div class="hud">
+  <div class="hud-item"><div class="hud-label">TIME</div><div class="hud-val" id="timerVal">0:00</div></div>
+  <div class="hud-item"><div class="hud-label">PIECES</div><div class="hud-val" id="piecesVal">0/16</div></div>
+  <button class="btn" onclick="newGame()">&#8635; New Puzzle</button>
+</div>
+<div id="gameArea">
+  <canvas id="boardCanvas"></canvas>
+</div>
+<div class="overlay" id="menuOverlay">
+  <h2>&#129544; Jigsaw Puzzle</h2>
+  <p>Drag pieces to their correct positions. They will snap into place when close!</p>
+  <button class="btn" onclick="startGame()" style="font-size:18px;padding:12px 30px;">&#9654; Start Puzzle</button>
+</div>
+<div class="overlay" id="winOverlay" style="display:none;">
+  <div class="win-stars">&#11088;&#11088;&#11088;</div>
+  <h2>You Win!</h2>
+  <p id="winMsg"></p>
+  <button class="btn" onclick="newGame()" style="font-size:16px;padding:10px 24px;">&#8635; New Puzzle</button>
+</div>
+
+<script>
+var canvas = document.getElementById('boardCanvas');
+var ctx = canvas.getContext('2d');
+var area = document.getElementById('gameArea');
+
+var GRID = 4;
+var PIECE_SIZE = 80;
+var BOARD_X, BOARD_Y;
+var sourceCanvas = document.createElement('canvas');
+var srcCtx = sourceCanvas.getContext('2d');
+
+function resize() {
+  var maxW = Math.min(area.clientWidth, 700);
+  PIECE_SIZE = Math.floor((maxW - 20) / (GRID * 2.4));
+  PIECE_SIZE = Math.max(60, Math.min(90, PIECE_SIZE));
+  var puzzleW = PIECE_SIZE * GRID;
+  var areaW = Math.max(area.clientWidth, puzzleW * 2 + 40);
+  canvas.width = areaW;
+  canvas.height = Math.max(area.clientHeight || 500, puzzleW + 80);
+  BOARD_X = 20;
+  BOARD_Y = (canvas.height - puzzleW) / 2;
+  sourceCanvas.width = puzzleW;
+  sourceCanvas.height = puzzleW;
+}
+
+var pieces = [];
+var dragging = null;
+var dragOffX = 0, dragOffY = 0;
+var timerInterval = null;
+var startTime = 0;
+var placed = 0;
+var gameActive = false;
+
+function drawScene() {
+  srcCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+  var w = sourceCanvas.width, h = sourceCanvas.height;
+
+  var sky = srcCtx.createLinearGradient(0, 0, 0, h * 0.55);
+  sky.addColorStop(0, '#1a0066');
+  sky.addColorStop(0.4, '#220088');
+  sky.addColorStop(1, '#442200');
+  srcCtx.fillStyle = sky;
+  srcCtx.fillRect(0, 0, w, h * 0.55);
+
+  var ground = srcCtx.createLinearGradient(0, h * 0.55, 0, h);
+  ground.addColorStop(0, '#3a2000');
+  ground.addColorStop(1, '#1a0800');
+  srcCtx.fillStyle = ground;
+  srcCtx.fillRect(0, h * 0.55, w, h * 0.45);
+
+  var starData = [
+    [0.1,0.05],[0.3,0.12],[0.6,0.08],[0.8,0.18],[0.45,0.22],
+    [0.15,0.28],[0.7,0.3],[0.9,0.1],[0.25,0.4],[0.55,0.35],
+    [0.05,0.45],[0.85,0.42],[0.38,0.15],[0.65,0.5],[0.77,0.45],
+    [0.12,0.36],[0.5,0.03],[0.2,0.52],[0.95,0.32],[0.42,0.48]
+  ];
+  starData.forEach(function(s) {
+    srcCtx.beginPath();
+    srcCtx.arc(s[0]*w, s[1]*h*0.55, Math.random()*1.2+0.8, 0, Math.PI*2);
+    srcCtx.fillStyle = 'rgba(255,255,200,' + (0.5+Math.random()*0.5) + ')';
+    srcCtx.fill();
+  });
+
+  var cx = w * 0.5, cy = h * 0.2, pr = h * 0.09;
+  var planetGrad = srcCtx.createRadialGradient(cx-pr*0.3, cy-pr*0.3, pr*0.1, cx, cy, pr);
+  planetGrad.addColorStop(0, '#ff9944');
+  planetGrad.addColorStop(0.6, '#cc5500');
+  planetGrad.addColorStop(1, '#882200');
+  srcCtx.beginPath();
+  srcCtx.arc(cx, cy, pr, 0, Math.PI*2);
+  srcCtx.fillStyle = planetGrad;
+  srcCtx.fill();
+  srcCtx.strokeStyle = '#ffbb66';
+  srcCtx.lineWidth = 2;
+  srcCtx.beginPath();
+  srcCtx.ellipse(cx, cy, pr*1.6, pr*0.35, -0.3, 0, Math.PI*2);
+  srcCtx.stroke();
+
+  var moonGrad = srcCtx.createRadialGradient(w*0.85-4, h*0.1-4, 2, w*0.85, h*0.1, 14);
+  moonGrad.addColorStop(0, '#ffffaa');
+  moonGrad.addColorStop(1, '#cccc66');
+  srcCtx.beginPath();
+  srcCtx.arc(w*0.85, h*0.1, 14, 0, Math.PI*2);
+  srcCtx.fillStyle = moonGrad;
+  srcCtx.fill();
+
+  var rocketX = w * 0.22, rocketY = h * 0.35;
+  srcCtx.save();
+  srcCtx.translate(rocketX, rocketY);
+  srcCtx.rotate(-0.4);
+  srcCtx.fillStyle = '#cccccc';
+  srcCtx.beginPath();
+  srcCtx.moveTo(0, -18); srcCtx.lineTo(8, 6); srcCtx.lineTo(-8, 6); srcCtx.closePath();
+  srcCtx.fill();
+  srcCtx.fillStyle = '#ff4444';
+  srcCtx.beginPath();
+  srcCtx.moveTo(0, -26); srcCtx.lineTo(6, -18); srcCtx.lineTo(-6, -18); srcCtx.closePath();
+  srcCtx.fill();
+  srcCtx.fillStyle = '#88ccff';
+  srcCtx.beginPath();
+  srcCtx.arc(0, -6, 5, 0, Math.PI*2);
+  srcCtx.fill();
+  srcCtx.fillStyle = '#ff8800';
+  srcCtx.beginPath();
+  srcCtx.moveTo(-4, 6); srcCtx.lineTo(-8, 18); srcCtx.lineTo(0, 12); srcCtx.lineTo(8, 18); srcCtx.lineTo(4, 6); srcCtx.closePath();
+  srcCtx.fill();
+  srcCtx.restore();
+
+  var alienX = w * 0.65, alienY = h * 0.4;
+  srcCtx.fillStyle = '#44ff66';
+  srcCtx.beginPath();
+  srcCtx.ellipse(alienX, alienY, 16, 20, 0, 0, Math.PI*2);
+  srcCtx.fill();
+  srcCtx.fillStyle = '#000';
+  srcCtx.beginPath(); srcCtx.ellipse(alienX-6, alienY-4, 5, 7, 0, 0, Math.PI*2); srcCtx.fill();
+  srcCtx.beginPath(); srcCtx.ellipse(alienX+6, alienY-4, 5, 7, 0, 0, Math.PI*2); srcCtx.fill();
+  srcCtx.fillStyle = '#fff';
+  srcCtx.beginPath(); srcCtx.arc(alienX-4, alienY-5, 2, 0, Math.PI*2); srcCtx.fill();
+  srcCtx.beginPath(); srcCtx.arc(alienX+8, alienY-5, 2, 0, Math.PI*2); srcCtx.fill();
+  srcCtx.strokeStyle = '#44ff66';
+  srcCtx.lineWidth = 2;
+  srcCtx.beginPath(); srcCtx.moveTo(alienX-8, alienY-12); srcCtx.lineTo(alienX-12, alienY-20); srcCtx.stroke();
+  srcCtx.beginPath(); srcCtx.moveTo(alienX+8, alienY-12); srcCtx.lineTo(alienX+12, alienY-20); srcCtx.stroke();
+  srcCtx.beginPath(); srcCtx.arc(alienX-12, alienY-20, 3, 0, Math.PI*2); srcCtx.fillStyle='#44ff66'; srcCtx.fill();
+  srcCtx.beginPath(); srcCtx.arc(alienX+12, alienY-20, 3, 0, Math.PI*2); srcCtx.fill();
+
+  var mountainData = [[0,0.58,0.2,0.35],[0.15,0.6,0.18,0.38],[0.35,0.55,0.22,0.32],[0.6,0.62,0.25,0.4],[0.8,0.57,0.2,0.36]];
+  mountainData.forEach(function(m) {
+    var mx = m[0]*w, mb = m[1]*h, mw = m[2]*w, mh = m[3]*h;
+    srcCtx.beginPath();
+    srcCtx.moveTo(mx, mb);
+    srcCtx.lineTo(mx + mw/2, mb - mh);
+    srcCtx.lineTo(mx + mw, mb);
+    srcCtx.closePath();
+    srcCtx.fillStyle = '#2a1400';
+    srcCtx.fill();
+    srcCtx.strokeStyle = '#ff6600';
+    srcCtx.lineWidth = 1;
+    srcCtx.stroke();
+    srcCtx.beginPath();
+    srcCtx.moveTo(mx + mw/2 - 6, mb - mh + 12);
+    srcCtx.lineTo(mx + mw/2, mb - mh);
+    srcCtx.lineTo(mx + mw/2 + 6, mb - mh + 12);
+    srcCtx.fillStyle = 'rgba(255,255,255,0.6)';
+    srcCtx.fill();
+  });
+
+  srcCtx.fillStyle = 'rgba(30,0,0,0.4)';
+  srcCtx.fillRect(0, h*0.55, w, h*0.45);
+
+  srcCtx.strokeStyle = '#550000';
+  srcCtx.lineWidth = 1;
+  for (var i = 1; i < GRID; i++) {
+    srcCtx.beginPath();
+    srcCtx.moveTo(i * PIECE_SIZE, 0); srcCtx.lineTo(i * PIECE_SIZE, h);
+    srcCtx.stroke();
+    srcCtx.beginPath();
+    srcCtx.moveTo(0, i * PIECE_SIZE); srcCtx.lineTo(w, i * PIECE_SIZE);
+    srcCtx.stroke();
+  }
+}
+
+function createPieces() {
+  pieces = [];
+  var ps = PIECE_SIZE;
+  var puzzleW = ps * GRID;
+  var scatterX = BOARD_X + puzzleW + 20;
+  var scatterW = canvas.width - scatterX - 10;
+  var scatterH = canvas.height - 60;
+
+  for (var r = 0; r < GRID; r++) {
+    for (var c = 0; c < GRID; c++) {
+      var sx = c * ps, sy = r * ps;
+      var tx, ty;
+      var attempts = 0;
+      do {
+        tx = scatterX + Math.random() * Math.max(10, scatterW - ps);
+        ty = 10 + Math.random() * Math.max(10, scatterH - ps);
+        attempts++;
+      } while(attempts < 20 && isOverlapping(tx, ty, ps, pieces));
+
+      pieces.push({
+        row: r, col: c,
+        sx: sx, sy: sy,
+        x: tx, y: ty,
+        placed: false,
+        targetX: BOARD_X + sx,
+        targetY: BOARD_Y + sy
+      });
+    }
+  }
+  shuffleArray(pieces);
+}
+
+function shuffleArray(arr) {
+  for (var i = arr.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  }
+}
+
+function isOverlapping(tx, ty, ps, existingPieces) {
+  for (var i = 0; i < existingPieces.length; i++) {
+    var p = existingPieces[i];
+    if (Math.abs(p.x - tx) < ps * 0.7 && Math.abs(p.y - ty) < ps * 0.7) return true;
+  }
+  return false;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = '#0d0005';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  var ps = PIECE_SIZE;
+  var puzzleW = ps * GRID;
+  ctx.strokeStyle = '#550000';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(BOARD_X, BOARD_Y, puzzleW, puzzleW);
+  for (var r = 0; r < GRID; r++) {
+    for (var c = 0; c < GRID; c++) {
+      ctx.strokeStyle = '#330000';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(BOARD_X + c*ps, BOARD_Y + r*ps, ps, ps);
+    }
+  }
+
+  pieces.forEach(function(p) {
+    if (p === dragging) return;
+    drawPiece(p);
+  });
+  if (dragging) drawPiece(dragging);
+}
+
+function drawPiece(p) {
+  var ps = PIECE_SIZE;
+  ctx.save();
+  if (p === dragging) {
+    ctx.shadowColor = 'yellow';
+    ctx.shadowBlur = 14;
+  }
+  ctx.drawImage(sourceCanvas, p.sx, p.sy, ps, ps, p.x, p.y, ps, ps);
+  if (!p.placed) {
+    ctx.strokeStyle = p === dragging ? '#ffff00' : 'rgba(255,200,0,0.5)';
+    ctx.lineWidth = p === dragging ? 3 : 1.5;
+    ctx.strokeRect(p.x, p.y, ps, ps);
+  } else {
+    ctx.strokeStyle = 'rgba(0,255,100,0.6)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(p.x, p.y, ps, ps);
+  }
+  ctx.restore();
+}
+
+function getPieceAt(x, y) {
+  for (var i = pieces.length - 1; i >= 0; i--) {
+    var p = pieces[i];
+    if (!p.placed && x >= p.x && x <= p.x + PIECE_SIZE && y >= p.y && y <= p.y + PIECE_SIZE) {
+      return p;
+    }
+  }
+  return null;
+}
+
+function startDrag(e) {
+  e.preventDefault();
+  var pos = getPos(e);
+  var p = getPieceAt(pos.x, pos.y);
+  if (p) {
+    dragging = p;
+    dragOffX = pos.x - p.x;
+    dragOffY = pos.y - p.y;
+    canvas.classList.add('dragging');
+    pieces.splice(pieces.indexOf(p), 1);
+    pieces.push(p);
+  }
+}
+
+function doDrag(e) {
+  e.preventDefault();
+  if (!dragging) return;
+  var pos = getPos(e);
+  dragging.x = pos.x - dragOffX;
+  dragging.y = pos.y - dragOffY;
+  draw();
+}
+
+function endDrag(e) {
+  if (!e) return;
+  e.preventDefault();
+  if (!dragging) return;
+  var snapDist = PIECE_SIZE * 0.35;
+  var dx = dragging.x - dragging.targetX;
+  var dy = dragging.y - dragging.targetY;
+  if (Math.sqrt(dx*dx + dy*dy) < snapDist) {
+    dragging.x = dragging.targetX;
+    dragging.y = dragging.targetY;
+    if (!dragging.placed) {
+      dragging.placed = true;
+      placed++;
+      document.getElementById('piecesVal').textContent = placed + '/' + (GRID*GRID);
+      playSnapSound();
+      if (placed === GRID * GRID) { setTimeout(winGame, 300); }
+    }
+  }
+  dragging = null;
+  canvas.classList.remove('dragging');
+  draw();
+}
+
+function getPos(e) {
+  var rect = canvas.getBoundingClientRect();
+  var scaleX = canvas.width / rect.width;
+  var scaleY = canvas.height / rect.height;
+  if (e.touches && e.touches.length > 0) {
+    return {
+      x: (e.touches[0].clientX - rect.left) * scaleX,
+      y: (e.touches[0].clientY - rect.top) * scaleY
+    };
+  }
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    return {
+      x: (e.changedTouches[0].clientX - rect.left) * scaleX,
+      y: (e.changedTouches[0].clientY - rect.top) * scaleY
+    };
+  }
+  return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+}
+
+var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSnapSound() {
+  audioCtx.resume();
+  var osc = audioCtx.createOscillator();
+  var g = audioCtx.createGain();
+  osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.1);
+  g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+}
+
+function playWinSound() {
+  audioCtx.resume();
+  var notes = [523, 659, 784, 1047];
+  notes.forEach(function(freq, i) {
+    var osc = audioCtx.createOscillator();
+    var g = audioCtx.createGain();
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0, audioCtx.currentTime + i*0.15);
+    g.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + i*0.15 + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i*0.15 + 0.4);
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(audioCtx.currentTime + i*0.15);
+    osc.stop(audioCtx.currentTime + i*0.15 + 0.4);
+  });
+}
+
+var timerVal = 0;
+function startTimer() {
+  startTime = Date.now();
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(function() {
+    if (!gameActive) return;
+    timerVal = Math.floor((Date.now() - startTime) / 1000);
+    var m = Math.floor(timerVal / 60);
+    var s = timerVal % 60;
+    document.getElementById('timerVal').textContent = m + ':' + (s<10?'0':'') + s;
+  }, 500);
+}
+
+function startGame() {
+  document.getElementById('menuOverlay').style.display = 'none';
+  document.getElementById('winOverlay').style.display = 'none';
+  placed = 0;
+  dragging = null;
+  gameActive = true;
+  resize();
+  drawScene();
+  createPieces();
+  document.getElementById('piecesVal').textContent = '0/' + (GRID*GRID);
+  draw();
+  startTimer();
+}
+
+function newGame() {
+  document.getElementById('winOverlay').style.display = 'none';
+  startGame();
+}
+
+function winGame() {
+  gameActive = false;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  draw();
+  playWinSound();
+  var m = Math.floor(timerVal / 60);
+  var s = timerVal % 60;
+  document.getElementById('winMsg').textContent =
+    'Puzzle complete in ' + m + ':' + (s<10?'0':'') + s + '! All ' + (GRID*GRID) + ' pieces placed!';
+  document.getElementById('winOverlay').style.display = 'flex';
+}
+
+canvas.addEventListener('mousedown', startDrag);
+canvas.addEventListener('mousemove', doDrag);
+canvas.addEventListener('mouseup', endDrag);
+canvas.addEventListener('mouseleave', endDrag);
+canvas.addEventListener('touchstart', startDrag, {passive:false});
+canvas.addEventListener('touchmove', doDrag, {passive:false});
+canvas.addEventListener('touchend', endDrag, {passive:false});
+
+window.addEventListener('resize', function() {
+  if (gameActive) { resize(); drawScene(); draw(); }
+});
+
+resize();
+drawScene();
+draw();
+</script>
+</body>
+</html>
