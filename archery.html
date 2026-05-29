@@ -67,7 +67,7 @@ function sndBullseye() { [784,988,1175,1568].forEach(function(f,i){ setTimeout(f
 // --- High Score ---
 var HS_KEY = 'hs_archery';
 function getHiScore() { return parseInt(localStorage.getItem(HS_KEY) || '0'); }
-function saveHiScore(v) { if (v > getHiScore()) { localStorage.setItem(HS_KEY, v); return true; } return false; }
+function saveHiScore(v) { if (v > getHiScore()) { localStorage.setItem(HS_KEY, v); if(window.submitLeaderboard) submitLeaderboard('archery',v); return true; } return false; }
 document.getElementById('hs-val').textContent = getHiScore();
 
 // --- Difficulty ---
@@ -245,6 +245,21 @@ function resetGame(){
   newRound();
 }
 resetGame();
+</script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script>
+(function(){
+  try {
+    var lbApp=firebase.initializeApp({apiKey:"AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",databaseURL:"https://enders-games-default-rtdb.firebaseio.com"},'lb_archery');
+    var lbDb=lbApp.database();
+    window.submitLeaderboard=function(game,score){
+      if(score<=0)return;
+      var n=localStorage.getItem('visitorName')||'Anonymous';
+      lbDb.ref('leaderboard/'+game).push({name:n,score:score,date:new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}),timestamp:Date.now()});
+    };
+  } catch(e){ window.submitLeaderboard=function(){}; }
+})();
 </script>
 </body>
 </html>

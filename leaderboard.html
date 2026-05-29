@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leaderboard - Ender's Game World</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a0000;color:white;font-family:Arial,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{color:yellow;font-size:24px;margin-bottom:4px}
+#home-btn{position:fixed;top:8px;left:10px;color:#ff9999;text-decoration:none;font-size:13px;z-index:99}
+.subtitle{font-size:12px;color:#ffaaaa;margin-bottom:16px}
+#tabs{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-bottom:12px;max-width:900px;width:100%}
+.tab-btn{background:#2a0000;color:#ffcc00;border:1.5px solid #ff6666;padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;white-space:nowrap}
+.tab-btn.active{background:#cc0000;color:white;border-color:yellow}
+#board-container{width:100%;max-width:900px}
+.board-section{background:#2a0000;border:1px solid #ff6666;border-radius:12px;padding:12px;margin-bottom:12px;display:none}
+.board-section.visible{display:block}
+.board-title{color:yellow;font-size:16px;margin-bottom:8px;font-weight:bold}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:#ffaaaa;text-align:left;padding:4px 8px;border-bottom:1px solid #ff6666}
+td{padding:5px 8px;border-bottom:1px solid rgba(255,102,102,0.2)}
+tr:first-child td{color:yellow;font-weight:bold}
+tr:nth-child(2) td{color:#ffddaa}
+tr:nth-child(3) td{color:#ffccaa}
+.rank-1::before{content:'🥇 '}
+.rank-2::before{content:'🥈 '}
+.rank-3::before{content:'🥉 '}
+.rank-other::before{content:'  '}
+#loading{color:#ffaaaa;font-size:14px;padding:20px;text-align:center}
+#your-rank{background:#3a0000;border:1px solid yellow;border-radius:8px;padding:8px;margin-top:8px;font-size:12px;color:#ffddaa;text-align:center}
+.empty-msg{color:#ff9999;font-size:13px;padding:8px;text-align:center}
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>🏆 Global Leaderboard</h1>
+<p class="subtitle">Top scores from all visitors</p>
+
+<div id="tabs">
+  <button class="tab-btn active" onclick="showAll(this)">All Games</button>
+  <button class="tab-btn" onclick="filterTab('archery',this)">🏹 Archery</button>
+  <button class="tab-btn" onclick="filterTab('soccer',this)">⚽ Soccer</button>
+  <button class="tab-btn" onclick="filterTab('basketball',this)">🏀 Basketball</button>
+  <button class="tab-btn" onclick="filterTab('bowling',this)">🎳 Bowling</button>
+  <button class="tab-btn" onclick="filterTab('minigolf',this)">⛳ Mini Golf</button>
+  <button class="tab-btn" onclick="filterTab('snake',this)">🐍 Snake</button>
+  <button class="tab-btn" onclick="filterTab('flappybird',this)">🐦 Flappy Bird</button>
+  <button class="tab-btn" onclick="filterTab('spaceinvaders',this)">👾 Space Invaders</button>
+  <button class="tab-btn" onclick="filterTab('asteroids',this)">🚀 Asteroids</button>
+  <button class="tab-btn" onclick="filterTab('tetris',this)">🟦 Tetris</button>
+  <button class="tab-btn" onclick="filterTab('pacman',this)">🟡 Pac-Man</button>
+  <button class="tab-btn" onclick="filterTab('slotmachine',this)">🎰 Slots</button>
+  <button class="tab-btn" onclick="filterTab('whackamole',this)">🔨 Whack-a-Mole</button>
+  <button class="tab-btn" onclick="filterTab('carracer',this)">🏎️ Car Racer</button>
+</div>
+
+<div id="loading">Loading scores...</div>
+<div id="board-container"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",
+  authDomain: "enders-games.firebaseapp.com",
+  databaseURL: "https://enders-games-default-rtdb.firebaseio.com",
+  projectId: "enders-games",
+  storageBucket: "enders-games.firebasestorage.app",
+  messagingSenderId: "87049074470",
+  appId: "1:87049074470:web:bc38b35669b43aedceb3e7"
+};
+
+var gameLabels = {
+  archery:'🏹 Archery', soccer:'⚽ Penalty Kicks', basketball:'🏀 Basketball',
+  bowling:'🎳 Bowling', minigolf:'⛳ Mini Golf', snake:'🐍 Snake',
+  flappybird:'🐦 Flappy Bird', spaceinvaders:'👾 Space Invaders', asteroids:'🚀 Asteroids',
+  tetris:'🟦 Tetris', pacman:'🟡 Pac-Man', slotmachine:'🎰 Slot Machine',
+  whackamole:'🔨 Whack-a-Mole', carracer:'🏎️ Car Racer'
+};
+
+var firebase_app = firebase.initializeApp(firebaseConfig);
+var db = firebase_app.database();
+var allData = {};
+var myName = localStorage.getItem('visitorName') || '';
+var currentFilter = null;
+
+db.ref('leaderboard').once('value').then(function(snap) {
+  document.getElementById('loading').style.display = 'none';
+  var data = snap.val() || {};
+  allData = data;
+  renderBoards(null);
+}).catch(function(e) {
+  document.getElementById('loading').textContent = 'Could not load scores. Check back later!';
+});
+
+function renderBoards(filterGame) {
+  var container = document.getElementById('board-container');
+  container.innerHTML = '';
+  var games = filterGame ? [filterGame] : Object.keys(gameLabels);
+  games.forEach(function(game) {
+    var entries = allData[game] || {};
+    var rows = Object.values(entries).sort(function(a,b){
+      // Mini golf: lower is better
+      if (game === 'minigolf') return a.score - b.score;
+      return b.score - a.score;
+    }).slice(0, 10);
+    var section = document.createElement('div');
+    section.className = 'board-section visible';
+    var title = document.createElement('div');
+    title.className = 'board-title';
+    title.textContent = gameLabels[game] || game;
+    section.appendChild(title);
+    if (rows.length === 0) {
+      var msg = document.createElement('div');
+      msg.className = 'empty-msg';
+      msg.textContent = 'No scores yet — be the first!';
+      section.appendChild(msg);
+    } else {
+      var table = document.createElement('table');
+      table.innerHTML = '<tr><th>Rank</th><th>Player</th><th>Score</th><th>Date</th></tr>';
+      var myBest = null;
+      rows.forEach(function(row, i) {
+        var tr = document.createElement('tr');
+        var rankClass = i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-other';
+        tr.innerHTML = '<td class="'+rankClass+'">'+(i+1)+'</td><td>'+escHtml(row.name||'?')+'</td><td>'+(row.score||0)+(game==='minigolf'?' strokes':' pts')+'</td><td>'+(row.date||'')+'</td>';
+        if (row.name === myName && myBest === null) myBest = {rank:i+1, score:row.score};
+        table.appendChild(tr);
+      });
+      section.appendChild(table);
+      if (myBest && myName) {
+        var yr = document.createElement('div');
+        yr.id = 'your-rank';
+        yr.textContent = 'Your best: #'+myBest.rank+' with '+myBest.score+(game==='minigolf'?' strokes':' pts');
+        section.appendChild(yr);
+      }
+    }
+    container.appendChild(section);
+  });
+  if (container.children.length === 0) {
+    container.innerHTML = '<div class="empty-msg" style="padding:20px">No scores yet for any game. Play a game to get on the board!</div>';
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});
+}
+
+function filterTab(game, btn) {
+  currentFilter = game;
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  renderBoards(game);
+}
+
+function showAll(btn) {
+  currentFilter = null;
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  renderBoards(null);
+}
+</script>
+</body>
+</html>

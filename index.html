@@ -90,6 +90,47 @@
         color: #ffe8e8;
         font-weight: bold;
       }
+      #filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        justify-content: center;
+        margin-bottom: 8px;
+        width: 100%;
+        max-width: 900px;
+      }
+      .cat-btn {
+        background: #2a0000;
+        color: #ffcc00;
+        border: 1.5px solid #ff6666;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        cursor: pointer;
+        white-space: nowrap;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .cat-btn.active { background: #cc0000; color: white; border-color: yellow; }
+      #search-input {
+        background: rgba(0,0,0,0.4);
+        border: 1.5px solid #ff6666;
+        color: white;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        width: 180px;
+        outline: none;
+      }
+      #search-input::placeholder { color: #ff9999; }
+      #search-input:focus { border-color: yellow; }
+      #recent-section { width: 100%; max-width: 900px; margin-bottom: 6px; }
+      #recent-label { font-size: 11px; color: #ffaaaa; margin-bottom: 4px; text-align: left; }
+      #recent-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 6px;
+      }
+      #no-results { color: #ffaaaa; font-size: 14px; padding: 20px; display: none; text-align: center; }
     </style>
     <script>
       // Redirect to login page if never logged in (localStorage persists forever)
@@ -102,9 +143,56 @@
     <h1>🎮 Ender's Game World!</h1>
     <p class="subtitle">
       <span id="welcome">Pick a game to play!</span>
+      <a href="leaderboard.html">🏆 Leaderboard</a>
       <a href="visitors.html">📋 Visitor Log</a>
     </p>
+    <div id="recent-section" style="display:none">
+      <div id="recent-label">⏱️ Recently Played</div>
+      <div id="recent-grid"></div>
+    </div>
+    <div id="filter-bar">
+      <input type="text" id="search-input" placeholder="🔍 Search games...">
+      <button class="cat-btn active" onclick="setFilter('all',this)">All</button>
+      <button class="cat-btn" onclick="setFilter('arcade',this)">🕹️ Arcade</button>
+      <button class="cat-btn" onclick="setFilter('sports',this)">🏆 Sports</button>
+      <button class="cat-btn" onclick="setFilter('puzzle',this)">🧩 Puzzle</button>
+      <button class="cat-btn" onclick="setFilter('board',this)">🃏 Board</button>
+      <button class="cat-btn" onclick="setFilter('creative',this)">🎨 Creative</button>
+      <button class="cat-btn" onclick="setFilter('world3d',this)">🌍 3D Worlds</button>
+    </div>
+    <div id="no-results">No games found! Try a different search.</div>
     <div class="grid">
+
+      <a class="game-card" href="slotmachine.html">
+        <div class="game-emoji">🎰</div>
+        <div class="game-name">Slot Machine</div>
+        <div class="game-desc">Spin to win credits!</div>
+        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+      </a>
+      <a class="game-card" href="whackamole.html">
+        <div class="game-emoji">🔨</div>
+        <div class="game-name">Whack-a-Mole</div>
+        <div class="game-desc">Whack those moles!</div>
+        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+      </a>
+      <a class="game-card" href="bubbleshooter.html">
+        <div class="game-emoji">🫧</div>
+        <div class="game-name">Bubble Shooter</div>
+        <div class="game-desc">Pop matching bubbles!</div>
+        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+      </a>
+      <a class="game-card" href="jewelmatch.html">
+        <div class="game-emoji">💎</div>
+        <div class="game-name">Jewel Match</div>
+        <div class="game-desc">Swap &amp; match 3!</div>
+        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+      </a>
+      <a class="game-card" href="carracer.html">
+        <div class="game-emoji">🏎️</div>
+        <div class="game-name">Car Racer</div>
+        <div class="game-desc">Dodge the traffic!</div>
+        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+      </a>
 
       <a class="game-card" href="basketball.html">
         <div class="game-emoji">🏀</div>
@@ -726,15 +814,6 @@
           <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 13</span></div>
         </div>
       </a>
-      <a class="game-card" href="whackamole.html">
-        <div class="game-emoji">🐹</div>
-        <div class="game-name">Whack a Mole</div>
-        <div class="game-desc">Whack before they hide!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">Apr 13</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 13</span></div>
-        </div>
-      </a>
       <a class="game-card" href="numbers.html">
         <div class="game-emoji">🔢</div>
         <div class="game-name">Number Blaster</div>
@@ -749,6 +828,85 @@
     <script>
       var name = localStorage.getItem('visitorName');
       if (name) document.getElementById('welcome').textContent = 'Welcome, ' + name + '! Pick a game!';
+
+      // Category mapping
+      var catMap = {
+        'asteroids.html':'arcade','spaceinvaders.html':'arcade','frogger.html':'arcade','pacman.html':'arcade',
+        'flappybird.html':'arcade','snake.html':'arcade','pong.html':'arcade','dinorun.html':'arcade',
+        'helicopter.html':'arcade','breakout.html':'arcade','pinball.html':'arcade','carracer.html':'arcade',
+        'bubbleshooter.html':'arcade','jewelmatch.html':'arcade','balloons.html':'arcade','stars.html':'arcade',
+        'numbers.html':'arcade','brick-breaker.html':'arcade','whackamole.html':'arcade',
+        'game2048.html':'puzzle','minesweeper.html':'puzzle','sudoku.html':'puzzle','chess.html':'puzzle',
+        'tetris.html':'puzzle','connectfour.html':'puzzle','crossword.html':'puzzle','wordle.html':'puzzle',
+        'hangman.html':'puzzle','typingspeed.html':'puzzle','wordscramble.html':'puzzle','lightsout.html':'puzzle',
+        'nonogram.html':'puzzle','kakuro.html':'puzzle','numberlink.html':'puzzle','calcudoku.html':'puzzle',
+        'mahjong.html':'puzzle','mastermind.html':'puzzle','sokoban.html':'puzzle','simonsays.html':'puzzle',
+        'trivia.html':'puzzle','puzzle-box.html':'puzzle',
+        'basketball.html':'sports','soccer.html':'sports','bowling.html':'sports','archery.html':'sports',
+        'minigolf.html':'sports','pool.html':'sports',
+        'blackjack.html':'board','solitaire.html':'board','memorymatch.html':'board','checkers.html':'board',
+        'yahtzee.html':'board','tictactoe.html':'board','battleship.html':'board','slotmachine.html':'board',
+        'memory.html':'board',
+        'egypt3d.html':'world3d','haunted3d.html':'world3d','spacestation3d.html':'world3d',
+        'wildwest3d.html':'world3d','underwater3d.html':'world3d','castle3d.html':'world3d',
+        'jungle3d.html':'world3d','dinomuseum3d.html':'world3d','piratecove3d.html':'world3d',
+        'mall3d.html':'world3d','farm3d.html':'world3d','beach3d.html':'world3d','school3d.html':'world3d',
+        'airport3d.html':'world3d','monuments.html':'world3d','titanic3d.html':'world3d','pirate-ship.html':'world3d',
+        'piano.html':'creative','drumkit.html':'creative','paintapp.html':'creative','rhythmgame.html':'creative',
+        'jigsaw.html':'creative','titanic.html':'creative','pizza.html':'creative','turtles.html':'creative'
+      };
+
+      // Apply categories and track clicks
+      document.querySelectorAll('.game-card').forEach(function(card) {
+        var href = card.getAttribute('href');
+        card.setAttribute('data-cat', catMap[href] || 'arcade');
+        card.addEventListener('click', function() {
+          var recent = JSON.parse(localStorage.getItem('recentGames') || '[]');
+          recent = [href].concat(recent.filter(function(h){return h!==href;})).slice(0,5);
+          localStorage.setItem('recentGames', JSON.stringify(recent));
+        });
+      });
+
+      // Recently played
+      var recentHrefs = JSON.parse(localStorage.getItem('recentGames') || '[]');
+      if (recentHrefs.length > 0) {
+        var recentGrid = document.getElementById('recent-grid');
+        recentHrefs.forEach(function(href) {
+          var orig = document.querySelector('.game-card[href="'+href+'"]');
+          if (orig) {
+            var clone = orig.cloneNode(true);
+            recentGrid.appendChild(clone);
+          }
+        });
+        document.getElementById('recent-section').style.display = 'block';
+      }
+
+      // Filter logic
+      var currentCat = 'all', currentSearch = '';
+      function applyFilter() {
+        var cards = document.querySelectorAll('.grid .game-card');
+        var visible = 0;
+        cards.forEach(function(card) {
+          var cat = card.getAttribute('data-cat') || '';
+          var txt = card.textContent.toLowerCase();
+          var catOk = currentCat === 'all' || cat === currentCat;
+          var searchOk = !currentSearch || txt.includes(currentSearch);
+          var show = catOk && searchOk;
+          card.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+        document.getElementById('no-results').style.display = visible === 0 ? 'block' : 'none';
+      }
+      function setFilter(cat, btn) {
+        currentCat = cat;
+        document.querySelectorAll('.cat-btn').forEach(function(b){b.classList.remove('active');});
+        btn.classList.add('active');
+        applyFilter();
+      }
+      document.getElementById('search-input').addEventListener('input', function() {
+        currentSearch = this.value.trim().toLowerCase();
+        applyFilter();
+      });
     </script>
   </body>
 </html>

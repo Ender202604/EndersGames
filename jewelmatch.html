@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Jewel Match - Ender's Game World</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #1a0000;
+  font-family: Arial, sans-serif;
+  color: #ff9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 40px 8px 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#home-btn {
+  position: fixed; top: 8px; left: 10px;
+  color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99;
+}
+h1 { color: yellow; font-size: 26px; margin-bottom: 4px; text-shadow: 0 0 10px #ff0000; }
+.stats-row {
+  display: flex; gap: 12px; margin-bottom: 8px;
+  background: darkred; border: 2px solid #ff6666;
+  border-radius: 10px; padding: 6px 14px;
+  flex-wrap: wrap; justify-content: center;
+}
+.stat { text-align: center; min-width: 55px; }
+.stat-label { font-size: 10px; color: #ffcccc; }
+.stat-value { font-size: 20px; color: yellow; font-weight: bold; }
+.diff-row { display: flex; gap: 8px; margin-bottom: 8px; width: 100%; max-width: 380px; }
+.diff-btn {
+  flex: 1; padding: 7px; border: 2px solid #ff6666;
+  border-radius: 8px; font-size: 12px; font-weight: bold;
+  cursor: pointer; transition: all 0.15s;
+  background: #1a0000; color: #ff9999;
+}
+.diff-btn.active { background: darkred; color: yellow; border-color: yellow; }
+#grid-wrapper {
+  position: relative;
+  margin-bottom: 8px;
+}
+#grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  background: #0a0000;
+  border: 3px solid #ff6666;
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 0 20px #ff000033;
+}
+.cell {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s, opacity 0.2s;
+  position: relative;
+  border: 2px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.cell:active { transform: scale(0.92); }
+.cell.selected {
+  border-color: yellow;
+  box-shadow: 0 0 12px yellow;
+  transform: scale(1.1);
+  z-index: 2;
+}
+.cell.hint {
+  animation: hintPulse 0.7s ease-in-out infinite alternate;
+}
+@keyframes hintPulse {
+  from { box-shadow: 0 0 0 transparent; }
+  to { box-shadow: 0 0 10px #ffffff88; }
+}
+.cell.pop {
+  animation: popAnim 0.3s ease-out forwards;
+}
+@keyframes popAnim {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+  100% { transform: scale(0); opacity: 0; }
+}
+.cell.fall {
+  animation: fallAnim 0.25s ease-in;
+}
+@keyframes fallAnim {
+  from { transform: translateY(-46px); opacity: 0.5; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.timer-bar {
+  width: 100%;
+  max-width: 380px;
+  height: 12px;
+  background: #0a0000;
+  border: 2px solid #ff6666;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.timer-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff0000, #ffaa00);
+  transition: width 0.25s linear;
+  border-radius: 6px;
+}
+#msg {
+  font-size: 14px; color: yellow; font-weight: bold;
+  min-height: 20px; margin-bottom: 4px;
+  text-shadow: 0 0 6px currentColor;
+}
+#overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: #1a0000cc;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 100;
+}
+#overlay h2 { color: yellow; font-size: 28px; margin-bottom: 12px; }
+#overlay p { color: #ffcccc; font-size: 15px; margin-bottom: 6px; text-align: center; }
+#start-btn-overlay {
+  margin-top: 14px;
+  padding: 12px 32px;
+  font-size: 17px; font-weight: bold;
+  background: linear-gradient(180deg, #cc0000, #880000);
+  color: yellow; border: 2px solid #ff6666;
+  border-radius: 12px; cursor: pointer;
+}
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>💎 Jewel Match</h1>
+
+<div class="stats-row">
+  <div class="stat"><div class="stat-label">Score</div><div class="stat-value" id="score">0</div></div>
+  <div class="stat"><div class="stat-label">Best</div><div class="stat-value" id="highscore">0</div></div>
+  <div class="stat"><div class="stat-label">Time</div><div class="stat-value" id="timer">90</div></div>
+  <div class="stat"><div class="stat-label">Combo</div><div class="stat-value" id="combo">x1</div></div>
+</div>
+
+<div class="diff-row">
+  <button class="diff-btn active" id="btn-easy" onclick="setDiff('easy')">🟢 Easy (hints)</button>
+  <button class="diff-btn" id="btn-hard" onclick="setDiff('hard')">🔴 Hard (no hints)</button>
+</div>
+
+<div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
+<div id="msg">&nbsp;</div>
+
+<div id="grid-wrapper">
+  <div id="grid"></div>
+</div>
+
+<div id="overlay">
+  <h2>💎 Jewel Match</h2>
+  <p>Swap adjacent jewels to match 3+ in a row!</p>
+  <p>Cascades &amp; combos earn bonus points.</p>
+  <p>You have 90 seconds to score as high as you can!</p>
+  <button id="start-btn-overlay" onclick="startGame()">▶ Start Game</button>
+</div>
+
+<script>
+const GEMS = ['💎','🔴','🟡','🟢','🔵','🟣'];
+const COLORS = ['#44aaff','#ff4444','#ffee44','#44ff88','#4466ff','#dd44ff'];
+const GRID_SIZE = 7;
+const TOTAL_TIME = 90;
+
+let board = [];
+let selected = null;
+let score = 0;
+let timeLeft = TOTAL_TIME;
+let combo = 1;
+let gameActive = false;
+let difficulty = 'easy';
+let timerInterval = null;
+let animating = false;
+let audioCtx = null;
+let hintCells = [];
+let hintTimer = null;
+
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playSound(type) {
+  try {
+    const c = getAudio();
+    const o = c.createOscillator(); const g = c.createGain();
+    o.connect(g); g.connect(c.destination);
+    if (type === 'select') {
+      o.type = 'sine'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.1, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.08);
+      o.start(); o.stop(c.currentTime + 0.08);
+    } else if (type === 'swap') {
+      o.type = 'sine'; o.frequency.setValueAtTime(440, c.currentTime);
+      o.frequency.setValueAtTime(660, c.currentTime + 0.05);
+      g.gain.setValueAtTime(0.12, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.15);
+      o.start(); o.stop(c.currentTime + 0.15);
+    } else if (type === 'match') {
+      const freqs = [523, 659, 784, 1047];
+      freqs.slice(0, Math.min(combo + 1, 4)).forEach((f, i) => {
+        const oo = c.createOscillator(); const gg = c.createGain();
+        oo.connect(gg); gg.connect(c.destination);
+        oo.type = 'sine'; oo.frequency.value = f;
+        gg.gain.setValueAtTime(0.15, c.currentTime + i * 0.06);
+        gg.gain.exponentialRampToValueAtTime(0.001, c.currentTime + i * 0.06 + 0.12);
+        oo.start(c.currentTime + i * 0.06); oo.stop(c.currentTime + i * 0.06 + 0.12);
+      });
+    } else if (type === 'invalid') {
+      o.type = 'square'; o.frequency.value = 200;
+      g.gain.setValueAtTime(0.1, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.1);
+      o.start(); o.stop(c.currentTime + 0.1);
+    } else if (type === 'gameover') {
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(400, c.currentTime);
+      o.frequency.exponentialRampToValueAtTime(100, c.currentTime + 0.7);
+      g.gain.setValueAtTime(0.15, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.7);
+      o.start(); o.stop(c.currentTime + 0.7);
+    }
+  } catch(e) {}
+}
+
+function setDiff(d) {
+  if (gameActive) return;
+  difficulty = d;
+  document.getElementById('btn-easy').classList.toggle('active', d === 'easy');
+  document.getElementById('btn-hard').classList.toggle('active', d === 'hard');
+}
+
+function randomGem() {
+  return Math.floor(Math.random() * GEMS.length);
+}
+
+function initBoard() {
+  board = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    board.push([]);
+    for (let c = 0; c < GRID_SIZE; c++) {
+      let gem;
+      do {
+        gem = randomGem();
+      } while (
+        (c >= 2 && board[r][c-1] === gem && board[r][c-2] === gem) ||
+        (r >= 2 && board[r-1][c] === gem && board[r-2][c] === gem)
+      );
+      board[r].push(gem);
+    }
+  }
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.id = `cell-${r}-${c}`;
+      cell.style.background = COLORS[board[r][c]];
+      cell.textContent = GEMS[board[r][c]];
+      cell.style.boxShadow = `inset 0 0 8px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.6)`;
+      cell.addEventListener('pointerdown', (e) => { e.preventDefault(); handleClick(r, c); });
+      grid.appendChild(cell);
+    }
+  }
+}
+
+function updateCell(r, c) {
+  const cell = document.getElementById(`cell-${r}-${c}`);
+  if (!cell) return;
+  cell.style.background = COLORS[board[r][c]];
+  cell.textContent = GEMS[board[r][c]];
+}
+
+function handleClick(r, c) {
+  if (!gameActive || animating) return;
+  clearHints();
+
+  if (selected === null) {
+    selected = { r, c };
+    document.getElementById(`cell-${r}-${c}`).classList.add('selected');
+    playSound('select');
+    scheduleHint();
+  } else {
+    const prev = selected;
+    document.getElementById(`cell-${prev.r}-${prev.c}`).classList.remove('selected');
+    selected = null;
+    clearTimeout(hintTimer);
+
+    if (prev.r === r && prev.c === c) return;
+
+    // Check adjacency
+    const dr = Math.abs(r - prev.r), dc = Math.abs(c - prev.c);
+    if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+      trySwap(prev.r, prev.c, r, c);
+    } else {
+      playSound('invalid');
+      // Re-select new cell
+      selected = { r, c };
+      document.getElementById(`cell-${r}-${c}`).classList.add('selected');
+      scheduleHint();
+    }
+  }
+}
+
+function trySwap(r1, c1, r2, c2) {
+  // Swap
+  [board[r1][c1], board[r2][c2]] = [board[r2][c2], board[r1][c1]];
+  const matches = findMatches();
+  if (matches.length > 0) {
+    playSound('swap');
+    updateCell(r1, c1); updateCell(r2, c2);
+    animating = true;
+    combo = 1;
+    processMatches(matches);
+  } else {
+    // Swap back
+    [board[r1][c1], board[r2][c2]] = [board[r2][c2], board[r1][c1]];
+    playSound('invalid');
+    // Shake animation
+    const cell1 = document.getElementById(`cell-${r1}-${c1}`);
+    const cell2 = document.getElementById(`cell-${r2}-${c2}`);
+    [cell1, cell2].forEach(cell => {
+      cell.style.transition = 'transform 0.05s';
+      cell.style.transform = 'translateX(6px)';
+      setTimeout(() => { cell.style.transform = 'translateX(-6px)'; }, 60);
+      setTimeout(() => { cell.style.transform = ''; }, 120);
+    });
+  }
+}
+
+function findMatches() {
+  const matched = new Set();
+  // Horizontal
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE - 2; c++) {
+      if (board[r][c] !== null && board[r][c] === board[r][c+1] && board[r][c] === board[r][c+2]) {
+        let len = 3;
+        while (c + len < GRID_SIZE && board[r][c+len] === board[r][c]) len++;
+        for (let i = 0; i < len; i++) matched.add(`${r},${c+i}`);
+      }
+    }
+  }
+  // Vertical
+  for (let c = 0; c < GRID_SIZE; c++) {
+    for (let r = 0; r < GRID_SIZE - 2; r++) {
+      if (board[r][c] !== null && board[r][c] === board[r+1][c] && board[r][c] === board[r+2][c]) {
+        let len = 3;
+        while (r + len < GRID_SIZE && board[r+len][c] === board[r][c]) len++;
+        for (let i = 0; i < len; i++) matched.add(`${r+i},${c}`);
+      }
+    }
+  }
+  return [...matched].map(k => k.split(',').map(Number)).map(([r,c]) => ({r,c}));
+}
+
+function processMatches(matches) {
+  const pts = matches.length * 10 * combo;
+  score += pts;
+  document.getElementById('score').textContent = score;
+  document.getElementById('combo').textContent = 'x' + combo;
+
+  const hs = parseInt(localStorage.getItem('hs_jewelmatch') || '0');
+  if (score > hs) {
+    localStorage.setItem('hs_jewelmatch', score);
+    document.getElementById('highscore').textContent = score;
+  }
+
+  if (combo >= 3) {
+    document.getElementById('msg').textContent = '🔥 CASCADE x' + combo + '! +' + pts + ' pts!';
+    playSound('match');
+  } else {
+    document.getElementById('msg').textContent = combo > 1 ? '⚡ Combo x' + combo + '! +' + pts + ' pts!' : '+' + pts + ' pts!';
+    playSound('match');
+  }
+
+  // Pop matched cells
+  matches.forEach(({r,c}) => {
+    const cell = document.getElementById(`cell-${r}-${c}`);
+    if (cell) { cell.classList.add('pop'); }
+  });
+
+  setTimeout(() => {
+    matches.forEach(({r,c}) => { board[r][c] = null; });
+    dropGems();
+    refillGems();
+    renderGrid();
+
+    setTimeout(() => {
+      const newMatches = findMatches();
+      if (newMatches.length > 0) {
+        combo++;
+        document.getElementById('combo').textContent = 'x' + combo;
+        processMatches(newMatches);
+      } else {
+        animating = false;
+        combo = 1;
+        document.getElementById('combo').textContent = 'x1';
+        if (difficulty === 'easy') scheduleHint();
+      }
+    }, 300);
+  }, 300);
+}
+
+function dropGems() {
+  for (let c = 0; c < GRID_SIZE; c++) {
+    const col = [];
+    for (let r = GRID_SIZE - 1; r >= 0; r--) {
+      if (board[r][c] !== null) col.push(board[r][c]);
+    }
+    for (let r = GRID_SIZE - 1; r >= 0; r--) {
+      board[r][c] = col.shift() !== undefined ? col[col.length - 1 - (GRID_SIZE - 1 - r)] : null;
+    }
+    // Re-pack bottom
+    let fill = GRID_SIZE - 1;
+    for (let r = GRID_SIZE - 1; r >= 0; r--) {
+      if (board[r][c] !== null) { board[fill][c] = board[r][c]; if (fill !== r) board[r][c] = null; fill--; }
+    }
+    for (let r = fill; r >= 0; r--) board[r][c] = null;
+  }
+}
+
+function refillGems() {
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (board[r][c] === null) board[r][c] = randomGem();
+    }
+  }
+}
+
+function findHint() {
+  // Try every possible swap and see if it creates a match
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const neighbors = [[r,c+1],[r+1,c]];
+      for (const [nr, nc] of neighbors) {
+        if (nr >= GRID_SIZE || nc >= GRID_SIZE) continue;
+        [board[r][c], board[nr][nc]] = [board[nr][nc], board[r][c]];
+        const matches = findMatches();
+        [board[r][c], board[nr][nc]] = [board[nr][nc], board[r][c]];
+        if (matches.length > 0) return [{r,c},{r:nr,c:nc}];
+      }
+    }
+  }
+  return null;
+}
+
+function scheduleHint() {
+  if (difficulty !== 'easy' || !gameActive) return;
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => {
+    if (!gameActive || animating) return;
+    const hint = findHint();
+    if (hint) {
+      hintCells = hint;
+      hint.forEach(({r,c}) => {
+        const cell = document.getElementById(`cell-${r}-${c}`);
+        if (cell) cell.classList.add('hint');
+      });
+    }
+  }, 4000);
+}
+
+function clearHints() {
+  hintCells.forEach(({r,c}) => {
+    const cell = document.getElementById(`cell-${r}-${c}`);
+    if (cell) cell.classList.remove('hint');
+  });
+  hintCells = [];
+  clearTimeout(hintTimer);
+}
+
+function startGame() {
+  score = 0; timeLeft = TOTAL_TIME; combo = 1;
+  animating = false; selected = null;
+  gameActive = true;
+  document.getElementById('score').textContent = '0';
+  document.getElementById('timer').textContent = TOTAL_TIME;
+  document.getElementById('timer-fill').style.width = '100%';
+  document.getElementById('combo').textContent = 'x1';
+  document.getElementById('msg').textContent = 'Swap jewels to match 3+!';
+  document.getElementById('overlay').style.display = 'none';
+  clearInterval(timerInterval);
+  initBoard();
+  renderGrid();
+  if (difficulty === 'easy') scheduleHint();
+
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    document.getElementById('timer').textContent = timeLeft;
+    document.getElementById('timer-fill').style.width = (timeLeft / TOTAL_TIME * 100) + '%';
+    if (timeLeft <= 0) endGame();
+  }, 1000);
+}
+
+function endGame() {
+  gameActive = false;
+  clearInterval(timerInterval);
+  clearHints();
+  playSound('gameover');
+  const hs = parseInt(localStorage.getItem('hs_jewelmatch') || '0');
+  const overlay = document.getElementById('overlay');
+  document.querySelector('#overlay h2').textContent = '⏰ Time\'s Up!';
+  document.querySelector('#overlay p').textContent = `Score: ${score}${score > hs ? ' 🏆 NEW BEST!' : ''}`;
+  document.querySelector('#overlay p:nth-child(3)').textContent = `Best: ${Math.max(score, hs)}`;
+  overlay.style.display = 'flex';
+}
+
+document.getElementById('highscore').textContent = localStorage.getItem('hs_jewelmatch') || '0';
+</script>
+</body>
+</html>
