@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="html">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,6 +14,9 @@ canvas { display:block;touch-action:none; }
 .final { font-size:26px;color:#ffcc00;text-shadow:0 0 12px #ffcc00;margin:16px 0 4px; }
 #startBtn { margin-top:16px;padding:12px 36px;font-size:18px;font-family:'Courier New',monospace;background:transparent;color:#66ff66;border:2px solid #66ff66;border-radius:8px;cursor:pointer;letter-spacing:2px;transition:all .2s; }
 #startBtn:hover { background:#66ff66;color:#0a100a;box-shadow:0 0 20px #66ff66; }
+#diffBtns { display:flex;gap:10px;margin-top:14px; }
+.diffBtn { padding:8px 18px;font-size:13px;font-family:'Courier New',monospace;background:transparent;border:1px solid #66ff66;border-radius:6px;cursor:pointer;color:#66ff66;opacity:.6;transition:all .2s;letter-spacing:1px; }
+.diffBtn.active,.diffBtn:hover { opacity:1;background:rgba(100,255,100,.1);box-shadow:0 0 10px #66ff66; }
 #tc { position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:grid;grid-template-columns:60px 60px 60px;grid-template-rows:60px 60px;gap:8px; }
 .cb { width:60px;height:60px;border-radius:12px;border:2px solid rgba(100,255,100,.35);background:rgba(100,255,100,.1);color:#66ff66;font-size:26px;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;touch-action:manipulation;cursor:pointer; }
 .cb:active { background:rgba(100,255,100,.3); }
@@ -24,13 +27,18 @@ canvas { display:block;touch-action:none; }
 </style>
 </head>
 <body>
-<a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">← Back</a>
+<a href="index.html" style="position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999;">&#8592; Back</a>
 <canvas id="c"></canvas>
 <div id="overlay">
   <h1>FROGGER</h1>
-  <p>Arrow / WASD — hop &nbsp;|&nbsp; Reach all 5 lily pads!</p>
+  <p>Arrow / WASD &mdash; hop &nbsp;|&nbsp; Reach all 5 lily pads!</p>
   <p>Mobile: use the D-pad below</p>
   <div class="final" id="fs" style="display:none"></div>
+  <div id="diffBtns">
+    <button class="diffBtn active" id="dEasy" onclick="setDiff('easy')">EASY</button>
+    <button class="diffBtn" id="dMed" onclick="setDiff('medium')">MEDIUM</button>
+    <button class="diffBtn" id="dHard" onclick="setDiff('hard')">HARD</button>
+  </div>
   <button id="startBtn" onclick="startGame()">HOP IN!</button>
 </div>
 <div id="tc">
@@ -40,174 +48,171 @@ canvas { display:block;touch-action:none; }
   <div class="cb" id="bR">&#8594;</div>
 </div>
 <script>
-const C=document.getElementById('c'),ctx=C.getContext('2d');
-const CELL=48;
-const COLS=13,ROWS=14;
-const W=COLS*CELL,H=ROWS*CELL;
+var AC=window.AudioContext||window.webkitAudioContext;
+var ac=AC?new AC():null;
+function snd(freq,dur,type,vol){
+  if(!ac)return;
+  try{var o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=freq;o.type=type||'square';g.gain.setValueAtTime(vol||0.12,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+dur);o.start();o.stop(ac.currentTime+dur);}catch(e){}
+}
+function sndHop(){snd(440,.06,'square',.07);}
+function sndSplat(){snd(200,.12,'sawtooth',.15);setTimeout(function(){snd(150,.15,'sawtooth',.12);},110);}
+function sndHome(){snd(523,.07,'square',.1);setTimeout(function(){snd(659,.08,'square',.1);},80);setTimeout(function(){snd(784,.12,'square',.1);},165);}
+function sndLevelUp(){snd(523,.08,'square',.12);setTimeout(function(){snd(659,.08,'square',.12);},90);setTimeout(function(){snd(784,.08,'square',.12);},180);setTimeout(function(){snd(1047,.18,'square',.12);},270);}
+
+var HS_KEY='hs_frogger';
+var highScore=parseInt(localStorage.getItem(HS_KEY)||'0');
+
+var difficulty='easy';
+function setDiff(d){
+  difficulty=d;
+  ['dEasy','dMed','dHard'].forEach(function(id){document.getElementById(id).classList.remove('active');});
+  document.getElementById(d==='easy'?'dEasy':d==='medium'?'dMed':'dHard').classList.add('active');
+}
+function getDiffParams(){
+  if(difficulty==='easy')return{lives:5,spdMult:0.7,timerLimit:60};
+  if(difficulty==='hard')return{lives:2,spdMult:1.5,timerLimit:25};
+  return{lives:3,spdMult:1.0,timerLimit:40};
+}
+
+var C=document.getElementById('c'),ctx=C.getContext('2d');
+var CELL=48,COLS=13,ROWS=14,W=COLS*CELL,H=ROWS*CELL;
 C.width=W;C.height=H;
 
-const keys={};
-window.addEventListener('keydown',e=>{
+var ROAD_ROWS=[9,10,11,12],WATER_ROWS=[3,4,5,6,7],HOME_ROW=1,FROG_START_ROW=13,FROG_START_COL=6;
+var frog,lanes,homes,score,lives,level,running,raf,timer,parts=[];
+
+window.addEventListener('keydown',function(e){
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD'].includes(e.code)){e.preventDefault();handleMove(e.code);}
 });
-['bU','bD','bL','bR'].forEach(id=>{
-  const el=document.getElementById(id);
-  ['touchstart','mousedown'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();handleMove({bU:'ArrowUp',bD:'ArrowDown',bL:'ArrowLeft',bR:'ArrowRight'}[id]);},{passive:false}));
+['bU','bD','bL','bR'].forEach(function(id){
+  var el=document.getElementById(id);
+  ['touchstart','mousedown'].forEach(function(ev){
+    el.addEventListener(ev,function(e){e.preventDefault();handleMove({bU:'ArrowUp',bD:'ArrowDown',bL:'ArrowLeft',bR:'ArrowRight'}[id]);},{passive:false});
+  });
 });
 
-const ROAD_ROWS=[9,10,11,12]; // from top (row index)
-const WATER_ROWS=[3,4,5,6,7];
-const HOME_ROW=1;
-const FROG_START_ROW=13;
-const FROG_START_COL=6;
-
-let frog,lanes,homes,score,lives,level,running,raf,timer,moveCD=0;
-let parts=[];
-
 function startGame(){
+  if(ac&&ac.state==='suspended')ac.resume();
   document.getElementById('overlay').style.display='none';
-  score=0;lives=3;level=1;
+  var p=getDiffParams();
+  score=0;lives=p.lives;level=1;
   initGame();if(raf)cancelAnimationFrame(raf);requestAnimationFrame(loop);
 }
 
 function initGame(){
-  frog={col:FROG_START_COL,row:FROG_START_ROW,dead:false,onLog:null};
-  homes=Array(5).fill(false);
-  timer=40;
-  running=true;
-  parts=[];
-  // Set up lanes
-  lanes=[];
-  const spd=1+level*.15;
-  // Road lanes (going alternating directions)
-  for(let i=0;i<ROAD_ROWS.length;i++){
-    const row=ROAD_ROWS[i];
-    const dir=i%2===0?1:-1;
-    const colors=['#cc3333','#ddaa33','#dd6633','#cc33cc'];
-    const len=1+Math.floor(Math.random()*2);
-    const vehicles=[];
-    const spacing=Math.floor(Math.random()*3+3)*CELL;
-    let sx=Math.random()*(W-100);
-    for(let v=0;v<4;v++){
-      vehicles.push({x:sx,len:len});
-      sx=(sx+spacing+len*CELL)%W;
-    }
-    lanes.push({row,type:'road',dir,speed:(0.8+Math.random()*.8)*spd,color:colors[i],vehicles});
+  var p=getDiffParams();
+  frog={col:FROG_START_COL,row:FROG_START_ROW,dead:false,_logX:null};
+  homes=Array(5).fill(false);timer=p.timerLimit;running=true;parts=[];lanes=[];
+  var spd=(1+level*.15)*p.spdMult;
+  for(var i=0;i<ROAD_ROWS.length;i++){
+    var row=ROAD_ROWS[i],dir=i%2===0?1:-1;
+    var colors=['#cc3333','#ddaa33','#dd6633','#cc33cc'];
+    var len=1+Math.floor(Math.random()*2),vehicles=[],spacing=Math.floor(Math.random()*3+3)*CELL,sx=Math.random()*(W-100);
+    for(var v=0;v<4;v++){vehicles.push({x:sx,len:len});sx=(sx+spacing+len*CELL)%W;}
+    lanes.push({row:row,type:'road',dir:dir,speed:(0.8+Math.random()*.8)*spd,color:colors[i],vehicles:vehicles});
   }
-  // Water lanes
-  for(let i=0;i<WATER_ROWS.length;i++){
-    const row=WATER_ROWS[i];
-    const dir=i%2===0?-1:1;
-    const logLen=2+Math.floor(Math.random()*2);
-    const logs=[];
-    const spacing=Math.floor(Math.random()*4+4)*CELL;
-    let sx=Math.random()*W;
-    for(let v=0;v<3;v++){
-      logs.push({x:sx,len:logLen});
-      sx=(sx+spacing+logLen*CELL)%W;
-    }
-    lanes.push({row,type:'water',dir,speed:(0.6+Math.random()*.6)*spd,logs});
+  for(var i=0;i<WATER_ROWS.length;i++){
+    var row=WATER_ROWS[i],dir=i%2===0?-1:1;
+    var logLen=2+Math.floor(Math.random()*2),logs=[],spacing=Math.floor(Math.random()*4+4)*CELL,sx=Math.random()*W;
+    for(var v=0;v<3;v++){logs.push({x:sx,len:logLen});sx=(sx+spacing+logLen*CELL)%W;}
+    lanes.push({row:row,type:'water',dir:dir,speed:(0.6+Math.random()*.6)*spd,logs:logs});
   }
 }
 
 function handleMove(code){
   if(!running||frog.dead)return;
-  const moves={ArrowUp:{dr:-1,dc:0},KeyW:{dr:-1,dc:0},ArrowDown:{dr:1,dc:0},KeyS:{dr:1,dc:0},ArrowLeft:{dr:0,dc:-1},KeyA:{dr:0,dc:-1},ArrowRight:{dr:0,dc:1},KeyD:{dr:0,dc:1}};
-  const m=moves[code];if(!m)return;
-  const nr=frog.row+m.dr,nc=frog.col+m.dc;
+  var moves={ArrowUp:{dr:-1,dc:0},KeyW:{dr:-1,dc:0},ArrowDown:{dr:1,dc:0},KeyS:{dr:1,dc:0},ArrowLeft:{dr:0,dc:-1},KeyA:{dr:0,dc:-1},ArrowRight:{dr:0,dc:1},KeyD:{dr:0,dc:1}};
+  var m=moves[code];if(!m)return;
+  var nr=frog.row+m.dr,nc=frog.col+m.dc;
   if(nr<0||nr>=ROWS||nc<0||nc>=COLS)return;
-  frog.row=nr;frog.col=nc;
-  score+=10;
-  // Check home arrival
+  frog.row=nr;frog.col=nc;frog._logX=null;score+=10;sndHop();
   if(frog.row===HOME_ROW){
-    const homeIdx=Math.floor(frog.col/2.5);
-    const hcols=[1,3,6,9,11];
-    const hi=hcols.findIndex(hc=>Math.abs(frog.col-hc)<=0);
+    var hcols=[1,3,6,9,11];
+    var hi=hcols.findIndex(function(hc){return Math.abs(frog.col-hc)<=0;});
     if(hi>=0&&!homes[hi]){
       homes[hi]=true;score+=200;
-      burst(frog.col*CELL+CELL/2,frog.row*CELL+CELL/2,'#66ff66',16);
-      frog.row=FROG_START_ROW;frog.col=FROG_START_COL;
+      if(score>highScore){highScore=score;localStorage.setItem(HS_KEY,score);}
+      sndHome();burst(frog.col*CELL+CELL/2,frog.row*CELL+CELL/2,'#66ff66',16);
+      frog.row=FROG_START_ROW;frog.col=FROG_START_COL;frog._logX=null;
+      timer=getDiffParams().timerLimit;
       if(homes.every(Boolean)){levelUp();return;}
     } else {killFrog();}
   }
 }
 
 function levelUp(){
-  level++;timer=40;homes=Array(5).fill(false);
-  burst(W/2,H/2,'#66ff66',30);
-  initGame();
+  sndLevelUp();level++;
+  homes=Array(5).fill(false);
+  burst(W/2,H/2,'#66ff66',30);initGame();
 }
 
 function killFrog(){
   if(frog.dead)return;
-  frog.dead=true;
+  frog.dead=true;sndSplat();
   burst(frog.col*CELL+CELL/2,frog.row*CELL+CELL/2,'#ff4444',16);
   lives--;
-  setTimeout(()=>{
+  setTimeout(function(){
     if(lives<=0){endGame(false);return;}
-    frog={col:FROG_START_COL,row:FROG_START_ROW,dead:false,onLog:null};
-    timer=40;
+    frog={col:FROG_START_COL,row:FROG_START_ROW,dead:false,_logX:null};
+    timer=getDiffParams().timerLimit;
   },800);
 }
 
 function endGame(win){
   running=false;
-  const ov=document.getElementById('overlay');ov.style.display='flex';
+  if(score>highScore){highScore=score;localStorage.setItem(HS_KEY,score);}
+  var ov=document.getElementById('overlay');ov.style.display='flex';
   ov.querySelector('h1').textContent=win?'YOU WIN!':'SPLAT!';
-  const fs=document.getElementById('fs');fs.style.display='block';fs.textContent='SCORE: '+score;
+  var fs=document.getElementById('fs');fs.style.display='block';
+  fs.textContent='SCORE: '+score+'  BEST: '+highScore;
   document.getElementById('startBtn').textContent='PLAY AGAIN';
 }
 
-function burst(x,y,col,n){for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=1+Math.random()*4;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:35+Math.random()*25,ml:60,col});}}
+function burst(x,y,col,n){for(var i=0;i<n;i++){var a=Math.random()*Math.PI*2,s=1+Math.random()*4;parts.push({x:x,y:y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:35+Math.random()*25,ml:60,col:col});}}
 
-let last=0,timerAcc=0;
+var last=0,timerAcc=0;
 function loop(ts){
   raf=requestAnimationFrame(loop);
-  const dt=Math.min((ts-last)/16.67,2.5);last=ts;
+  var dt=Math.min((ts-last)/16.67,2.5);last=ts;
   if(running)update(dt);render();
 }
 
 function update(dt){
   if(!running)return;
-  // Timer
   timerAcc+=dt;
   if(timerAcc>=60){timerAcc=0;timer--;if(timer<=0&&!frog.dead)killFrog();}
-  // Move lanes
-  for(const lane of lanes){
-    const objs=lane.vehicles||lane.logs;
-    for(const o of objs){
-      o.x+=lane.dir*lane.speed*dt;
-      if(o.x>W+CELL*4)o.x-=W+CELL*8;
-      if(o.x<-CELL*4)o.x+=W+CELL*8;
+  for(var li=0;li<lanes.length;li++){
+    var lane=lanes[li],objs=lane.vehicles||lane.logs;
+    for(var oi=0;oi<objs.length;oi++){
+      objs[oi].x+=lane.dir*lane.speed*dt;
+      if(objs[oi].x>W+CELL*4)objs[oi].x-=W+CELL*8;
+      if(objs[oi].x<-CELL*4)objs[oi].x+=W+CELL*8;
     }
   }
-  // particles
-  for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;if(p.life<=0)parts.splice(i,1);}
+  for(var i=parts.length-1;i>=0;i--){var p=parts[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;if(p.life<=0)parts.splice(i,1);}
   if(frog.dead)return;
-  // Check frog lane
-  const fx=frog.col*CELL+CELL/2, fy=frog.row*CELL+CELL/2;
-  let onLog=false;
-  for(const lane of lanes){
+  var fx=frog.col*CELL+CELL/2,fy=frog.row*CELL+CELL/2;
+  var onLog=false;
+  for(var li=0;li<lanes.length;li++){
+    var lane=lanes[li];
     if(lane.row!==frog.row)continue;
     if(lane.type==='water'){
-      for(const log of lane.logs){
+      for(var oi=0;oi<lane.logs.length;oi++){
+        var log=lane.logs[oi];
         if(fx>log.x&&fx<log.x+log.len*CELL){
-          // Ride the log
-          frog.col=Math.round((log.x+log.len*CELL/2)/CELL)-(log.len/2);
-          // Actually move frog with log gradually
-          frog._logX=(frog._logX||fx)+lane.dir*lane.speed*dt;
+          if(frog._logX===null)frog._logX=fx;
+          frog._logX+=lane.dir*lane.speed*dt;
           frog.col=Math.floor(frog._logX/CELL);
           if(frog.col<0||frog.col>=COLS){killFrog();return;}
           onLog=true;break;
         }
       }
-      if(!onLog&&WATER_ROWS.includes(frog.row)){killFrog();return;}
+      if(!onLog&&WATER_ROWS.indexOf(frog.row)>=0){killFrog();return;}
     }
     if(lane.type==='road'){
-      for(const v of lane.vehicles){
-        if(fx>v.x+2&&fx<v.x+v.len*CELL-2&&fy>lane.row*CELL+2&&fy<lane.row*CELL+CELL-2){
-          killFrog();return;
-        }
+      for(var oi=0;oi<lane.vehicles.length;oi++){
+        var v=lane.vehicles[oi];
+        if(fx>v.x+2&&fx<v.x+v.len*CELL-2&&fy>lane.row*CELL+2&&fy<lane.row*CELL+CELL-2){killFrog();return;}
       }
     }
   }
@@ -215,77 +220,46 @@ function update(dt){
 }
 
 function render(){
-  // Background zones
   ctx.fillStyle='#0a100a';ctx.fillRect(0,0,W,H);
-  // Safe zones (start + middle strip)
-  ctx.fillStyle='#0d200d';
-  ctx.fillRect(0,0,W,CELL*2); // top (homes)
-  ctx.fillRect(0,CELL*8,W,CELL); // middle safe
-  ctx.fillRect(0,CELL*(ROWS-1),W,CELL); // bottom start
-  // Road
+  ctx.fillStyle='#0d200d';ctx.fillRect(0,0,W,CELL*2);ctx.fillRect(0,CELL*8,W,CELL);ctx.fillRect(0,CELL*(ROWS-1),W,CELL);
   ctx.fillStyle='#1a1a2a';ctx.fillRect(0,CELL*9,W,CELL*4);
-  // Water
   ctx.fillStyle='#081828';ctx.fillRect(0,CELL*3,W,CELL*5);
-  // Road markings
   ctx.strokeStyle='rgba(255,255,100,.12)';ctx.lineWidth=1;ctx.setLineDash([CELL/2,CELL/2]);
-  for(let r=9;r<13;r++){ctx.beginPath();ctx.moveTo(0,r*CELL+CELL/2);ctx.lineTo(W,r*CELL+CELL/2);ctx.stroke();}
+  for(var r=9;r<13;r++){ctx.beginPath();ctx.moveTo(0,r*CELL+CELL/2);ctx.lineTo(W,r*CELL+CELL/2);ctx.stroke();}
   ctx.setLineDash([]);
-  // Home slots
-  const hcols=[1,3,6,9,11];
-  for(let i=0;i<5;i++){
-    const hx=hcols[i]*CELL;
-    if(homes[i]){
-      ctx.fillStyle='#33ff33';ctx.shadowColor='#33ff33';ctx.shadowBlur=12;
-      ctx.beginPath();ctx.arc(hx+CELL/2,CELL+CELL/2,CELL*.38,0,Math.PI*2);ctx.fill();
-      ctx.shadowBlur=0;
-    } else {
-      ctx.strokeStyle='#226622';ctx.lineWidth=2;
-      ctx.beginPath();ctx.arc(hx+CELL/2,CELL+CELL/2,CELL*.38,0,Math.PI*2);ctx.stroke();
-    }
+  var hcols=[1,3,6,9,11];
+  for(var i=0;i<5;i++){
+    var hx=hcols[i]*CELL;
+    if(homes[i]){ctx.fillStyle='#33ff33';ctx.shadowColor='#33ff33';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(hx+CELL/2,CELL+CELL/2,CELL*.38,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
+    else{ctx.strokeStyle='#226622';ctx.lineWidth=2;ctx.beginPath();ctx.arc(hx+CELL/2,CELL+CELL/2,CELL*.38,0,Math.PI*2);ctx.stroke();}
   }
-  // Lanes
-  for(const lane of lanes){
-    const ly=lane.row*CELL;
+  for(var li=0;li<lanes.length;li++){
+    var lane=lanes[li],ly=lane.row*CELL;
     if(lane.type==='road'){
-      for(const v of lane.vehicles){
-        // Car body
-        ctx.fillStyle=lane.color;ctx.shadowColor=lane.color;ctx.shadowBlur=5;
-        ctx.fillRect(v.x+2,ly+8,v.len*CELL-4,CELL-16);
-        // Wheels
-        ctx.fillStyle='#222';ctx.shadowBlur=0;
-        ctx.fillRect(v.x+4,ly+CELL-12,12,8);ctx.fillRect(v.x+v.len*CELL-16,ly+CELL-12,12,8);
-        // Windows
-        ctx.fillStyle='rgba(150,220,255,.5)';
-        ctx.fillRect(v.x+8,ly+12,v.len*CELL-16,12);
-        ctx.shadowBlur=0;
+      for(var oi=0;oi<lane.vehicles.length;oi++){
+        var v=lane.vehicles[oi];
+        ctx.fillStyle=lane.color;ctx.shadowColor=lane.color;ctx.shadowBlur=5;ctx.fillRect(v.x+2,ly+8,v.len*CELL-4,CELL-16);
+        ctx.fillStyle='#222';ctx.shadowBlur=0;ctx.fillRect(v.x+4,ly+CELL-12,12,8);ctx.fillRect(v.x+v.len*CELL-16,ly+CELL-12,12,8);
+        ctx.fillStyle='rgba(150,220,255,.5)';ctx.fillRect(v.x+8,ly+12,v.len*CELL-16,12);ctx.shadowBlur=0;
       }
     } else {
-      for(const log of lane.logs){
+      for(var oi=0;oi<lane.logs.length;oi++){
+        var log=lane.logs[oi];
         ctx.fillStyle='#7c4a1e';ctx.shadowColor='#a06030';ctx.shadowBlur=4;
         ctx.beginPath();
-        ctx.roundRect?ctx.roundRect(log.x+2,ly+8,log.len*CELL-4,CELL-16,6):ctx.rect(log.x+2,ly+8,log.len*CELL-4,CELL-16);
+        if(ctx.roundRect)ctx.roundRect(log.x+2,ly+8,log.len*CELL-4,CELL-16,6);else ctx.rect(log.x+2,ly+8,log.len*CELL-4,CELL-16);
         ctx.fill();
-        // wood grain
         ctx.strokeStyle='rgba(0,0,0,.3)';ctx.lineWidth=1.5;ctx.shadowBlur=0;
-        for(let g=0;g<log.len;g++){ctx.beginPath();ctx.moveTo(log.x+g*CELL+CELL/2,ly+10);ctx.lineTo(log.x+g*CELL+CELL/2,ly+CELL-10);ctx.stroke();}
+        for(var g=0;g<log.len;g++){ctx.beginPath();ctx.moveTo(log.x+g*CELL+CELL/2,ly+10);ctx.lineTo(log.x+g*CELL+CELL/2,ly+CELL-10);ctx.stroke();}
       }
     }
   }
-  // Frog
   if(!frog.dead||Math.floor(Date.now()/100)%2===0){
-    const fx=frog.col*CELL+CELL/2, fy=frog.row*CELL+CELL/2;
+    var fx=frog.col*CELL+CELL/2,fy=frog.row*CELL+CELL/2;
     ctx.shadowColor='#88ff88';ctx.shadowBlur=8;
-    // Body
-    ctx.fillStyle='#55cc44';
-    ctx.beginPath();ctx.ellipse(fx,fy,13,11,0,0,Math.PI*2);ctx.fill();
-    // Eyes
-    ctx.fillStyle='#eeffee';
-    ctx.beginPath();ctx.arc(fx-7,fy-8,5,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(fx+7,fy-8,5,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#000';
-    ctx.beginPath();ctx.arc(fx-7,fy-8,2.5,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(fx+7,fy-8,2.5,0,Math.PI*2);ctx.fill();
-    // Legs
+    ctx.fillStyle='#55cc44';ctx.beginPath();ctx.ellipse(fx,fy,13,11,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#eeffee';ctx.beginPath();ctx.arc(fx-7,fy-8,5,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(fx+7,fy-8,5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#000';ctx.beginPath();ctx.arc(fx-7,fy-8,2.5,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(fx+7,fy-8,2.5,0,Math.PI*2);ctx.fill();
     ctx.strokeStyle='#44aa33';ctx.lineWidth=3;ctx.shadowBlur=0;
     ctx.beginPath();ctx.moveTo(fx-13,fy);ctx.lineTo(fx-18,fy-7);ctx.lineTo(fx-22,fy-4);ctx.stroke();
     ctx.beginPath();ctx.moveTo(fx+13,fy);ctx.lineTo(fx+18,fy-7);ctx.lineTo(fx+22,fy-4);ctx.stroke();
@@ -293,21 +267,15 @@ function render(){
     ctx.beginPath();ctx.moveTo(fx+11,fy+7);ctx.lineTo(fx+16,fy+12);ctx.stroke();
     ctx.shadowBlur=0;
   }
-  // HUD
-  ctx.shadowBlur=0;
-  ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,0,W,22);
-  ctx.font='13px "Courier New"';ctx.textAlign='left';ctx.fillStyle='#66ff66';
-  ctx.shadowColor='#66ff66';ctx.shadowBlur=6;
+  ctx.shadowBlur=0;ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,0,W,22);
+  ctx.font='13px "Courier New"';ctx.textAlign='left';ctx.fillStyle='#66ff66';ctx.shadowColor='#66ff66';ctx.shadowBlur=6;
   ctx.fillText('SCORE:'+score,6,15);
-  ctx.textAlign='center';ctx.fillStyle='#ffcc00';ctx.shadowColor='#ffcc00';
-  ctx.fillText('TIME:'+(timer>0?timer:0),W/2,15);
-  ctx.textAlign='right';ctx.fillStyle='#ff6666';ctx.shadowColor='#ff6666';
-  ctx.fillText('♥'.repeat(lives),W-6,15);
-  ctx.textAlign='center';ctx.fillStyle='#aaaaff';ctx.shadowColor='#aaaaff';
-  ctx.fillText('LVL '+level,W*.78,15);
+  ctx.fillStyle='#ffaa44';ctx.shadowColor='#ffaa44';ctx.fillText('BEST:'+highScore,95,15);
+  ctx.textAlign='center';ctx.fillStyle='#ffcc00';ctx.shadowColor='#ffcc00';ctx.fillText('TIME:'+(timer>0?timer:0),W/2,15);
+  ctx.textAlign='right';ctx.fillStyle='#ff6666';ctx.shadowColor='#ff6666';ctx.fillText('hearts:'+lives,W-6,15);
+  ctx.textAlign='center';ctx.fillStyle='#aaaaff';ctx.shadowColor='#aaaaff';ctx.fillText('LVL '+level,W*.84,15);
   ctx.shadowBlur=0;
-  // Particles
-  for(const p of parts){ctx.globalAlpha=p.life/p.ml;ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,2.5,0,Math.PI*2);ctx.fill();}
+  for(var i=0;i<parts.length;i++){var p=parts[i];ctx.globalAlpha=p.life/p.ml;ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,2.5,0,Math.PI*2);ctx.fill();}
   ctx.globalAlpha=1;
 }
 render();

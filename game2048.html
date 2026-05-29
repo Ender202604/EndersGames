@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>2048 – Ender's Games</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a0a00;font-family:'Segoe UI',Arial,sans-serif;color:#fff;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px 10px}
+a.back{position:fixed;top:10px;left:10px;color:#ffaaaa;text-decoration:none;font-size:13px;border:1px solid #ff6666;padding:4px 10px;border-radius:6px;z-index:999}
+h1{color:#ffdd44;font-size:2.2rem;margin:50px 0 4px;letter-spacing:2px}
+.subtitle{color:#ffaaaa;font-size:.85rem;margin-bottom:14px}
+.info-row{display:flex;gap:14px;margin-bottom:14px;align-items:center;flex-wrap:wrap;justify-content:center}
+.score-box{background:#2a1800;border:2px solid #ff8800;border-radius:10px;padding:6px 18px;text-align:center;min-width:90px}
+.score-box .label{font-size:.7rem;color:#ffaaaa;text-transform:uppercase;letter-spacing:1px}
+.score-box .val{font-size:1.5rem;color:#ffdd44;font-weight:bold}
+button{background:#ff6600;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:.95rem;cursor:pointer;transition:.15s}
+button:hover{background:#ff8800}
+#grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:#2a1400;border-radius:14px;padding:12px;width:min(95vw,420px)}
+.cell{width:100%;aspect-ratio:1;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:bold;background:#3a2000;transition:background .1s}
+.c2{background:#ffe066;color:#1a0a00}
+.c4{background:#ffbb33;color:#1a0a00}
+.c8{background:#ff9900;color:#fff}
+.c16{background:#ff7700;color:#fff}
+.c32{background:#ff5500;color:#fff}
+.c64{background:#ff3300;color:#fff}
+.c128{background:#dd2277;color:#fff}
+.c256{background:#bb1188;color:#fff}
+.c512{background:#9900cc;color:#fff}
+.c1024{background:#6600ff;color:#fff;font-size:1.3rem}
+.c2048{background:#ffdd00;color:#1a0a00;font-size:1.3rem;box-shadow:0 0 18px #ffdd00}
+.chigh{background:#00ffcc;color:#1a0a00;font-size:1.1rem}
+#msg{margin-top:18px;font-size:1.5rem;color:#ffdd44;font-weight:bold;min-height:2rem}
+.hint{color:#ff9955;font-size:.78rem;margin-top:8px}
+</style>
+</head>
+<body>
+<a href="index.html" class="back">← Back</a>
+<h1>2048</h1>
+<div class="subtitle">Merge tiles to reach 2048!</div>
+<div class="info-row">
+  <div class="score-box"><div class="label">Score</div><div class="val" id="score">0</div></div>
+  <div class="score-box"><div class="label">Best</div><div class="val" id="best">0</div></div>
+  <button onclick="newGame()">New Game</button>
+</div>
+<div id="grid"></div>
+<div id="msg"></div>
+<div class="hint">Arrow keys or swipe to move</div>
+<script>
+// --- Web Audio API sound engine ---
+var AC = window.AudioContext || window.webkitAudioContext;
+var ac = AC ? new AC() : null;
+function snd(freq, dur, type, vol) {
+  if (!ac) return;
+  var o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.frequency.value = freq; o.type = type || 'square';
+  g.gain.setValueAtTime(vol || 0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.start(); o.stop(ac.currentTime + dur);
+}
+function sndMerge(val) {
+  // Higher pitch for higher tile values
+  var freq = Math.min(880, 200 + Math.log2(val) * 40);
+  snd(freq, 0.1, 'sine', 0.18);
+}
+function sndNewTile() {
+  snd(220, 0.06, 'sine', 0.08);
+}
+function sndWin() {
+  snd(523, 0.12, 'sine', 0.2);
+  setTimeout(function(){ snd(659, 0.12, 'sine', 0.2); }, 130);
+  setTimeout(function(){ snd(784, 0.25, 'sine', 0.22); }, 260);
+}
+function sndLose() {
+  snd(300, 0.12, 'sawtooth', 0.18);
+  setTimeout(function(){ snd(240, 0.12, 'sawtooth', 0.18); }, 130);
+  setTimeout(function(){ snd(180, 0.3, 'sawtooth', 0.2); }, 260);
+}
+
+// --- High score (localStorage) ---
+function loadBest() {
+  var v = parseInt(localStorage.getItem('hs_2048') || '0', 10);
+  document.getElementById('best').textContent = v;
+  return v;
+}
+function saveBest(s) {
+  var cur = parseInt(localStorage.getItem('hs_2048') || '0', 10);
+  if (s > cur) {
+    localStorage.setItem('hs_2048', s);
+    document.getElementById('best').textContent = s;
+  }
+}
+
+const GRID=4;
+let board,score,won=false,over=false;
+
+function newGame(){
+  board=Array.from({length:GRID},()=>Array(GRID).fill(0));
+  score=0;won=false;over=false;
+  addRandom();addRandom();
+  render();
+  document.getElementById('msg').textContent='';
+}
+
+function addRandom(){
+  let empty=[];
+  for(let r=0;r<GRID;r++)for(let c=0;c<GRID;c++)if(!board[r][c])empty.push([r,c]);
+  if(!empty.length)return false;
+  let [r,c]=empty[Math.floor(Math.random()*empty.length)];
+  board[r][c]=Math.random()<0.9?2:4;
+  return true;
+}
+
+function render(){
+  const g=document.getElementById('grid');
+  g.innerHTML='';
+  for(let r=0;r<GRID;r++)for(let c=0;c<GRID;c++){
+    const v=board[r][c];
+    const d=document.createElement('div');
+    let cls='cell';
+    if(v===0)cls+='';
+    else if(v>2048)cls+=' chigh';
+    else cls+=' c'+v;
+    d.className=cls;
+    if(v>0)d.textContent=v;
+    g.appendChild(d);
+  }
+  document.getElementById('score').textContent=score;
+  saveBest(score);
+}
+
+function slide(row){
+  let a=row.filter(x=>x);
+  var merged = false;
+  var mergedVals = [];
+  for(let i=0;i<a.length-1;i++){
+    if(a[i]===a[i+1]){
+      a[i]*=2;score+=a[i];
+      mergedVals.push(a[i]);
+      if(a[i]===2048&&!won){won=true;}
+      a.splice(i+1,1);
+    }
+  }
+  while(a.length<GRID)a.push(0);
+  return {row:a, merges:mergedVals};
+}
+
+function move(dir){
+  if(over)return;
+  let moved=false;
+  var allMerges=[];
+
+  if(dir==='left'){
+    for(let r=0;r<GRID;r++){
+      let res=slide([...board[r]]);
+      if(res.row.join()!==board[r].join())moved=true;
+      board[r]=res.row;
+      allMerges=allMerges.concat(res.merges);
+    }
+  }else if(dir==='right'){
+    for(let r=0;r<GRID;r++){
+      let res=slide([...board[r]].reverse());
+      let newRow=res.row.reverse();
+      if(newRow.join()!==board[r].join())moved=true;
+      board[r]=newRow;
+      allMerges=allMerges.concat(res.merges);
+    }
+  }else if(dir==='up'){
+    for(let c=0;c<GRID;c++){
+      let col=board.map(r=>r[c]);
+      let res=slide(col);
+      if(res.row.join()!==col.join())moved=true;
+      for(let r=0;r<GRID;r++)board[r][c]=res.row[r];
+      allMerges=allMerges.concat(res.merges);
+    }
+  }else if(dir==='down'){
+    for(let c=0;c<GRID;c++){
+      let col=board.map(r=>r[c]).reverse();
+      let res=slide(col);
+      let newCol=res.row.reverse();
+      let orig=board.map(r=>r[c]);
+      if(newCol.join()!==orig.join())moved=true;
+      for(let r=0;r<GRID;r++)board[r][c]=newCol[r];
+      allMerges=allMerges.concat(res.merges);
+    }
+  }
+
+  if(moved){
+    // Play merge sound for highest merged value
+    if(allMerges.length>0){
+      var maxMerge = Math.max.apply(null, allMerges);
+      sndMerge(maxMerge);
+    }
+    var added = addRandom();
+    if(added) sndNewTile();
+    render();
+  }
+
+  if(won){
+    sndWin();
+    document.getElementById('msg').textContent='You reached 2048! Keep going!';
+    won=false;
+  }
+  if(isGameOver()){
+    over=true;
+    sndLose();
+    document.getElementById('msg').textContent='Game Over! Final: '+score;
+  }
+}
+
+function isGameOver(){
+  for(let r=0;r<GRID;r++)for(let c=0;c<GRID;c++){
+    if(!board[r][c])return false;
+    if(c<GRID-1&&board[r][c]===board[r][c+1])return false;
+    if(r<GRID-1&&board[r][c]===board[r+1][c])return false;
+  }
+  return true;
+}
+
+document.addEventListener('keydown',e=>{
+  const map={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};
+  if(map[e.key]){e.preventDefault();move(map[e.key]);}
+});
+
+let tx=null,ty=null;
+document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
+document.addEventListener('touchend',e=>{
+  if(tx===null)return;
+  let dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;
+  if(Math.abs(dx)<20&&Math.abs(dy)<20)return;
+  if(Math.abs(dx)>Math.abs(dy))move(dx>0?'right':'left');
+  else move(dy>0?'down':'up');
+  tx=ty=null;
+},{passive:true});
+
+loadBest();
+newGame();
+</script>
+</body>
+</html>
