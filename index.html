@@ -1,1026 +1,513 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Ender's Game World!</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      html { height: 100%; }
-      body {
-        background: #1a0000;
-        font-family: Arial, sans-serif;
-        color: white;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 8px 12px;
-        overflow-y: auto;
-        overflow-x: hidden;
-        min-height: 100%;
-      }
-      h1 { font-size: 24px; color: yellow; margin-bottom: 2px; }
-      .subtitle {
-        font-size: 12px;
-        color: #ffaaaa;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-        justify-content: center;
-      }
-      .subtitle a {
-        color: #ffaaaa;
-        font-size: 11px;
-        text-decoration: none;
-        border: 1px solid #ff6666;
-        padding: 2px 8px;
-        border-radius: 6px;
-        white-space: nowrap;
-      }
-      .subtitle a:hover { color: yellow; border-color: yellow; }
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
-        width: 100%;
-        max-width: 900px;
-        padding-bottom: 16px;
-      }
-      .game-card {
-        background: darkred;
-        border-radius: 12px;
-        padding: 6px 4px;
-        text-align: center;
-        text-decoration: none;
-        color: white;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 0;
-        transition: transform 0.1s, filter 0.1s;
-        -webkit-tap-highlight-color: transparent;
-        touch-action: manipulation;
-        cursor: pointer;
-      }
-      .game-card:active { transform: scale(0.96); filter: brightness(1.4); }
-      .game-emoji { font-size: 104px; line-height: 1; margin-bottom: 10px; }
-      .game-name { font-size: 10px; font-weight: bold; line-height: 1.2; }
-      .game-desc { font-size: 9px; color: #ffcccc; line-height: 1.2; }
-      .dates {
-        display: flex;
-        gap: 6px;
-        margin-top: 4px;
-        justify-content: center;
-      }
-      .date-col {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-      .date-key {
-        font-size: 7px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: rgba(255,200,200,0.7);
-      }
-      .date-val {
-        font-size: 9px;
-        color: #ffe8e8;
-        font-weight: bold;
-      }
-      #filter-bar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 5px;
-        justify-content: center;
-        margin-bottom: 8px;
-        width: 100%;
-        max-width: 900px;
-      }
-      .cat-btn {
-        background: #2a0000;
-        color: #ffcc00;
-        border: 1.5px solid #ff6666;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        cursor: pointer;
-        white-space: nowrap;
-        -webkit-tap-highlight-color: transparent;
-      }
-      .cat-btn.active { background: #cc0000; color: white; border-color: yellow; }
-      #search-input {
-        background: rgba(0,0,0,0.4);
-        border: 1.5px solid #ff6666;
-        color: white;
-        padding: 5px 14px;
-        border-radius: 20px;
-        font-size: 13px;
-        width: 180px;
-        outline: none;
-      }
-      #search-input::placeholder { color: #ff9999; }
-      #search-input:focus { border-color: yellow; }
-      #recent-section { width: 100%; max-width: 900px; margin-bottom: 6px; }
-      #recent-label { font-size: 11px; color: #ffaaaa; margin-bottom: 4px; text-align: left; }
-      #recent-grid {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 6px;
-      }
-      #no-results { color: #ffaaaa; font-size: 14px; padding: 20px; display: none; text-align: center; }
-    </style>
-    <script>
-      // Redirect to login page if never logged in (localStorage persists forever)
-      if (!localStorage.getItem('visitorLogged')) {
-        location.href = 'login.html';
-      }
-    </script>
-  </head>
-  <body>
-    <h1>🎮 Ender's Game World!</h1>
-    <p class="subtitle">
-      <span id="welcome">Pick a game to play!</span>
-      <a href="leaderboard.html">🏆 Leaderboard</a>
-      <a href="visitors.html">📋 Visitor Log</a>
-    </p>
-    <div id="recent-section" style="display:none">
-      <div id="recent-label">⏱️ Recently Played</div>
-      <div id="recent-grid"></div>
-    </div>
-    <div id="filter-bar">
-      <input type="text" id="search-input" placeholder="🔍 Search games...">
-      <button class="cat-btn active" onclick="setFilter('all',this)">All</button>
-      <button class="cat-btn" onclick="setFilter('arcade',this)">🕹️ Arcade</button>
-      <button class="cat-btn" onclick="setFilter('sports',this)">🏆 Sports</button>
-      <button class="cat-btn" onclick="setFilter('puzzle',this)">🧩 Puzzle</button>
-      <button class="cat-btn" onclick="setFilter('board',this)">🃏 Board</button>
-      <button class="cat-btn" onclick="setFilter('creative',this)">🎨 Creative</button>
-      <button class="cat-btn" onclick="setFilter('world3d',this)">🌍 3D Worlds</button>
-    </div>
-    <div id="no-results">No games found! Try a different search.</div>
-    <div class="grid">
-
-      <a class="game-card" href="slotmachine.html">
-        <div class="game-emoji">🎰</div>
-        <div class="game-name">Slot Machine</div>
-        <div class="game-desc">Spin to win credits!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="whackamole.html">
-        <div class="game-emoji">🔨</div>
-        <div class="game-name">Whack-a-Mole</div>
-        <div class="game-desc">Whack those moles!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="bubbleshooter.html">
-        <div class="game-emoji">🫧</div>
-        <div class="game-name">Bubble Shooter</div>
-        <div class="game-desc">Pop matching bubbles!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="jewelmatch.html">
-        <div class="game-emoji">💎</div>
-        <div class="game-name">Jewel Match</div>
-        <div class="game-desc">Swap &amp; match 3!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="carracer.html">
-        <div class="game-emoji">🏎️</div>
-        <div class="game-name">Car Racer</div>
-        <div class="game-desc">Dodge the traffic!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-
-      <a class="game-card" href="fruitcatcher.html">
-        <div class="game-emoji">🍎</div>
-        <div class="game-name">Fruit Catcher</div>
-        <div class="game-desc">Catch fruits, dodge bombs!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="colorflood.html">
-        <div class="game-emoji">🌊</div>
-        <div class="game-name">Color Flood</div>
-        <div class="game-desc">Flood the grid with color!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      <a class="game-card" href="slidingpuzzle.html">
-        <div class="game-emoji">🔢</div>
-        <div class="game-name">Sliding Puzzle</div>
-        <div class="game-desc">Slide tiles 1-15 into order!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
-      </a>
-      <a class="game-card" href="pipepuzzle.html">
-        <div class="game-emoji">🔧</div>
-        <div class="game-name">Pipe Puzzle</div>
-        <div class="game-desc">Connect source to drain!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
-      </a>
-      <a class="game-card" href="wordladder.html">
-        <div class="game-emoji">📖</div>
-        <div class="game-name">Word Ladder</div>
-        <div class="game-desc">Change one letter at a time!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
-      </a>
-      <a class="game-card" href="towerstacker.html">
-        <div class="game-emoji">🏗️</div>
-        <div class="game-name">Tower Stacker</div>
-        <div class="game-desc">Stack the platforms!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="endlessrunner.html">
-        <div class="game-emoji">🏃</div>
-        <div class="game-name">Endless Runner</div>
-        <div class="game-desc">Jump over obstacles!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="fishinggame.html">
-        <div class="game-emoji">🎣</div>
-        <div class="game-name">Fishing Game</div>
-        <div class="game-desc">Cast and catch fish!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="towerdefense.html">
-        <div class="game-emoji">🏰</div>
-        <div class="game-name">Tower Defense</div>
-        <div class="game-desc">Stop the enemy waves!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="cookieclicker.html">
-        <div class="game-emoji">🍪</div>
-        <div class="game-name">Cookie Clicker</div>
-        <div class="game-desc">Click for cookies!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="dartsgame.html">
-        <div class="game-emoji">🎯</div>
-        <div class="game-name">Darts Game</div>
-        <div class="game-desc">Hit the bullseye!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="gravityflip.html">
-        <div class="game-emoji">💫</div>
-        <div class="game-name">Gravity Flip</div>
-        <div class="game-desc">Flip gravity to survive!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="mergenumbers.html">
-        <div class="game-emoji">🔢</div>
-        <div class="game-name">Merge Numbers</div>
-        <div class="game-desc">Slide and merge tiles!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="museum3d.html">
-        <div class="game-emoji">🏛️</div>
-        <div class="game-name">Museum 3D</div>
-        <div class="game-desc">Explore natural history!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
-      </a>
-      <a class="game-card" href="volcano3d.html">
-        <div class="game-emoji">🌋</div>
-        <div class="game-name">Volcano Island 3D</div>
-        <div class="game-desc">Explore an active volcano!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
-      </a>
-      <a class="game-card" href="zoo3d.html">
-        <div class="game-emoji">🦁</div>
-        <div class="game-name">Zoo 3D</div>
-        <div class="game-desc">Visit the animal kingdom!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
-      </a>
-      <a class="game-card" href="balloongame.html">
-        <div class="game-emoji">🎈</div>
-        <div class="game-name">Balloon Pop</div>
-        <div class="game-desc">Pop balloons before they fly away!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
-      </a>
-      <a class="game-card" href="spaceshooter.html">
-        <div class="game-emoji">👾</div>
-        <div class="game-name">Space Shooter</div>
-        <div class="game-desc">Shoot enemy waves in space!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
-      </a>
-
-      <a class="game-card" href="basketball.html">
-        <div class="game-emoji">🏀</div>
-        <div class="game-name">Basketball</div>
-        <div class="game-desc">Shoot hoops!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="soccer.html">
-        <div class="game-emoji">⚽</div>
-        <div class="game-name">Penalty Kicks</div>
-        <div class="game-desc">Score against the keeper!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="bowling.html">
-        <div class="game-emoji">🎳</div>
-        <div class="game-name">Bowling</div>
-        <div class="game-desc">Roll for a strike!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="archery.html">
-        <div class="game-emoji">🏹</div>
-        <div class="game-name">Archery</div>
-        <div class="game-desc">Hit the bullseye!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="minigolf.html">
-        <div class="game-emoji">⛳</div>
-        <div class="game-name">Mini Golf</div>
-        <div class="game-desc">9 holes of fun!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="piano.html">
-        <div class="game-emoji">🎹</div>
-        <div class="game-name">Piano</div>
-        <div class="game-desc">Play the keyboard!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="drumkit.html">
-        <div class="game-emoji">🥁</div>
-        <div class="game-name">Drum Kit</div>
-        <div class="game-desc">Hit the drums!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="paintapp.html">
-        <div class="game-emoji">🎨</div>
-        <div class="game-name">Paint</div>
-        <div class="game-desc">Draw anything!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="rhythmgame.html">
-        <div class="game-emoji">🎵</div>
-        <div class="game-name">Rhythm Game</div>
-        <div class="game-desc">Hit the beat!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="jigsaw.html">
-        <div class="game-emoji">🧩</div>
-        <div class="game-name">Jigsaw Puzzle</div>
-        <div class="game-desc">Assemble the pieces!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="lightsout.html">
-        <div class="game-emoji">💡</div>
-        <div class="game-name">Lights Out</div>
-        <div class="game-desc">Turn off all the lights!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="nonogram.html">
-        <div class="game-emoji">🖼️</div>
-        <div class="game-name">Nonogram</div>
-        <div class="game-desc">Picross pixel art!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="kakuro.html">
-        <div class="game-emoji">➕</div>
-        <div class="game-name">Kakuro</div>
-        <div class="game-desc">Number crossword!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="numberlink.html">
-        <div class="game-emoji">🔗</div>
-        <div class="game-name">Number Link</div>
-        <div class="game-desc">Connect the numbers!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="calcudoku.html">
-        <div class="game-emoji">🔣</div>
-        <div class="game-name">Calcudoku</div>
-        <div class="game-desc">Math cage puzzle!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="mall3d.html">
-        <div class="game-emoji">🛍️</div>
-        <div class="game-name">Mall 3D</div>
-        <div class="game-desc">Explore the mall!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="farm3d.html">
-        <div class="game-emoji">🌾</div>
-        <div class="game-name">Farm 3D</div>
-        <div class="game-desc">Explore the farm!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="beach3d.html">
-        <div class="game-emoji">🏖️</div>
-        <div class="game-name">Beach 3D</div>
-        <div class="game-desc">Explore the beach!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="school3d.html">
-        <div class="game-emoji">🏫</div>
-        <div class="game-name">School 3D</div>
-        <div class="game-desc">Explore the school!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-      <a class="game-card" href="airport3d.html">
-        <div class="game-emoji">✈️</div>
-        <div class="game-name">Airport 3D</div>
-        <div class="game-desc">Explore the airport!</div>
-        <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
-      </a>
-
-      <a class="game-card" href="wordle.html">
-        <div class="game-emoji">🟩</div>
-        <div class="game-name">Wordle</div>
-        <div class="game-desc">Guess the 5-letter word!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="hangman.html">
-        <div class="game-emoji">🪢</div>
-        <div class="game-name">Hangman</div>
-        <div class="game-desc">Guess the word letter by letter!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="typingspeed.html">
-        <div class="game-emoji">⌨️</div>
-        <div class="game-name">Typing Speed</div>
-        <div class="game-desc">How fast can you type?</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="wordscramble.html">
-        <div class="game-emoji">🔀</div>
-        <div class="game-name">Word Scramble</div>
-        <div class="game-desc">Unscramble the word!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="crossword.html">
-        <div class="game-emoji">✏️</div>
-        <div class="game-name">Crossword</div>
-        <div class="game-desc">Mini crossword puzzle!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="dinorun.html">
-        <div class="game-emoji">🦕</div>
-        <div class="game-name">Dino Run</div>
-        <div class="game-desc">Jump over obstacles!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="simonsays.html">
-        <div class="game-emoji">🔴</div>
-        <div class="game-name">Simon Says</div>
-        <div class="game-desc">Repeat the pattern!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="pinball.html">
-        <div class="game-emoji">⚪</div>
-        <div class="game-name">Pinball</div>
-        <div class="game-desc">Hit the bumpers!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="helicopter.html">
-        <div class="game-emoji">🚁</div>
-        <div class="game-name">Helicopter</div>
-        <div class="game-desc">Fly through the cave!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="breakout.html">
-        <div class="game-emoji">🏓</div>
-        <div class="game-name">Breakout</div>
-        <div class="game-desc">Smash all the bricks!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="battleship.html">
-        <div class="game-emoji">🚢</div>
-        <div class="game-name">Battleship</div>
-        <div class="game-desc">Sink the enemy fleet!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="tictactoe.html">
-        <div class="game-emoji">❌</div>
-        <div class="game-name">Tic Tac Toe</div>
-        <div class="game-desc">Beat the unbeatable AI!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="mastermind.html">
-        <div class="game-emoji">🔐</div>
-        <div class="game-name">Mastermind</div>
-        <div class="game-desc">Crack the color code!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="sokoban.html">
-        <div class="game-emoji">📦</div>
-        <div class="game-name">Sokoban</div>
-        <div class="game-desc">Push boxes onto targets!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="mahjong.html">
-        <div class="game-emoji">🀄</div>
-        <div class="game-name">Mahjong</div>
-        <div class="game-desc">Match the free tiles!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="underwater3d.html">
-        <div class="game-emoji">🐠</div>
-        <div class="game-name">Underwater 3D</div>
-        <div class="game-desc">Explore the ocean!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="castle3d.html">
-        <div class="game-emoji">🏰</div>
-        <div class="game-name">Castle 3D</div>
-        <div class="game-desc">Explore a medieval castle!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="jungle3d.html">
-        <div class="game-emoji">🌿</div>
-        <div class="game-name">Jungle 3D</div>
-        <div class="game-desc">Explore the jungle!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="dinomuseum3d.html">
-        <div class="game-emoji">🦖</div>
-        <div class="game-name">Dino Museum 3D</div>
-        <div class="game-desc">Walk with the dinosaurs!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="piratecove3d.html">
-        <div class="game-emoji">🏴‍☠️</div>
-        <div class="game-name">Pirate Cove 3D</div>
-        <div class="game-desc">Explore the pirate cove!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-
-      <a class="game-card" href="asteroids.html">
-        <div class="game-emoji">🚀</div>
-        <div class="game-name">Asteroids</div>
-        <div class="game-desc">Shoot the asteroids!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="spaceinvaders.html">
-        <div class="game-emoji">👾</div>
-        <div class="game-name">Space Invaders</div>
-        <div class="game-desc">Defend the Earth!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="frogger.html">
-        <div class="game-emoji">🐸</div>
-        <div class="game-name">Frogger</div>
-        <div class="game-desc">Cross the road safely!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="pacman.html">
-        <div class="game-emoji">🟡</div>
-        <div class="game-name">Pac-Man</div>
-        <div class="game-desc">Eat the dots, dodge ghosts!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="flappybird.html">
-        <div class="game-emoji">🐦</div>
-        <div class="game-name">Flappy Bird</div>
-        <div class="game-desc">Dodge the pipes!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="blackjack.html">
-        <div class="game-emoji">🃏</div>
-        <div class="game-name">Blackjack</div>
-        <div class="game-desc">Beat the dealer to 21!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="solitaire.html">
-        <div class="game-emoji">🂡</div>
-        <div class="game-name">Solitaire</div>
-        <div class="game-desc">Classic Klondike!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="memorymatch.html">
-        <div class="game-emoji">🎴</div>
-        <div class="game-name">Memory Cards</div>
-        <div class="game-desc">Find all the pairs!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="checkers.html">
-        <div class="game-emoji">⬛</div>
-        <div class="game-name">Checkers</div>
-        <div class="game-desc">Classic checkers vs AI!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="yahtzee.html">
-        <div class="game-emoji">🎲</div>
-        <div class="game-name">Yahtzee</div>
-        <div class="game-desc">Roll for the best score!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="egypt3d.html">
-        <div class="game-emoji">🏺</div>
-        <div class="game-name">Egypt 3D</div>
-        <div class="game-desc">Explore ancient pyramids!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="haunted3d.html">
-        <div class="game-emoji">👻</div>
-        <div class="game-name">Haunted House 3D</div>
-        <div class="game-desc">Explore the haunted house!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="spacestation3d.html">
-        <div class="game-emoji">🛸</div>
-        <div class="game-name">Space Station 3D</div>
-        <div class="game-desc">Walk the space station!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="wildwest3d.html">
-        <div class="game-emoji">🤠</div>
-        <div class="game-name">Wild West 3D</div>
-        <div class="game-desc">Explore the frontier!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-
-      <a class="game-card" href="chess.html">
-        <div class="game-emoji">♟️</div>
-        <div class="game-name">Chess</div>
-        <div class="game-desc">Full chess vs AI!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="tetris.html">
-        <div class="game-emoji">🟦</div>
-        <div class="game-name">Tetris</div>
-        <div class="game-desc">Classic block stacker!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="connectfour.html">
-        <div class="game-emoji">🔴</div>
-        <div class="game-name">Connect Four</div>
-        <div class="game-desc">Minimax AI challenge!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="sudoku.html">
-        <div class="game-emoji">🔢</div>
-        <div class="game-name">Sudoku</div>
-        <div class="game-desc">3 difficulty levels!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="minesweeper.html">
-        <div class="game-emoji">💣</div>
-        <div class="game-name">Minesweeper</div>
-        <div class="game-desc">Find all the mines!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="game2048.html">
-        <div class="game-emoji">🧮</div>
-        <div class="game-name">2048</div>
-        <div class="game-desc">Merge tiles to 2048!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div>
-        </div>
-      </a>
-
-      <a class="game-card" href="snake.html">
-        <div class="game-emoji">🐍</div>
-        <div class="game-name">Snake</div>
-        <div class="game-desc">Classic snake game!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 28</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 28</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="pong.html">
-        <div class="game-emoji">🏓</div>
-        <div class="game-name">Pong</div>
-        <div class="game-desc">2-player paddle battle!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 28</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 28</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="brick-breaker.html">
-        <div class="game-emoji">🧱</div>
-        <div class="game-name">Brick Breaker</div>
-        <div class="game-desc">Break all the bricks!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 28</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 28</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="trivia.html">
-        <div class="game-emoji">🧠</div>
-        <div class="game-name">Trivia Quiz</div>
-        <div class="game-desc">10 random questions!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 28</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 28</span></div>
-        </div>
-      </a>
-
-      <a class="game-card" href="puzzle-box.html">
-        <div class="game-emoji">🧩</div>
-        <div class="game-name">Puzzle Box</div>
-        <div class="game-desc">Word searches &amp; mazes!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 27</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 27</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="monuments.html">
-        <div class="game-emoji">🏛️</div>
-        <div class="game-name">Monuments 3D</div>
-        <div class="game-desc">Explore monuments in 3D!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 27</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 11</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="pirate-ship.html">
-        <div class="game-emoji">⚓</div>
-        <div class="game-name">Pirate Ship</div>
-        <div class="game-desc">Battle on the high seas!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">May 17</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">May 16</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="pool.html">
-        <div class="game-emoji">🎱</div>
-        <div class="game-name">Pool</div>
-        <div class="game-desc">Classic billiards!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">Apr 26</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 26</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="titanic3d.html">
-        <div class="game-emoji">🎮</div>
-        <div class="game-name">Titanic 3D</div>
-        <div class="game-desc">WASD + mouse like Minecraft!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">Apr 13</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 13</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="titanic.html">
-        <div class="game-emoji">🚢</div>
-        <div class="game-name">Titanic Story</div>
-        <div class="game-desc">Choices on the Titanic!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">Apr 13</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 13</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="pizza.html">
-        <div class="game-emoji">🍕</div>
-        <div class="game-name">Last Pizza Slice</div>
-        <div class="game-desc">2 players eat pizza!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">Apr 13</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 13</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="balloons.html">
-        <div class="game-emoji">🎈</div>
-        <div class="game-name">Pop the Balloons</div>
-        <div class="game-desc">Tap before they float away!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">Apr 13</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 13</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="turtles.html">
-        <div class="game-emoji">🐢</div>
-        <div class="game-name">Turtle Race</div>
-        <div class="game-desc">2 players race to finish!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">Apr 13</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 13</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="memory.html">
-        <div class="game-emoji">🧠</div>
-        <div class="game-name">Memory Match</div>
-        <div class="game-desc">Find the matching pairs!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">Apr 13</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 13</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="stars.html">
-        <div class="game-emoji">🌟</div>
-        <div class="game-name">Shooting Stars</div>
-        <div class="game-desc">Catch the flying stars!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">Apr 13</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 13</span></div>
-        </div>
-      </a>
-      <a class="game-card" href="numbers.html">
-        <div class="game-emoji">🔢</div>
-        <div class="game-name">Number Blaster</div>
-        <div class="game-desc">Tap numbers 1, 2, 3...!</div>
-        <div class="dates">
-          <div class="date-col"><span class="date-key">updated</span><span class="date-val">Apr 13</span></div>
-          <div class="date-col"><span class="date-key">started</span><span class="date-val">Apr 13</span></div>
-        </div>
-      </a>
-
-    </div>
-    <script>
-      var name = localStorage.getItem('visitorName');
-      if (name) document.getElementById('welcome').textContent = 'Welcome, ' + name + '! Pick a game!';
-
-      // Category mapping
-      var catMap = {
-        'asteroids.html':'arcade','spaceinvaders.html':'arcade','frogger.html':'arcade','pacman.html':'arcade',
-        'flappybird.html':'arcade','snake.html':'arcade','pong.html':'arcade','dinorun.html':'arcade',
-        'helicopter.html':'arcade','breakout.html':'arcade','pinball.html':'arcade','carracer.html':'arcade',
-        'bubbleshooter.html':'arcade','jewelmatch.html':'arcade','balloons.html':'arcade','stars.html':'arcade',
-        'numbers.html':'arcade','brick-breaker.html':'arcade','whackamole.html':'arcade',
-        'fruitcatcher.html':'arcade','endlessrunner.html':'arcade','gravityflip.html':'arcade','towerstacker.html':'arcade',
-        'towerdefense.html':'arcade','cookieclicker.html':'arcade',
-        'fishinggame.html':'sports','dartsgame.html':'sports',
-        'colorflood.html':'puzzle','slidingpuzzle.html':'puzzle','pipepuzzle.html':'puzzle','wordladder.html':'puzzle','mergenumbers.html':'puzzle',
-        'game2048.html':'puzzle','minesweeper.html':'puzzle','sudoku.html':'puzzle','chess.html':'puzzle',
-        'tetris.html':'puzzle','connectfour.html':'puzzle','crossword.html':'puzzle','wordle.html':'puzzle',
-        'hangman.html':'puzzle','typingspeed.html':'puzzle','wordscramble.html':'puzzle','lightsout.html':'puzzle',
-        'nonogram.html':'puzzle','kakuro.html':'puzzle','numberlink.html':'puzzle','calcudoku.html':'puzzle',
-        'mahjong.html':'puzzle','mastermind.html':'puzzle','sokoban.html':'puzzle','simonsays.html':'puzzle',
-        'trivia.html':'puzzle','puzzle-box.html':'puzzle',
-        'basketball.html':'sports','soccer.html':'sports','bowling.html':'sports','archery.html':'sports',
-        'minigolf.html':'sports','pool.html':'sports',
-        'blackjack.html':'board','solitaire.html':'board','memorymatch.html':'board','checkers.html':'board',
-        'yahtzee.html':'board','tictactoe.html':'board','battleship.html':'board','slotmachine.html':'board',
-        'memory.html':'board',
-        'egypt3d.html':'world3d','haunted3d.html':'world3d','spacestation3d.html':'world3d',
-        'wildwest3d.html':'world3d','underwater3d.html':'world3d','castle3d.html':'world3d',
-        'jungle3d.html':'world3d','dinomuseum3d.html':'world3d','piratecove3d.html':'world3d',
-        'mall3d.html':'world3d','farm3d.html':'world3d','beach3d.html':'world3d','school3d.html':'world3d',
-        'airport3d.html':'world3d','monuments.html':'world3d','titanic3d.html':'world3d','pirate-ship.html':'world3d',
-        'museum3d.html':'world3d','volcano3d.html':'world3d','zoo3d.html':'world3d',
-        'balloongame.html':'arcade','spaceshooter.html':'arcade',
-        'piano.html':'creative','drumkit.html':'creative','paintapp.html':'creative','rhythmgame.html':'creative',
-        'jigsaw.html':'creative','titanic.html':'creative','pizza.html':'creative','turtles.html':'creative'
-      };
-
-      // Apply categories and track clicks
-      document.querySelectorAll('.game-card').forEach(function(card) {
-        var href = card.getAttribute('href');
-        card.setAttribute('data-cat', catMap[href] || 'arcade');
-        card.addEventListener('click', function() {
-          var recent = JSON.parse(localStorage.getItem('recentGames') || '[]');
-          recent = [href].concat(recent.filter(function(h){return h!==href;})).slice(0,5);
-          localStorage.setItem('recentGames', JSON.stringify(recent));
-        });
+<head>
+  <title>Ender's Game World!</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+    body { background: #1a0000; font-family: Arial, sans-serif; color: white; display: flex; flex-direction: column; align-items: center; padding: 8px 12px; overflow-y: auto; overflow-x: hidden; min-height: 100%; }
+    h1 { font-size: 24px; color: yellow; margin-bottom: 2px; }
+    .subtitle { font-size: 12px; color: #ffaaaa; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .subtitle a { color: #ffaaaa; font-size: 11px; text-decoration: none; border: 1px solid #ff6666; padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+    .subtitle a:hover { color: yellow; border-color: yellow; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; max-width: 900px; padding-bottom: 16px; }
+    .game-card { background: darkred; border-radius: 12px; padding: 6px 4px; text-align: center; text-decoration: none; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; transition: transform 0.1s, filter 0.1s; -webkit-tap-highlight-color: transparent; touch-action: manipulation; cursor: pointer; }
+    .game-card:active { transform: scale(0.96); filter: brightness(1.4); }
+    .game-emoji { font-size: 40px; line-height: 1; margin-bottom: 4px; }
+    .game-name { font-size: 10px; font-weight: bold; line-height: 1.2; }
+    .game-desc { font-size: 9px; color: #ffcccc; line-height: 1.2; }
+    .dates { display: flex; gap: 6px; margin-top: 4px; justify-content: center; }
+    .date-col { display: flex; flex-direction: column; align-items: center; }
+    .date-key { font-size: 7px; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,200,200,0.7); }
+    .date-val { font-size: 9px; color: #ffe8e8; font-weight: bold; }
+    #filter-bar { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-bottom: 8px; width: 100%; max-width: 900px; }
+    .cat-btn { background: #2a0000; color: #ffcc00; border: 1.5px solid #ff6666; padding: 4px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+    .cat-btn.active { background: #cc0000; color: white; border-color: yellow; }
+    #search-input { background: rgba(0,0,0,0.4); border: 1.5px solid #ff6666; color: white; padding: 5px 14px; border-radius: 20px; font-size: 13px; width: 180px; outline: none; }
+    #search-input::placeholder { color: #ff9999; }
+    #search-input:focus { border-color: yellow; }
+    #recent-section { width: 100%; max-width: 900px; margin-bottom: 6px; }
+    #recent-label { font-size: 11px; color: #ffaaaa; margin-bottom: 4px; text-align: left; }
+    #recent-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    #no-results { color: #ffaaaa; font-size: 14px; padding: 20px; display: none; text-align: center; }
+    #game-count { font-size: 10px; color: #ff9999; text-align: center; margin-bottom: 4px; }
+  </style>
+  <script>if (!localStorage.getItem('visitorLogged')) { location.href = 'login.html'; }</script>
+</head>
+<body>
+  <h1>🎮 Ender's Game World!</h1>
+  <p class="subtitle">
+    <span id="welcome">Pick a game to play!</span>
+    <a href="leaderboard.html">🏆 Leaderboard</a>
+    <a href="visitors.html">📋 Visitor Log</a>
+  </p>
+  <div id="recent-section" style="display:none">
+    <div id="recent-label">&#x23F1;&#xFE0F; Recently Played</div>
+    <div id="recent-grid"></div>
+  </div>
+  <div id="filter-bar">
+    <input type="text" id="search-input" placeholder="&#x1F50D; Search games...">
+    <button class="cat-btn active" onclick="setFilter('all',this)">All</button>
+    <button class="cat-btn" onclick="setFilter('arcade',this)">&#x1F579;&#xFE0F; Arcade</button>
+    <button class="cat-btn" onclick="setFilter('sports',this)">&#x1F3C6; Sports</button>
+    <button class="cat-btn" onclick="setFilter('puzzle',this)">&#x1F9E9; Puzzle</button>
+    <button class="cat-btn" onclick="setFilter('board',this)">&#x1F0CF; Board</button>
+    <button class="cat-btn" onclick="setFilter('creative',this)">&#x1F3A8; Creative</button>
+    <button class="cat-btn" onclick="setFilter('world3d',this)">&#x1F30D; 3D Worlds</button>
+  </div>
+  <div id="game-count"></div>
+  <div id="no-results">No games found! Try a different search.</div>
+  <div class="grid" id="game-grid">
+    <a class="game-card" href="snake.html" data-cat="arcade" data-name="snake snake arcade eat the food, grow longer!">
+      <div class="game-emoji">🐍</div><div class="game-name">Snake</div><div class="game-desc">Eat the food, grow longer!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 10</span></div></div>
+    </a>
+    <a class="game-card" href="tetris.html" data-cat="arcade" data-name="tetris tetris arcade stack the falling blocks!">
+      <div class="game-emoji">🟦</div><div class="game-name">Tetris</div><div class="game-desc">Stack the falling blocks!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="pacman.html" data-cat="arcade" data-name="pacman pac-man arcade eat dots, dodge ghosts!">
+      <div class="game-emoji">🟡</div><div class="game-name">Pac-Man</div><div class="game-desc">Eat dots, dodge ghosts!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="asteroids.html" data-cat="arcade" data-name="asteroids asteroids arcade blast space rocks!">
+      <div class="game-emoji">🚀</div><div class="game-name">Asteroids</div><div class="game-desc">Blast space rocks!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="spaceinvaders.html" data-cat="arcade" data-name="spaceinvaders space invaders arcade defend earth from aliens!">
+      <div class="game-emoji">👾</div><div class="game-name">Space Invaders</div><div class="game-desc">Defend Earth from aliens!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="flappybird.html" data-cat="arcade" data-name="flappybird flappy bird arcade flap through the pipes!">
+      <div class="game-emoji">🐦</div><div class="game-name">Flappy Bird</div><div class="game-desc">Flap through the pipes!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="frogger.html" data-cat="arcade" data-name="frogger frogger arcade cross the road safely!">
+      <div class="game-emoji">🐸</div><div class="game-name">Frogger</div><div class="game-desc">Cross the road safely!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="pong.html" data-cat="arcade" data-name="pong pong arcade classic paddle game!">
+      <div class="game-emoji">🏓</div><div class="game-name">Pong</div><div class="game-desc">Classic paddle game!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 10</span></div></div>
+    </a>
+    <a class="game-card" href="breakout.html" data-cat="arcade" data-name="breakout breakout arcade break all the bricks!">
+      <div class="game-emoji">🧱</div><div class="game-name">Breakout</div><div class="game-desc">Break all the bricks!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 15</span></div></div>
+    </a>
+    <a class="game-card" href="brick-breaker.html" data-cat="arcade" data-name="brick-breaker brick breaker arcade smash all the bricks!">
+      <div class="game-emoji">🧱</div><div class="game-name">Brick Breaker</div><div class="game-desc">Smash all the bricks!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 10</span></div></div>
+    </a>
+    <a class="game-card" href="dinorun.html" data-cat="arcade" data-name="dinorun dino run arcade jump the cacti!">
+      <div class="game-emoji">🦕</div><div class="game-name">Dino Run</div><div class="game-desc">Jump the cacti!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 15</span></div></div>
+    </a>
+    <a class="game-card" href="helicopter.html" data-cat="arcade" data-name="helicopter helicopter arcade fly through the cave!">
+      <div class="game-emoji">🚁</div><div class="game-name">Helicopter</div><div class="game-desc">Fly through the cave!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 15</span></div></div>
+    </a>
+    <a class="game-card" href="pinball.html" data-cat="arcade" data-name="pinball pinball arcade classic pinball action!">
+      <div class="game-emoji">⚪</div><div class="game-name">Pinball</div><div class="game-desc">Classic pinball action!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 15</span></div></div>
+    </a>
+    <a class="game-card" href="simonsays.html" data-cat="arcade" data-name="simonsays simon says arcade follow the sequence!">
+      <div class="game-emoji">🔵</div><div class="game-name">Simon Says</div><div class="game-desc">Follow the sequence!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 15</span></div></div>
+    </a>
+    <a class="game-card" href="slotmachine.html" data-cat="arcade" data-name="slotmachine slot machine arcade spin to win credits!">
+      <div class="game-emoji">🎰</div><div class="game-name">Slot Machine</div><div class="game-desc">Spin to win credits!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="whackamole.html" data-cat="arcade" data-name="whackamole whack-a-mole arcade whack those moles!">
+      <div class="game-emoji">🔨</div><div class="game-name">Whack-a-Mole</div><div class="game-desc">Whack those moles!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="bubbleshooter.html" data-cat="arcade" data-name="bubbleshooter bubble shooter arcade pop matching bubbles!">
+      <div class="game-emoji">🫧</div><div class="game-name">Bubble Shooter</div><div class="game-desc">Pop matching bubbles!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="carracer.html" data-cat="arcade" data-name="carracer car racer arcade dodge the traffic!">
+      <div class="game-emoji">🏎️</div><div class="game-name">Car Racer</div><div class="game-desc">Dodge the traffic!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="fruitcatcher.html" data-cat="arcade" data-name="fruitcatcher fruit catcher arcade catch fruits, dodge bombs!">
+      <div class="game-emoji">🍎</div><div class="game-name">Fruit Catcher</div><div class="game-desc">Catch fruits, dodge bombs!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="towerstacker.html" data-cat="arcade" data-name="towerstacker tower stacker arcade stack the platforms!">
+      <div class="game-emoji">🏗️</div><div class="game-name">Tower Stacker</div><div class="game-desc">Stack the platforms!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="endlessrunner.html" data-cat="arcade" data-name="endlessrunner endless runner arcade jump over obstacles!">
+      <div class="game-emoji">🏃</div><div class="game-name">Endless Runner</div><div class="game-desc">Jump over obstacles!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="towerdefense.html" data-cat="arcade" data-name="towerdefense tower defense arcade stop the enemy waves!">
+      <div class="game-emoji">🏰</div><div class="game-name">Tower Defense</div><div class="game-desc">Stop the enemy waves!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="gravityflip.html" data-cat="arcade" data-name="gravityflip gravity flip arcade flip gravity to survive!">
+      <div class="game-emoji">💫</div><div class="game-name">Gravity Flip</div><div class="game-desc">Flip gravity to survive!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="spaceshooter.html" data-cat="arcade" data-name="spaceshooter space shooter arcade shoot enemy waves in space!">
+      <div class="game-emoji">👾</div><div class="game-name">Space Shooter</div><div class="game-desc">Shoot enemy waves in space!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="balloongame.html" data-cat="arcade" data-name="balloongame balloon pop arcade pop balloons before they fly away!">
+      <div class="game-emoji">🎈</div><div class="game-name">Balloon Pop</div><div class="game-desc">Pop balloons before they fly away!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="fruitninja.html" data-cat="arcade" data-name="fruitninja fruit ninja arcade slice the fruits!">
+      <div class="game-emoji">🍉</div><div class="game-name">Fruit Ninja</div><div class="game-desc">Slice the fruits!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="dodgemaster.html" data-cat="arcade" data-name="dodgemaster dodge master arcade dodge the falling blocks!">
+      <div class="game-emoji">⚡</div><div class="game-name">Dodge Master</div><div class="game-desc">Dodge the falling blocks!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="galaga.html" data-cat="arcade" data-name="galaga galaga arcade classic alien shooter!">
+      <div class="game-emoji">🛸</div><div class="game-name">Galaga</div><div class="game-desc">Classic alien shooter!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="crossyroad.html" data-cat="arcade" data-name="crossyroad crossy road arcade hop across traffic!">
+      <div class="game-emoji">🐸</div><div class="game-name">Crossy Road</div><div class="game-desc">Hop across traffic!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="cookieclicker.html" data-cat="arcade" data-name="cookieclicker cookie clicker arcade click for cookies!">
+      <div class="game-emoji">🍪</div><div class="game-name">Cookie Clicker</div><div class="game-desc">Click for cookies!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="basketball.html" data-cat="sports" data-name="basketball basketball sports shoot hoops!">
+      <div class="game-emoji">🏀</div><div class="game-name">Basketball</div><div class="game-desc">Shoot hoops!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="soccer.html" data-cat="sports" data-name="soccer penalty kicks sports score against the keeper!">
+      <div class="game-emoji">⚽</div><div class="game-name">Penalty Kicks</div><div class="game-desc">Score against the keeper!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="bowling.html" data-cat="sports" data-name="bowling bowling sports roll for a strike!">
+      <div class="game-emoji">🎳</div><div class="game-name">Bowling</div><div class="game-desc">Roll for a strike!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="archery.html" data-cat="sports" data-name="archery archery sports hit the bullseye!">
+      <div class="game-emoji">🏹</div><div class="game-name">Archery</div><div class="game-desc">Hit the bullseye!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="minigolf.html" data-cat="sports" data-name="minigolf mini golf sports 9 holes of fun!">
+      <div class="game-emoji">⛳</div><div class="game-name">Mini Golf</div><div class="game-desc">9 holes of fun!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="fishinggame.html" data-cat="sports" data-name="fishinggame fishing game sports cast and catch fish!">
+      <div class="game-emoji">🎣</div><div class="game-name">Fishing Game</div><div class="game-desc">Cast and catch fish!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="dartsgame.html" data-cat="sports" data-name="dartsgame darts game sports hit the bullseye!">
+      <div class="game-emoji">🎯</div><div class="game-name">Darts Game</div><div class="game-desc">Hit the bullseye!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="football.html" data-cat="sports" data-name="football football qb sports throw touchdown passes!">
+      <div class="game-emoji">🏈</div><div class="game-name">Football QB</div><div class="game-desc">Throw touchdown passes!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="tennis.html" data-cat="sports" data-name="tennis tennis sports rally to win the set!">
+      <div class="game-emoji">🎾</div><div class="game-name">Tennis</div><div class="game-desc">Rally to win the set!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="darts.html" data-cat="sports" data-name="darts darts 301 sports count down to zero!">
+      <div class="game-emoji">🎯</div><div class="game-name">Darts 301</div><div class="game-desc">Count down to zero!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="game2048.html" data-cat="puzzle" data-name="game2048 2048 puzzle merge tiles to 2048!">
+      <div class="game-emoji">🔢</div><div class="game-name">2048</div><div class="game-desc">Merge tiles to 2048!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="minesweeper.html" data-cat="puzzle" data-name="minesweeper minesweeper puzzle avoid the mines!">
+      <div class="game-emoji">💣</div><div class="game-name">Minesweeper</div><div class="game-desc">Avoid the mines!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="sudoku.html" data-cat="puzzle" data-name="sudoku sudoku puzzle fill in the numbers!">
+      <div class="game-emoji">🔢</div><div class="game-name">Sudoku</div><div class="game-desc">Fill in the numbers!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="wordle.html" data-cat="puzzle" data-name="wordle wordle puzzle guess the 5-letter word!">
+      <div class="game-emoji">📝</div><div class="game-name">Wordle</div><div class="game-desc">Guess the 5-letter word!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 15</span></div></div>
+    </a>
+    <a class="game-card" href="hangman.html" data-cat="puzzle" data-name="hangman hangman puzzle guess the word!">
+      <div class="game-emoji">🪢</div><div class="game-name">Hangman</div><div class="game-desc">Guess the word!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 15</span></div></div>
+    </a>
+    <a class="game-card" href="typingspeed.html" data-cat="puzzle" data-name="typingspeed typing speed puzzle type as fast as you can!">
+      <div class="game-emoji">⌨️</div><div class="game-name">Typing Speed</div><div class="game-desc">Type as fast as you can!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 15</span></div></div>
+    </a>
+    <a class="game-card" href="wordscramble.html" data-cat="puzzle" data-name="wordscramble word scramble puzzle unscramble the letters!">
+      <div class="game-emoji">🔀</div><div class="game-name">Word Scramble</div><div class="game-desc">Unscramble the letters!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 15</span></div></div>
+    </a>
+    <a class="game-card" href="crossword.html" data-cat="puzzle" data-name="crossword crossword puzzle fill in the clues!">
+      <div class="game-emoji">📰</div><div class="game-name">Crossword</div><div class="game-desc">Fill in the clues!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 15</span></div></div>
+    </a>
+    <a class="game-card" href="sokoban.html" data-cat="puzzle" data-name="sokoban sokoban puzzle push boxes to goals!">
+      <div class="game-emoji">📦</div><div class="game-name">Sokoban</div><div class="game-desc">Push boxes to goals!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 18</span></div></div>
+    </a>
+    <a class="game-card" href="lightsout.html" data-cat="puzzle" data-name="lightsout lights out puzzle turn off all the lights!">
+      <div class="game-emoji">💡</div><div class="game-name">Lights Out</div><div class="game-desc">Turn off all the lights!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="nonogram.html" data-cat="puzzle" data-name="nonogram nonogram puzzle logic number grid!">
+      <div class="game-emoji">🟫</div><div class="game-name">Nonogram</div><div class="game-desc">Logic number grid!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="kakuro.html" data-cat="puzzle" data-name="kakuro kakuro puzzle number cross puzzle!">
+      <div class="game-emoji">➕</div><div class="game-name">Kakuro</div><div class="game-desc">Number cross puzzle!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="numberlink.html" data-cat="puzzle" data-name="numberlink number link puzzle connect the numbers!">
+      <div class="game-emoji">🔗</div><div class="game-name">Number Link</div><div class="game-desc">Connect the numbers!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="calcudoku.html" data-cat="puzzle" data-name="calcudoku calcudoku puzzle math-based sudoku!">
+      <div class="game-emoji">🔣</div><div class="game-name">Calcudoku</div><div class="game-desc">Math-based Sudoku!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="jigsaw.html" data-cat="puzzle" data-name="jigsaw jigsaw puzzle piece together the puzzle!">
+      <div class="game-emoji">🧩</div><div class="game-name">Jigsaw</div><div class="game-desc">Piece together the puzzle!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="jewelmatch.html" data-cat="puzzle" data-name="jewelmatch jewel match puzzle swap &amp; match 3!">
+      <div class="game-emoji">💎</div><div class="game-name">Jewel Match</div><div class="game-desc">Swap &amp; match 3!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="colorflood.html" data-cat="puzzle" data-name="colorflood color flood puzzle flood the grid with color!">
+      <div class="game-emoji">🌊</div><div class="game-name">Color Flood</div><div class="game-desc">Flood the grid with color!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="mergenumbers.html" data-cat="puzzle" data-name="mergenumbers merge numbers puzzle slide and merge tiles!">
+      <div class="game-emoji">🔢</div><div class="game-name">Merge Numbers</div><div class="game-desc">Slide and merge tiles!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 29</span></div></div>
+    </a>
+    <a class="game-card" href="puzzle-box.html" data-cat="puzzle" data-name="puzzle-box puzzle box puzzle solve the mystery box!">
+      <div class="game-emoji">🎁</div><div class="game-name">Puzzle Box</div><div class="game-desc">Solve the mystery box!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 1</span></div></div>
+    </a>
+    <a class="game-card" href="slidingpuzzle.html" data-cat="puzzle" data-name="slidingpuzzle sliding puzzle puzzle slide tiles 1-15 in order!">
+      <div class="game-emoji">🔲</div><div class="game-name">Sliding Puzzle</div><div class="game-desc">Slide tiles 1-15 in order!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="pipepuzzle.html" data-cat="puzzle" data-name="pipepuzzle pipe puzzle puzzle connect the pipes!">
+      <div class="game-emoji">🔧</div><div class="game-name">Pipe Puzzle</div><div class="game-desc">Connect the pipes!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="wordladder.html" data-cat="puzzle" data-name="wordladder word ladder puzzle change one letter at a time!">
+      <div class="game-emoji">📖</div><div class="game-name">Word Ladder</div><div class="game-desc">Change one letter at a time!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="blackjack.html" data-cat="board" data-name="blackjack blackjack board beat the dealer!">
+      <div class="game-emoji">🃏</div><div class="game-name">Blackjack</div><div class="game-desc">Beat the dealer!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="solitaire.html" data-cat="board" data-name="solitaire solitaire board classic card game!">
+      <div class="game-emoji">🃏</div><div class="game-name">Solitaire</div><div class="game-desc">Classic card game!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="memorymatch.html" data-cat="board" data-name="memorymatch memory match board find all the pairs!">
+      <div class="game-emoji">🧠</div><div class="game-name">Memory Match</div><div class="game-desc">Find all the pairs!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="checkers.html" data-cat="board" data-name="checkers checkers board jump your opponent!">
+      <div class="game-emoji">♟️</div><div class="game-name">Checkers</div><div class="game-desc">Jump your opponent!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="chess.html" data-cat="board" data-name="chess chess board the classic strategy game!">
+      <div class="game-emoji">♟️</div><div class="game-name">Chess</div><div class="game-desc">The classic strategy game!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="connectfour.html" data-cat="board" data-name="connectfour connect four board four in a row wins!">
+      <div class="game-emoji">🟡</div><div class="game-name">Connect Four</div><div class="game-desc">Four in a row wins!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="yahtzee.html" data-cat="board" data-name="yahtzee yahtzee board roll for the best combo!">
+      <div class="game-emoji">🎲</div><div class="game-name">Yahtzee</div><div class="game-desc">Roll for the best combo!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="battleship.html" data-cat="board" data-name="battleship battleship board sink the fleet!">
+      <div class="game-emoji">🛳️</div><div class="game-name">Battleship</div><div class="game-desc">Sink the fleet!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 18</span></div></div>
+    </a>
+    <a class="game-card" href="tictactoe.html" data-cat="board" data-name="tictactoe tic tac toe board x's and o's!">
+      <div class="game-emoji">❌</div><div class="game-name">Tic Tac Toe</div><div class="game-desc">X's and O's!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 18</span></div></div>
+    </a>
+    <a class="game-card" href="mastermind.html" data-cat="board" data-name="mastermind mastermind board crack the color code!">
+      <div class="game-emoji">🎨</div><div class="game-name">Mastermind</div><div class="game-desc">Crack the color code!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 18</span></div></div>
+    </a>
+    <a class="game-card" href="mahjong.html" data-cat="board" data-name="mahjong mahjong board match the tiles!">
+      <div class="game-emoji">🀄</div><div class="game-name">Mahjong</div><div class="game-desc">Match the tiles!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 18</span></div></div>
+    </a>
+    <a class="game-card" href="trivia.html" data-cat="board" data-name="trivia trivia quiz board test your knowledge!">
+      <div class="game-emoji">❓</div><div class="game-name">Trivia Quiz</div><div class="game-desc">Test your knowledge!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 10</span></div></div>
+    </a>
+    <a class="game-card" href="piano.html" data-cat="creative" data-name="piano piano creative play the keyboard!">
+      <div class="game-emoji">🎹</div><div class="game-name">Piano</div><div class="game-desc">Play the keyboard!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="drumkit.html" data-cat="creative" data-name="drumkit drum kit creative hit the drums!">
+      <div class="game-emoji">🥁</div><div class="game-name">Drum Kit</div><div class="game-desc">Hit the drums!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="paintapp.html" data-cat="creative" data-name="paintapp paint creative draw anything!">
+      <div class="game-emoji">🎨</div><div class="game-name">Paint</div><div class="game-desc">Draw anything!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="rhythmgame.html" data-cat="creative" data-name="rhythmgame rhythm game creative hit the beats!">
+      <div class="game-emoji">🎵</div><div class="game-name">Rhythm Game</div><div class="game-desc">Hit the beats!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="titanic3d.html" data-cat="world3d" data-name="titanic3d titanic 3d world3d explore the titanic!">
+      <div class="game-emoji">🚢</div><div class="game-name">Titanic 3D</div><div class="game-desc">Explore the Titanic!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 10</span></div></div>
+    </a>
+    <a class="game-card" href="egypt3d.html" data-cat="world3d" data-name="egypt3d egypt 3d world3d explore ancient egypt!">
+      <div class="game-emoji">🏺</div><div class="game-name">Egypt 3D</div><div class="game-desc">Explore ancient Egypt!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="haunted3d.html" data-cat="world3d" data-name="haunted3d haunted mansion 3d world3d explore the haunted house!">
+      <div class="game-emoji">👻</div><div class="game-name">Haunted Mansion 3D</div><div class="game-desc">Explore the haunted house!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="spacestation3d.html" data-cat="world3d" data-name="spacestation3d space station 3d world3d explore the space station!">
+      <div class="game-emoji">🚀</div><div class="game-name">Space Station 3D</div><div class="game-desc">Explore the space station!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="wildwest3d.html" data-cat="world3d" data-name="wildwest3d wild west 3d world3d explore the frontier!">
+      <div class="game-emoji">🤠</div><div class="game-name">Wild West 3D</div><div class="game-desc">Explore the frontier!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 12</span></div></div>
+    </a>
+    <a class="game-card" href="underwater3d.html" data-cat="world3d" data-name="underwater3d underwater 3d world3d dive into the deep!">
+      <div class="game-emoji">🤿</div><div class="game-name">Underwater 3D</div><div class="game-desc">Dive into the deep!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 18</span></div></div>
+    </a>
+    <a class="game-card" href="castle3d.html" data-cat="world3d" data-name="castle3d castle 3d world3d explore a medieval castle!">
+      <div class="game-emoji">🏰</div><div class="game-name">Castle 3D</div><div class="game-desc">Explore a medieval castle!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 18</span></div></div>
+    </a>
+    <a class="game-card" href="jungle3d.html" data-cat="world3d" data-name="jungle3d jungle 3d world3d explore the jungle!">
+      <div class="game-emoji">🌿</div><div class="game-name">Jungle 3D</div><div class="game-desc">Explore the jungle!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 18</span></div></div>
+    </a>
+    <a class="game-card" href="dinomuseum3d.html" data-cat="world3d" data-name="dinomuseum3d dino museum 3d world3d meet the dinosaurs!">
+      <div class="game-emoji">🦕</div><div class="game-name">Dino Museum 3D</div><div class="game-desc">Meet the dinosaurs!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 18</span></div></div>
+    </a>
+    <a class="game-card" href="piratecove3d.html" data-cat="world3d" data-name="piratecove3d pirate cove 3d world3d find the treasure!">
+      <div class="game-emoji">☠️</div><div class="game-name">Pirate Cove 3D</div><div class="game-desc">Find the treasure!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 18</span></div></div>
+    </a>
+    <a class="game-card" href="mall3d.html" data-cat="world3d" data-name="mall3d mall 3d world3d explore the shopping mall!">
+      <div class="game-emoji">🛍️</div><div class="game-name">Mall 3D</div><div class="game-desc">Explore the shopping mall!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="farm3d.html" data-cat="world3d" data-name="farm3d farm 3d world3d explore the farm!">
+      <div class="game-emoji">🌾</div><div class="game-name">Farm 3D</div><div class="game-desc">Explore the farm!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="beach3d.html" data-cat="world3d" data-name="beach3d beach 3d world3d explore the beach!">
+      <div class="game-emoji">🏖️</div><div class="game-name">Beach 3D</div><div class="game-desc">Explore the beach!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 29</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="school3d.html" data-cat="world3d" data-name="school3d school 3d world3d explore the school!">
+      <div class="game-emoji">🏫</div><div class="game-name">School 3D</div><div class="game-desc">Explore the school!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="airport3d.html" data-cat="world3d" data-name="airport3d airport 3d world3d explore a busy airport!">
+      <div class="game-emoji">✈️</div><div class="game-name">Airport 3D</div><div class="game-desc">Explore a busy airport!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 22</span></div></div>
+    </a>
+    <a class="game-card" href="museum3d.html" data-cat="world3d" data-name="museum3d museum 3d world3d explore natural history!">
+      <div class="game-emoji">🏛️</div><div class="game-name">Museum 3D</div><div class="game-desc">Explore natural history!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="volcano3d.html" data-cat="world3d" data-name="volcano3d volcano island 3d world3d explore an active volcano!">
+      <div class="game-emoji">🌋</div><div class="game-name">Volcano Island 3D</div><div class="game-desc">Explore an active volcano!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="zoo3d.html" data-cat="world3d" data-name="zoo3d zoo 3d world3d visit the animal kingdom!">
+      <div class="game-emoji">🦁</div><div class="game-name">Zoo 3D</div><div class="game-desc">Visit the animal kingdom!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="dungeon3d.html" data-cat="world3d" data-name="dungeon3d dungeon 3d world3d explore a dark dungeon!">
+      <div class="game-emoji">⚔️</div><div class="game-name">Dungeon 3D</div><div class="game-desc">Explore a dark dungeon!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="city3d.html" data-cat="world3d" data-name="city3d city 3d world3d explore a bustling city!">
+      <div class="game-emoji">🏙️</div><div class="game-name">City 3D</div><div class="game-desc">Explore a bustling city!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+    <a class="game-card" href="aquarium3d.html" data-cat="world3d" data-name="aquarium3d aquarium 3d world3d dive into a giant aquarium!">
+      <div class="game-emoji">🐠</div><div class="game-name">Aquarium 3D</div><div class="game-desc">Dive into a giant aquarium!</div>
+      <div class="dates"><div class="date-col"><span class="date-key">updated</span><span class="date-val">May 30</span></div><div class="date-col"><span class="date-key">started</span><span class="date-val">May 30</span></div></div>
+    </a>
+  </div>
+  <script>
+    var nm = localStorage.getItem('visitorName');
+    if (nm) document.getElementById('welcome').textContent = 'Welcome back, ' + nm + '!';
+    function trackPlay(href,emoji,gname) {
+      var r = JSON.parse(localStorage.getItem('recentGames') || '[]');
+      r = r.filter(function(x){ return x.href !== href; });
+      r.unshift({href:href,emoji:emoji,name:gname});
+      if (r.length > 5) r.length = 5;
+      localStorage.setItem('recentGames', JSON.stringify(r));
+    }
+    function showRecent() {
+      var r = JSON.parse(localStorage.getItem('recentGames') || '[]');
+      if (!r.length) return;
+      var grid = document.getElementById('recent-grid');
+      r.forEach(function(x) {
+        var a = document.createElement('a');
+        a.className = 'game-card'; a.href = x.href;
+        a.innerHTML = '<div class="game-emoji">' + x.emoji + '</div><div class="game-name" style="font-size:9px">' + x.name + '</div>';
+        a.addEventListener('click', function(){ trackPlay(x.href,x.emoji,x.name); });
+        grid.appendChild(a);
       });
-
-      // Recently played
-      var recentHrefs = JSON.parse(localStorage.getItem('recentGames') || '[]');
-      if (recentHrefs.length > 0) {
-        var recentGrid = document.getElementById('recent-grid');
-        recentHrefs.forEach(function(href) {
-          var orig = document.querySelector('.game-card[href="'+href+'"]');
-          if (orig) {
-            var clone = orig.cloneNode(true);
-            recentGrid.appendChild(clone);
-          }
-        });
-        document.getElementById('recent-section').style.display = 'block';
-      }
-
-      // Filter logic
-      var currentCat = 'all', currentSearch = '';
-      function applyFilter() {
-        var cards = document.querySelectorAll('.grid .game-card');
-        var visible = 0;
-        cards.forEach(function(card) {
-          var cat = card.getAttribute('data-cat') || '';
-          var txt = card.textContent.toLowerCase();
-          var catOk = currentCat === 'all' || cat === currentCat;
-          var searchOk = !currentSearch || txt.includes(currentSearch);
-          var show = catOk && searchOk;
-          card.style.display = show ? '' : 'none';
-          if (show) visible++;
-        });
-        document.getElementById('no-results').style.display = visible === 0 ? 'block' : 'none';
-      }
-      function setFilter(cat, btn) {
-        currentCat = cat;
-        document.querySelectorAll('.cat-btn').forEach(function(b){b.classList.remove('active');});
-        btn.classList.add('active');
-        applyFilter();
-      }
-      document.getElementById('search-input').addEventListener('input', function() {
-        currentSearch = this.value.trim().toLowerCase();
-        applyFilter();
+      document.getElementById('recent-section').style.display = 'block';
+    }
+    showRecent();
+    document.querySelectorAll('#game-grid .game-card').forEach(function(c) {
+      c.addEventListener('click', function() {
+        trackPlay(c.getAttribute('href'), c.querySelector('.game-emoji').textContent, c.querySelector('.game-name').textContent);
       });
-    </script>
-  </body>
+    });
+    var currentFilter = 'all', searchText = '';
+    function setFilter(cat, btn) {
+      currentFilter = cat;
+      document.querySelectorAll('.cat-btn').forEach(function(b){ b.classList.remove('active'); });
+      if (btn) btn.classList.add('active');
+      filterGames();
+    }
+    function filterGames() {
+      var cards = document.querySelectorAll('#game-grid .game-card');
+      var q = searchText.toLowerCase().trim();
+      var visible = 0;
+      cards.forEach(function(card) {
+        var cat = card.getAttribute('data-cat') || '';
+        var terms = (card.getAttribute('data-name') || '').toLowerCase();
+        if ((currentFilter === 'all' || cat === currentFilter) && (!q || terms.indexOf(q) >= 0)) {
+          card.style.display = ''; visible++;
+        } else { card.style.display = 'none'; }
+      });
+      document.getElementById('no-results').style.display = visible === 0 ? 'block' : 'none';
+      document.getElementById('game-count').textContent = visible + ' game' + (visible !== 1 ? 's' : '');
+    }
+    document.getElementById('search-input').addEventListener('input', function() { searchText = this.value; filterGames(); });
+    filterGames();
+  </script>
+</body>
 </html>

@@ -1,163 +1,241 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Color Flood</title>
+<title>Color Flood - Ender's Game World</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #1a0000; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial, sans-serif; padding: 10px; }
-#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
-h1 { color: #ffff00; font-size: 22px; margin-bottom: 4px; }
-#hud { color: #ffcccc; font-size: 14px; margin-bottom: 8px; display: flex; gap: 16px; }
+body { background: #1a0000; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+canvas { border: 2px solid #ff6666; border-radius: 8px; display: block; touch-action: none; }
+#hud { color: #ffcccc; font-size: 15px; margin-bottom: 8px; text-align: center; }
 #hud span { color: #ffff00; font-weight: bold; }
-#grid-wrap { border: 2px solid #ff6666; border-radius: 8px; overflow: hidden; display: inline-block; }
-#color-btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
-.color-btn { width: 44px; height: 44px; border-radius: 8px; border: 3px solid transparent; cursor: pointer; transition: transform 0.1s; }
-.color-btn:active { transform: scale(0.9); }
-.color-btn.selected { border-color: white; transform: scale(1.1); }
-#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
-#overlay h2 { color: #ffff00; font-size: 26px; }
-#overlay p { color: #ffcccc; font-size: 15px; }
-.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; padding: 10px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; }
-.btn:hover { background: #cc0000; }
-#diff-row { display: flex; gap: 10px; }
-.diff-btn { background: #2a0000; border: 2px solid #ff6666; color: #ffcccc; padding: 8px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; }
-.diff-btn.active { background: darkred; color: #ffff00; border-color: yellow; }
+button { background: darkred; border: 2px solid #ff6666; color: #ffff00; border-radius: 6px; cursor: pointer; padding: 6px 14px; font-size: 13px; font-weight: bold; }
+button:hover { background: #aa0000; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 10; }
+.overlay h2 { color: #ffff00; font-size: 26px; }
+.overlay p { color: #ffcccc; font-size: 16px; }
+#colorBtns { display: flex; gap: 6px; margin-top: 8px; }
+#colorBtns div { width: 42px; height: 42px; border-radius: 6px; border: 3px solid #770000; cursor: pointer; transition: transform 0.1s; }
+#colorBtns div:hover { transform: scale(1.15); border-color: #ffff00; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+#diffBtns { display: flex; gap: 8px; margin-top: 4px; }
+#btnsRow { display: flex; gap: 10px; margin-top: 8px; }
 </style>
 </head>
 <body>
-<a href="index.html" id="home-btn">🏠 Home</a>
-<h1>🌊 Color Flood</h1>
-<div id="hud">Moves: <span id="mv">0</span>/<span id="maxmv">30</span> &nbsp; Score: <span id="sc">0</span> &nbsp; Best: <span id="hs">0</span></div>
-<div id="grid-wrap"><canvas id="c"></canvas></div>
-<div id="color-btns"></div>
-<div id="overlay">
-  <h2>🌊 Color Flood</h2>
-  <p>Flood the entire grid with one color!</p>
-  <p id="hs-msg" style="color:#ffff00"></p>
-  <div id="diff-row">
-    <button class="diff-btn active" id="easy-btn" onclick="setDiff('easy')">Easy (8x8, 30)</button>
-    <button class="diff-btn" id="hard-btn" onclick="setDiff('hard')">Hard (6x6, 20)</button>
-  </div>
-  <button class="btn" onclick="startGame()">▶ Play</button>
+<a href="index.html" id="home-btn">&#127968; Home</a>
+<div id="hud">Moves: <span id="hMoves">0</span>/<span id="hMax">25</span> &nbsp;|&nbsp; Score: <span id="hScore">0</span> &nbsp;|&nbsp; Best: <span id="hBest">--</span></div>
+<canvas id="c" width="360" height="360"></canvas>
+<div id="colorBtns">
+  <div style="background:#ff4444" onclick="flood(0)"></div>
+  <div style="background:#4488ff" onclick="flood(1)"></div>
+  <div style="background:#44cc44" onclick="flood(2)"></div>
+  <div style="background:#ffdd00" onclick="flood(3)"></div>
+  <div style="background:#ff88dd" onclick="flood(4)"></div>
+  <div style="background:#ff8800" onclick="flood(5)"></div>
 </div>
+<div id="btnsRow">
+  <button onclick="newGame()">New Game</button>
+  <button onclick="cycleDifficulty()">Difficulty: <span id="diffLabel">Normal</span></button>
+</div>
+
+<div id="startOverlay" class="overlay">
+  <h2>🌊 Color Flood</h2>
+  <p>Flood the whole board with one color!</p>
+  <p style="color:#ff9999;font-size:13px;">Click color buttons to expand your territory.</p>
+  <div id="diffBtns">
+    <button onclick="setDiff('easy')">Easy (30)</button>
+    <button onclick="setDiff('normal')">Normal (25)</button>
+    <button onclick="setDiff('hard')">Hard (20)</button>
+  </div>
+  <button onclick="startGame()">▶ Play</button>
+</div>
+
+<div id="endOverlay" class="overlay" style="display:none;">
+  <h2 id="endTitle"></h2>
+  <p id="endMsg"></p>
+  <p>Best Score: <span id="eBest" style="color:#ffff00;font-weight:bold"></span></p>
+  <button onclick="newGame()">New Game</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script>
-const COLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c'];
-const HS_KEY = 'hs_colorflood';
-const audio = new (window.AudioContext || window.webkitAudioContext)();
-let diff = 'easy', grid = [], SIZE = 8, MAX_MOVES = 30, moves = 0, score = 0;
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-
-function beep(freq, dur) {
-  const o = audio.createOscillator(), g = audio.createGain();
-  o.connect(g); g.connect(audio.destination);
-  o.frequency.value = freq; o.type = 'sine';
-  g.gain.setValueAtTime(0.25, audio.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
-  o.start(); o.stop(audio.currentTime + dur);
-}
-function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
-function saveHS(s) { if (s > getHS()) localStorage.setItem(HS_KEY, s); }
-
-function setDiff(d) {
-  diff = d;
-  document.getElementById('easy-btn').classList.toggle('active', d==='easy');
-  document.getElementById('hard-btn').classList.toggle('active', d==='hard');
+var FB_CFG = {apiKey:"AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",authDomain:"enders-games.firebaseapp.com",databaseURL:"https://enders-games-default-rtdb.firebaseio.com",projectId:"enders-games",storageBucket:"enders-games.firebasestorage.app",messagingSenderId:"87049074470",appId:"1:87049074470:web:bc38b35669b43aedceb3e7"};
+var HS_KEY = 'hs_colorflood';
+function getHS(){return parseInt(localStorage.getItem(HS_KEY))||0;}
+function saveHS(s){if(s>getHS())localStorage.setItem(HS_KEY,s);}
+function submitScore(score){
+  var name=localStorage.getItem('visitorName')||'Player';
+  try{var app=firebase.initializeApp(FB_CFG,'lb_colorflood');var db=app.database();db.ref('leaderboard/colorflood').push({name:name,score:score,date:new Date().toLocaleDateString()});}catch(e){}
 }
 
-function startGame() {
-  SIZE = diff==='hard' ? 6 : 8;
-  MAX_MOVES = diff==='hard' ? 20 : 30;
-  const CELL = Math.min(320/SIZE, 52);
-  canvas.width = SIZE*CELL; canvas.height = SIZE*CELL;
-  grid = [];
-  for (let r=0;r<SIZE;r++) { grid[r]=[]; for (let c=0;c<SIZE;c++) grid[r][c]=Math.floor(Math.random()*6); }
-  moves = 0; score = 0;
-  document.getElementById('maxmv').textContent = MAX_MOVES;
-  document.getElementById('overlay').style.display = 'none';
-  buildColorBtns();
-  drawGrid();
-  updateHUD();
+var audio=null;
+function getAudio(){if(!audio){try{audio=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}return audio;}
+function playBeep(freq,dur,type){
+  var ctx2=getAudio();if(!ctx2)return;
+  var o=ctx2.createOscillator();var g=ctx2.createGain();
+  o.connect(g);g.connect(ctx2.destination);
+  o.type=type||'sine';o.frequency.value=freq;
+  g.gain.setValueAtTime(0.18,ctx2.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,ctx2.currentTime+dur);
+  o.start();o.stop(ctx2.currentTime+dur);
 }
 
-function buildColorBtns() {
-  const div = document.getElementById('color-btns');
-  div.innerHTML = '';
-  COLORS.forEach((c,i) => {
-    const btn = document.createElement('button');
-    btn.className = 'color-btn';
-    btn.style.background = c;
-    btn.onclick = () => doFlood(i);
-    div.appendChild(btn);
-  });
+var COLORS=['#ff4444','#4488ff','#44cc44','#ffdd00','#ff88dd','#ff8800'];
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=360, H=360;
+
+var DIFFICULTY={easy:{size:14,maxMoves:30},normal:{size:14,maxMoves:25},hard:{size:16,maxMoves:20}};
+var currentDiff='normal';
+var GRID_SIZE=14, MAX_MOVES=25;
+var CELL_SIZE, OX, OY;
+
+var grid=[], owned=[], moves=0, gameActive=false;
+
+function setDiff(d){
+  currentDiff=d;
+  document.getElementById('diffLabel').textContent=d.charAt(0).toUpperCase()+d.slice(1);
+  GRID_SIZE=DIFFICULTY[d].size;
+  MAX_MOVES=DIFFICULTY[d].maxMoves;
+  document.getElementById('hMax').textContent=MAX_MOVES;
 }
 
-function drawGrid() {
-  const CELL = canvas.width / SIZE;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) {
-    ctx.fillStyle = COLORS[grid[r][c]];
-    ctx.fillRect(c*CELL, r*CELL, CELL-1, CELL-1);
+function cycleDifficulty(){
+  var order=['easy','normal','hard'];
+  var idx=order.indexOf(currentDiff);
+  setDiff(order[(idx+1)%3]);
+  newGame();
+}
+
+function calcLayout(){
+  CELL_SIZE=Math.floor(330/GRID_SIZE);
+  OX=Math.floor((W-CELL_SIZE*GRID_SIZE)/2);
+  OY=Math.floor((H-CELL_SIZE*GRID_SIZE)/2);
+}
+
+function initGrid(){
+  calcLayout();
+  grid=[];owned=[];
+  for(var r=0;r<GRID_SIZE;r++){
+    grid[r]=[];owned[r]=[];
+    for(var c=0;c<GRID_SIZE;c++){
+      grid[r][c]=Math.floor(Math.random()*6);
+      owned[r][c]=false;
+    }
   }
-  // highlight top-left
-  ctx.strokeStyle = 'white'; ctx.lineWidth = 3;
-  ctx.strokeRect(1, 1, CELL-3, CELL-3);
+  // Flood fill owned from (0,0)
+  owned[0][0]=true;
+  var startColor=grid[0][0];
+  expandOwned(startColor);
 }
 
-function flood(target, replacement, r, c, visited) {
-  if (r<0||r>=SIZE||c<0||c>=SIZE||visited[r][c]||grid[r][c]!==target) return;
-  visited[r][c] = true;
-  grid[r][c] = replacement;
-  flood(target, replacement, r+1, c, visited);
-  flood(target, replacement, r-1, c, visited);
-  flood(target, replacement, r, c+1, visited);
-  flood(target, replacement, r, c-1, visited);
+function expandOwned(newColor){
+  // Change all owned cells to newColor
+  for(var r=0;r<GRID_SIZE;r++)for(var c=0;c<GRID_SIZE;c++)if(owned[r][c])grid[r][c]=newColor;
+  // Flood fill: add adjacent cells of newColor
+  var changed=true;
+  while(changed){
+    changed=false;
+    for(var r=0;r<GRID_SIZE;r++){
+      for(var c=0;c<GRID_SIZE;c++){
+        if(!owned[r][c]) continue;
+        var neighbors=[[r-1,c],[r+1,c],[r,c-1],[r,c+1]];
+        for(var i=0;i<neighbors.length;i++){
+          var nr=neighbors[i][0],nc=neighbors[i][1];
+          if(nr>=0&&nr<GRID_SIZE&&nc>=0&&nc<GRID_SIZE&&!owned[nr][nc]&&grid[nr][nc]===newColor){
+            owned[nr][nc]=true; changed=true;
+          }
+        }
+      }
+    }
+  }
 }
 
-function doFlood(colorIdx) {
-  if (moves >= MAX_MOVES) return;
-  const cur = grid[0][0];
-  if (cur === colorIdx) return;
-  const visited = Array.from({length:SIZE}, ()=>new Array(SIZE).fill(false));
-  flood(cur, colorIdx, 0, 0, visited);
+function flood(colorIdx){
+  if(!gameActive) return;
+  var curColor=grid[0][0];
+  if(colorIdx===curColor) return; // same color, no move
   moves++;
-  beep(400 + colorIdx*80, 0.1);
-  drawGrid();
+  expandOwned(colorIdx);
+  playBeep(300+colorIdx*60,0.07,'sine');
   updateHUD();
-  checkWin();
-}
-
-function allSame() {
-  const c = grid[0][0];
-  return grid.every(r => r.every(v => v === c));
-}
-
-function checkWin() {
-  if (allSame()) {
-    score = MAX_MOVES - moves + 1;
-    saveHS(score);
-    setTimeout(() => showEnd('You Win! 🎉', score), 200);
-  } else if (moves >= MAX_MOVES) {
-    setTimeout(() => showEnd('Out of Moves!', 0), 200);
+  draw();
+  var totalOwned=0;
+  for(var r=0;r<GRID_SIZE;r++)for(var c=0;c<GRID_SIZE;c++)if(owned[r][c])totalOwned++;
+  var total=GRID_SIZE*GRID_SIZE;
+  if(totalOwned===total){
+    onWin();
+  } else if(moves>=MAX_MOVES){
+    onLose();
   }
 }
 
-function showEnd(msg, sc) {
-  const ov = document.getElementById('overlay');
-  ov.querySelector('h2').textContent = msg;
-  ov.querySelector('p').textContent = `Score: ${sc} (moves left × 1)`;
-  document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
-  ov.style.display = 'flex';
+function onWin(){
+  gameActive=false;
+  var score=(MAX_MOVES-moves)*100;
+  saveHS(score);
+  submitScore(score);
+  playBeep(523,0.15);setTimeout(function(){playBeep(659,0.15);},150);setTimeout(function(){playBeep(784,0.3);},300);
+  document.getElementById('endTitle').textContent='Solved in '+moves+' moves!';
+  document.getElementById('endMsg').textContent='Score: '+score;
+  document.getElementById('eBest').textContent=getHS();
+  document.getElementById('endOverlay').style.display='flex';
 }
 
-function updateHUD() {
-  document.getElementById('mv').textContent = moves;
-  document.getElementById('sc').textContent = score;
-  document.getElementById('hs').textContent = getHS();
+function onLose(){
+  gameActive=false;
+  playBeep(150,0.4,'sawtooth');
+  document.getElementById('endTitle').textContent='Out of moves!';
+  document.getElementById('endMsg').textContent='Try again!';
+  document.getElementById('eBest').textContent=getHS();
+  document.getElementById('endOverlay').style.display='flex';
 }
 
-document.getElementById('hs-msg').textContent = `Best: ${getHS()}`;
+function updateHUD(){
+  document.getElementById('hMoves').textContent=moves;
+  document.getElementById('hMax').textContent=MAX_MOVES;
+  var score=Math.max(0,(MAX_MOVES-moves)*100);
+  document.getElementById('hScore').textContent=score;
+  var hs=getHS(); document.getElementById('hBest').textContent=hs>0?hs:'--';
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#110000';
+  ctx.fillRect(0,0,W,H);
+  for(var r=0;r<GRID_SIZE;r++){
+    for(var c=0;c<GRID_SIZE;c++){
+      var x=OX+c*CELL_SIZE, y=OY+r*CELL_SIZE;
+      ctx.fillStyle=COLORS[grid[r][c]];
+      ctx.fillRect(x,y,CELL_SIZE-1,CELL_SIZE-1);
+      if(owned[r][c]){
+        ctx.strokeStyle='rgba(255,255,255,0.4)';
+        ctx.lineWidth=1;
+        ctx.strokeRect(x+0.5,y+0.5,CELL_SIZE-2,CELL_SIZE-2);
+      }
+    }
+  }
+}
+
+function startGame(){
+  document.getElementById('startOverlay').style.display='none';
+  newGame();
+}
+
+function newGame(){
+  document.getElementById('endOverlay').style.display='none';
+  moves=0; gameActive=true;
+  GRID_SIZE=DIFFICULTY[currentDiff].size;
+  MAX_MOVES=DIFFICULTY[currentDiff].maxMoves;
+  initGrid();
+  updateHUD();
+  draw();
+}
+
+updateHUD();
+draw();
 </script>
 </body>
 </html>

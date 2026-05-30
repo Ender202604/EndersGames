@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Dodge Master – Ender's Game World</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; padding-top: 40px; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+#hud { display: flex; justify-content: space-between; width: 360px; padding: 4px 8px; font-size: 14px; color: #ffcccc; margin-bottom: 4px; }
+#hud span { color: #ffff00; font-weight: bold; }
+canvas { border: 2px solid #ff6666; border-radius: 8px; display: block; touch-action: none; }
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 50; }
+#overlay h1 { font-size: 36px; color: #ff6666; text-shadow: 0 0 20px #ff0000; }
+#overlay .info { font-size: 18px; color: #ffcccc; }
+.btn { background: darkred; border: 2px solid #ff6666; color: #ffff00; font-size: 18px; padding: 10px 28px; border-radius: 8px; cursor: pointer; margin: 4px; }
+.btn:hover { background: #aa0000; }
+.btn.active { background: #aa0000; border-color: #ffff00; }
+#diff-select { display: flex; gap: 8px; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<div id="hud">
+  <div>Score: <span id="hud-score">0</span></div>
+  <div>HS: <span id="hud-hs">0</span></div>
+  <div>Time: <span id="hud-time">0s</span></div>
+</div>
+<canvas id="gc" width="360" height="500"></canvas>
+
+<div id="overlay">
+  <h1>⚡ Dodge Master</h1>
+  <div class="info">Dodge the falling blocks!</div>
+  <div class="info">Collect ⭐ for invincibility!</div>
+  <div id="diff-select">
+    <button class="btn active" id="btn-easy" onclick="setDiff('easy')">Easy</button>
+    <button class="btn" id="btn-hard" onclick="setDiff('hard')">Hard</button>
+  </div>
+  <div class="info">High Score: <span id="ov-hs">0</span></div>
+  <button class="btn" id="play-btn">▶ Play</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script>
+var FB_CFG = {apiKey:"AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",authDomain:"enders-games.firebaseapp.com",databaseURL:"https://enders-games-default-rtdb.firebaseio.com",projectId:"enders-games",storageBucket:"enders-games.firebasestorage.app",messagingSenderId:"87049074470",appId:"1:87049074470:web:bc38b35669b43aedceb3e7"};
+
+var HS_KEY = 'hs_dodgemaster';
+function getHS() { return parseInt(localStorage.getItem(HS_KEY)) || 0; }
+function saveHS(s) { if (s > getHS()) localStorage.setItem(HS_KEY, s); }
+
+function submitScore(score) {
+  var name = localStorage.getItem('visitorName') || 'Player';
+  try {
+    var app = firebase.initializeApp(FB_CFG, 'lb_dodgemaster');
+    var db = app.database();
+    db.ref('leaderboard/dodgemaster').push({name:name, score:score, date:new Date().toLocaleDateString()});
+  } catch(e) {}
+}
+
+var audio = null;
+function getAudio() {
+  if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} }
+  return audio;
+}
+function playBeep(freq, dur, type, vol) {
+  var ac = getAudio(); if (!ac) return;
+  var o = ac.createOscillator(), g = ac.createGain();
+  o.type = type || 'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol || 0.3, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.connect(g); g.connect(ac.destination);
+  o.start(); o.stop(ac.currentTime + dur);
+}
+
+var canvas = document.getElementById('gc');
+var ctx = canvas.getContext('2d');
+var W = 360, H = 500;
+
+var COLORS = ['#ff4444','#ff8800','#ffcc00','#44ff44','#4488ff','#cc44ff','#ff44cc'];
+var difficulty = 'easy';
+
+function setDiff(d) {
+  difficulty = d;
+  document.getElementById('btn-easy').classList.toggle('active', d === 'easy');
+  document.getElementById('btn-hard').classList.toggle('active', d === 'hard');
+}
+
+var state = 'menu';
+var player, obstacles, powerups, stars;
+var score, timeSurvived, gameLoopId, lastTime;
+var spawnTimer, speedTimer, obstSpeed, spawnInterval;
+var invincible, invTimer;
+var keys;
+var touchLeft, touchRight;
+var flashTimer;
+
+function initGame() {
+  player = { x: W/2, y: H - 40, r: 18, vx: 0 };
+  obstacles = []; powerups = [];
+  score = 0; timeSurvived = 0;
+  invincible = false; invTimer = 0; flashTimer = 0;
+  spawnTimer = 0; speedTimer = 0;
+  obstSpeed = difficulty === 'easy' ? 2.5 : 4.5;
+  spawnInterval = difficulty === 'easy' ? 0.6 : 0.35;
+  keys = {};
+  touchLeft = false; touchRight = false;
+
+  // Generate background stars
+  stars = [];
+  for (var i = 0; i < 80; i++) {
+    stars.push({ x: Math.random()*W, y: Math.random()*H, r: 0.5+Math.random()*1.5, speed: 0.3+Math.random()*1.2 });
+  }
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('hud-score').textContent = Math.floor(score);
+  document.getElementById('hud-hs').textContent = getHS();
+  document.getElementById('hud-time').textContent = Math.floor(timeSurvived) + 's';
+}
+
+function spawnObstacle() {
+  var w = 20 + Math.random() * 60;
+  var x = Math.random() * (W - w);
+  var color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  obstacles.push({ x: x, y: -30, w: w, h: 18 + Math.random()*12, color: color, speed: obstSpeed * (0.8 + Math.random()*0.6) });
+}
+
+function spawnPowerup() {
+  powerups.push({ x: 30 + Math.random() * (W - 60), y: -20, r: 14, speed: obstSpeed * 0.7 });
+}
+
+function gameOver() {
+  state = 'over';
+  playBeep(150, 0.5, 'sawtooth', 0.4);
+  saveHS(Math.floor(score));
+  submitScore(Math.floor(score));
+  showOverlay(true);
+}
+
+function showOverlay(isOver) {
+  var ov = document.getElementById('overlay');
+  ov.style.display = 'flex';
+  var h1 = ov.querySelector('h1');
+  var infos = ov.querySelectorAll('.info');
+  var ds = document.getElementById('diff-select');
+  if (isOver) {
+    h1.textContent = 'Game Over!';
+    infos[0].innerHTML = 'Score: <span style="color:#ffff00;font-weight:bold">' + Math.floor(score) + '</span>';
+    infos[1].innerHTML = 'Time: <span style="color:#ffff00;font-weight:bold">' + Math.floor(timeSurvived) + 's</span>';
+    ds.style.display = 'none';
+    infos[2].innerHTML = 'High Score: <span style="color:#ffff00;font-weight:bold">' + getHS() + '</span>';
+    document.getElementById('play-btn').textContent = '▶ Play Again';
+  } else {
+    h1.textContent = '⚡ Dodge Master';
+    infos[0].textContent = 'Dodge the falling blocks!';
+    infos[1].textContent = 'Collect ⭐ for invincibility!';
+    ds.style.display = 'flex';
+    infos[2].innerHTML = 'High Score: <span style="color:#ffff00;font-weight:bold">' + getHS() + '</span>';
+    document.getElementById('play-btn').textContent = '▶ Play';
+  }
+}
+
+function hideOverlay() {
+  document.getElementById('overlay').style.display = 'none';
+}
+
+function startGame() {
+  initGame();
+  hideOverlay();
+  state = 'play';
+  if (gameLoopId) cancelAnimationFrame(gameLoopId);
+  lastTime = null;
+  gameLoopId = requestAnimationFrame(loop);
+}
+
+function loop(ts) {
+  if (state !== 'play') return;
+  if (!lastTime) lastTime = ts;
+  var dt = Math.min((ts - lastTime) / 1000, 0.08);
+  lastTime = ts;
+  update(dt);
+  draw();
+  gameLoopId = requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  timeSurvived += dt;
+  score += dt * (10/1); // ~10 pts/sec
+  spawnTimer += dt;
+  speedTimer += dt;
+
+  // Speed increase every 10s
+  if (speedTimer >= 10) {
+    speedTimer = 0;
+    obstSpeed += 0.4;
+    spawnInterval = Math.max(0.15, spawnInterval - 0.03);
+  }
+
+  if (spawnTimer >= spawnInterval) {
+    spawnTimer = 0;
+    spawnObstacle();
+    if (Math.random() < 0.07) spawnPowerup();
+  }
+
+  // Player movement
+  var targetVx = 0;
+  var speed = 220;
+  if (keys['ArrowLeft'] || keys['a'] || touchLeft) targetVx = -speed;
+  if (keys['ArrowRight'] || keys['d'] || touchRight) targetVx = speed;
+  player.vx += (targetVx - player.vx) * 0.25;
+  player.x += player.vx * dt;
+  player.x = Math.max(player.r, Math.min(W - player.r, player.x));
+
+  // Invincibility
+  if (invincible) {
+    invTimer -= dt;
+    flashTimer -= dt;
+    if (invTimer <= 0) { invincible = false; }
+  }
+
+  // Update obstacles
+  for (var i = obstacles.length - 1; i >= 0; i--) {
+    var ob = obstacles[i];
+    ob.y += ob.speed * 60 * dt;
+    if (ob.y > H + 30) { obstacles.splice(i, 1); continue; }
+
+    // Collision with player (circle vs rect)
+    if (!invincible) {
+      var cx = Math.max(ob.x, Math.min(player.x, ob.x + ob.w));
+      var cy = Math.max(ob.y, Math.min(player.y, ob.y + ob.h));
+      var dx = player.x - cx, dy = player.y - cy;
+      if (dx*dx + dy*dy < player.r * player.r) {
+        gameOver(); return;
+      }
+    }
+  }
+
+  // Update powerups
+  for (var i = powerups.length - 1; i >= 0; i--) {
+    var pu = powerups[i];
+    pu.y += pu.speed * 60 * dt;
+    if (pu.y > H + 30) { powerups.splice(i, 1); continue; }
+    var dx = player.x - pu.x, dy = player.y - pu.y;
+    if (dx*dx + dy*dy < (player.r + pu.r) * (player.r + pu.r)) {
+      invincible = true; invTimer = 2.0;
+      score += 50;
+      playBeep(880, 0.2, 'sine', 0.3);
+      powerups.splice(i, 1);
+    }
+  }
+
+  // Scroll stars
+  for (var i = 0; i < stars.length; i++) {
+    stars[i].y += stars[i].speed * 60 * dt;
+    if (stars[i].y > H) stars[i].y = 0;
+  }
+
+  updateHUD();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  // Background
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  for (var i = 0; i < stars.length; i++) {
+    var s = stars[i];
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.3 + s.r * 0.3) + ')';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Obstacles
+  for (var i = 0; i < obstacles.length; i++) {
+    var ob = obstacles[i];
+    ctx.fillStyle = ob.color;
+    ctx.shadowColor = ob.color;
+    ctx.shadowBlur = 6;
+    ctx.fillRect(ob.x, ob.y, ob.w, ob.h);
+    ctx.shadowBlur = 0;
+  }
+
+  // Powerups
+  for (var i = 0; i < powerups.length; i++) {
+    var pu = powerups[i];
+    ctx.font = '24px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⭐', pu.x, pu.y);
+  }
+
+  // Player
+  var showPlayer = true;
+  if (invincible && flashTimer < 0) {
+    flashTimer = 0.1;
+    showPlayer = false;
+  }
+  if (showPlayer || !invincible) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r, 0, Math.PI*2);
+    if (invincible) {
+      ctx.fillStyle = '#ffff00';
+      ctx.shadowColor = '#ffff00';
+    } else {
+      ctx.fillStyle = '#00ffff';
+      ctx.shadowColor = '#00ffff';
+    }
+    ctx.shadowBlur = 12;
+    ctx.fill();
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  // Invincibility timer bar
+  if (invincible) {
+    ctx.fillStyle = 'rgba(255,255,0,0.4)';
+    ctx.fillRect(0, H - 5, (invTimer / 2.0) * W, 5);
+  }
+}
+
+// Keyboard
+document.addEventListener('keydown', function(e) { keys[e.key] = true; });
+document.addEventListener('keyup', function(e) { keys[e.key] = false; });
+
+// Touch
+canvas.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  if (state !== 'play') return;
+  var rect = canvas.getBoundingClientRect();
+  var scaleX = W / rect.width;
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    var tx = (e.changedTouches[i].clientX - rect.left) * scaleX;
+    if (tx < W / 2) touchLeft = true; else touchRight = true;
+  }
+}, {passive: false});
+canvas.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+  if (state !== 'play') return;
+  var rect = canvas.getBoundingClientRect();
+  var scaleX = W / rect.width;
+  touchLeft = false; touchRight = false;
+  for (var i = 0; i < e.touches.length; i++) {
+    var tx = (e.touches[i].clientX - rect.left) * scaleX;
+    if (tx < W / 2) touchLeft = true; else touchRight = true;
+  }
+}, {passive: false});
+canvas.addEventListener('touchend', function(e) {
+  e.preventDefault();
+  if (e.touches.length === 0) { touchLeft = false; touchRight = false; }
+}, {passive: false});
+
+document.getElementById('play-btn').addEventListener('click', startGame);
+document.getElementById('play-btn').addEventListener('touchend', function(e) { e.preventDefault(); startGame(); });
+
+document.getElementById('ov-hs').textContent = getHS();
+document.getElementById('hud-hs').textContent = getHS();
+</script>
+</body>
+</html>

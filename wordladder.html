@@ -213,7 +213,7 @@ function renderChain(){
     if(i<chain.length-1){
       var arr=document.createElement('div');
       arr.className='chainArrow';
-      arr.textContent='\u2193';
+      arr.textContent='↓';
       div.appendChild(row);
       div.appendChild(arr);
       continue;
@@ -276,7 +276,7 @@ function showHint(){
   var p=PUZZLES[currentPuzzleIdx];
   var hintBox=document.getElementById('hintBox');
   hintBox.style.display='block';
-  hintBox.textContent='Hint: '+p.hint.join(' \u2192 ');
+  hintBox.textContent='Hint: '+p.hint.join(' → ');
 }
 
 function giveUp(){
@@ -285,7 +285,7 @@ function giveUp(){
   var p=PUZZLES[currentPuzzleIdx];
   var hintBox=document.getElementById('hintBox');
   hintBox.style.display='block';
-  hintBox.textContent='Solution: '+p.hint.join(' \u2192 ');
+  hintBox.textContent='Solution: '+p.hint.join(' → ');
   setErr('Better luck next time!');
 }
 

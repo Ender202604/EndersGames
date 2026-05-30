@@ -19,41 +19,231 @@ button:hover { background: #aa0000; }
 </style>
 </head>
 <body>
-<a href="index.html" id="home-btn">Home</a>
-<div id="hud">Moves: <span id="hMoves">0</span> | Time: <span id="hTime">0</span>s | Best: <span id="hBest">--</span></div>
+<a href="index.html" id="home-btn">&#127968; Home</a>
+<div id="hud">Moves: <span id="hMoves">0</span> &nbsp;|&nbsp; Time: <span id="hTime">0</span>s &nbsp;|&nbsp; Best: <span id="hBest">--</span></div>
 <canvas id="c" width="360" height="360"></canvas>
 <div id="btns">
   <button onclick="shuffleBoard()">Shuffle</button>
   <button onclick="newGame()">New Game</button>
 </div>
-<div id="startOverlay" class="overlay"><h2>Sliding Puzzle</h2><p>Arrange tiles 1-15!</p><button onclick="startGame()">Play</button></div>
-<div id="winOverlay" class="overlay" style="display:none;"><h2>Solved!</h2><p>Moves: <span id="wMoves"></span></p><p>Score: <span id="wScore"></span></p><button onclick="newGame()">New Game</button></div>
+
+<div id="startOverlay" class="overlay">
+  <h2>🧩 Sliding Puzzle</h2>
+  <p>Arrange tiles 1–15 in order!</p>
+  <p style="color:#ff9999;font-size:13px;">Click tiles next to the blank to slide them.</p>
+  <button onclick="startGame()">▶ Play</button>
+</div>
+
+<div id="winOverlay" class="overlay" style="display:none;">
+  <h2>🎉 Puzzle Solved!</h2>
+  <p>Time: <span id="wTime" style="color:#ffff00;font-weight:bold"></span>s</p>
+  <p>Moves: <span id="wMoves" style="color:#ffff00;font-weight:bold"></span></p>
+  <p>Score: <span id="wScore" style="color:#ffff00;font-weight:bold;font-size:22px"></span></p>
+  <p>Best Score: <span id="wBest" style="color:#ffff00;font-weight:bold"></span></p>
+  <button onclick="newGame()">New Game</button>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script>
-var FB_CFG={apiKey:"AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",authDomain:"enders-games.firebaseapp.com",databaseURL:"https://enders-games-default-rtdb.firebaseio.com",projectId:"enders-games",storageBucket:"enders-games.firebasestorage.app",messagingSenderId:"87049074470",appId:"1:87049074470:web:bc38b35669b43aedceb3e7"};
-var HS_KEY='hs_slidingpuzzle';
+var FB_CFG = {apiKey:"AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",authDomain:"enders-games.firebaseapp.com",databaseURL:"https://enders-games-default-rtdb.firebaseio.com",projectId:"enders-games",storageBucket:"enders-games.firebasestorage.app",messagingSenderId:"87049074470",appId:"1:87049074470:web:bc38b35669b43aedceb3e7"};
+var HS_KEY = 'hs_slidingpuzzle';
 function getHS(){return parseInt(localStorage.getItem(HS_KEY))||0;}
 function saveHS(s){if(s>getHS())localStorage.setItem(HS_KEY,s);}
-function submitScore(score){var name=localStorage.getItem('visitorName')||'Player';try{var app=firebase.initializeApp(FB_CFG,'lb_slidingpuzzle');var db=app.database();db.ref('leaderboard/slidingpuzzle').push({name:name,score:score,date:new Date().toLocaleDateString()});}catch(e){}}
-var audio=null;
+function submitScore(score){
+  var name=localStorage.getItem('visitorName')||'Player';
+  try{var app=firebase.initializeApp(FB_CFG,'lb_slidingpuzzle');var db=app.database();db.ref('leaderboard/slidingpuzzle').push({name:name,score:score,date:new Date().toLocaleDateString()});}catch(e){}
+}
+
+var audio = null;
 function getAudio(){if(!audio){try{audio=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}return audio;}
-function playBeep(freq,dur,type){var c=getAudio();if(!c)return;var o=c.createOscillator();var g=c.createGain();o.connect(g);g.connect(c.destination);o.type=type||'sine';o.frequency.value=freq;g.gain.setValueAtTime(0.2,c.currentTime);g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+dur);o.start();o.stop(c.currentTime+dur);}
-var canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=360,H=360,CELL=80,OX=20,OY=20;
-var tiles=[],blankR=3,blankC=3,moves=0,startTime=0,timerRunning=false,gameActive=false,timerInterval=null;
-function initSolved(){tiles=[];for(var r=0;r<4;r++){tiles[r]=[];for(var c=0;c<4;c++)tiles[r][c]=r*4+c+1;}tiles[3][3]=0;blankR=3;blankC=3;}
-function shuffleBoard(){initSolved();var p=[-1,-1];var dirs=[[-1,0],[1,0],[0,-1],[0,1]];for(var i=0;i<200;i++){var v=[];for(var d=0;d<4;d++){var nr=blankR+dirs[d][0],nc=blankC+dirs[d][1];if(nr>=0&&nr<4&&nc>=0&&nc<4&&(nr!==p[0]||nc!==p[1]))v.push([nr,nc]);}if(!v.length)v=[[blankR+1,blankC]];var pk=v[Math.floor(Math.random()*v.length)];p=[blankR,blankC];tiles[blankR][blankC]=tiles[pk[0]][pk[1]];tiles[pk[0]][pk[1]]=0;blankR=pk[0];blankC=pk[1];}moves=0;timerRunning=false;startTime=0;if(timerInterval)clearInterval(timerInterval);updateHUD();draw();}
-function isSolved(){for(var r=0;r<4;r++)for(var c=0;c<4;c++){var e=r*4+c+1;if(r===3&&c===3)e=0;if(tiles[r][c]!==e)return false;}return true;}
-function trySlide(tr,tc){if(!gameActive)return;var dr=Math.abs(tr-blankR),dc=Math.abs(tc-blankC);if((dr===1&&dc===0)||(dr===0&&dc===1)){if(!timerRunning){timerRunning=true;startTime=Date.now();timerInterval=setInterval(updateHUD,500);}tiles[blankR][blankC]=tiles[tr][tc];tiles[tr][tc]=0;blankR=tr;blankC=tc;moves++;playBeep(300,0.05,'square');updateHUD();draw();if(isSolved())onWin();}}
-function onWin(){gameActive=false;timerRunning=false;if(timerInterval)clearInterval(timerInterval);var e=Math.floor((Date.now()-startTime)/1000);var s=Math.max(0,1000-moves);saveHS(s);submitScore(s);document.getElementById('wMoves').textContent=moves;document.getElementById('wScore').textContent=s;document.getElementById('winOverlay').style.display='flex';}
-function updateHUD(){document.getElementById('hMoves').textContent=moves;var e=timerRunning?Math.floor((Date.now()-startTime)/1000):0;document.getElementById('hTime').textContent=e;var hs=getHS();document.getElementById('hBest').textContent=hs>0?hs:'--';}
-function draw(){ctx.clearRect(0,0,W,H);ctx.fillStyle='#110000';ctx.fillRect(0,0,W,H);for(var r=0;r<4;r++)for(var c=0;c<4;c++){var x=OX+c*CELL,y=OY+r*CELL,val=tiles[r][c];if(!val){ctx.fillStyle='#330000';ctx.fillRect(x+3,y+3,CELL-6,CELL-6);}else{ctx.fillStyle='#660000';ctx.fillRect(x+3,y+3,CELL-6,CELL-6);ctx.strokeStyle='#ff6666';ctx.lineWidth=2;ctx.strokeRect(x+3,y+3,CELL-6,CELL-6);ctx.fillStyle='#ffff00';ctx.font='bold 28px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(val,x+CELL/2,y+CELL/2);}}}
-canvas.addEventListener('click',function(e){var r=canvas.getBoundingClientRect();var cell=getCell((e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height);if(cell)trySlide(cell.r,cell.c);});
-canvas.addEventListener('touchend',function(e){e.preventDefault();var t=e.changedTouches[0];var r=canvas.getBoundingClientRect();var cell=getCell((t.clientX-r.left)*W/r.width,(t.clientY-r.top)*H/r.height);if(cell)trySlide(cell.r,cell.c);},{passive:false});
-function getCell(mx,my){var c=Math.floor((mx-OX)/CELL),r=Math.floor((my-OY)/CELL);if(r>=0&&r<4&&c>=0&&c<4)return{r:r,c:c};return null;}
-function startGame(){document.getElementById('startOverlay').style.display='none';newGame();}
-function newGame(){document.getElementById('winOverlay').style.display='none';gameActive=true;shuffleBoard();}
-updateHUD();draw();
+function playBeep(freq,dur,type){
+  var ctx=getAudio(); if(!ctx) return;
+  var o=ctx.createOscillator(); var g=ctx.createGain();
+  o.connect(g); g.connect(ctx.destination);
+  o.type=type||'sine'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0.2,ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
+  o.start(); o.stop(ctx.currentTime+dur);
+}
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var W = 360, H = 360;
+var GRID = 4, CELL = 80, OFFSET_X = 20, OFFSET_Y = 20;
+var tiles = [], blankR = 3, blankC = 3;
+var moves = 0, startTime = 0, timerRunning = false, gameActive = false;
+var timerInterval = null;
+
+function initSolved(){
+  tiles = [];
+  for(var r=0;r<4;r++){
+    tiles[r]=[];
+    for(var c=0;c<4;c++){
+      tiles[r][c] = r*4+c+1;
+    }
+  }
+  tiles[3][3] = 0;
+  blankR=3; blankC=3;
+}
+
+function shuffleBoard(){
+  initSolved();
+  var prevBlankR=-1, prevBlankC=-1;
+  var dirs=[[-1,0],[1,0],[0,-1],[0,1]];
+  for(var i=0;i<200;i++){
+    var valid=[];
+    for(var d=0;d<4;d++){
+      var nr=blankR+dirs[d][0], nc=blankC+dirs[d][1];
+      if(nr>=0&&nr<4&&nc>=0&&nc<4){
+        if(nr!==prevBlankR||nc!==prevBlankC) valid.push([nr,nc]);
+      }
+    }
+    if(valid.length===0) valid=[[blankR+dirs[0][0],blankR+dirs[0][1]]];
+    var pick=valid[Math.floor(Math.random()*valid.length)];
+    prevBlankR=blankR; prevBlankC=blankC;
+    tiles[blankR][blankC]=tiles[pick[0]][pick[1]];
+    tiles[pick[0]][pick[1]]=0;
+    blankR=pick[0]; blankC=pick[1];
+  }
+  moves=0; timerRunning=false; startTime=0;
+  if(timerInterval) clearInterval(timerInterval);
+  updateHUD();
+  draw();
+}
+
+function isSolved(){
+  for(var r=0;r<4;r++) for(var c=0;c<4;c++){
+    var expected=r*4+c+1;
+    if(r===3&&c===3) expected=0;
+    if(tiles[r][c]!==expected) return false;
+  }
+  return true;
+}
+
+function trySlide(tr,tc){
+  if(!gameActive) return;
+  var dr=Math.abs(tr-blankR), dc=Math.abs(tc-blankC);
+  if((dr===1&&dc===0)||(dr===0&&dc===1)){
+    if(!timerRunning){timerRunning=true;startTime=Date.now();timerInterval=setInterval(updateHUD,500);}
+    tiles[blankR][blankC]=tiles[tr][tc];
+    tiles[tr][tc]=0;
+    blankR=tr; blankC=tc;
+    moves++;
+    playBeep(300,0.05,'square');
+    updateHUD();
+    draw();
+    if(isSolved()) onWin();
+  }
+}
+
+function onWin(){
+  gameActive=false;
+  timerRunning=false;
+  if(timerInterval) clearInterval(timerInterval);
+  var elapsed=Math.floor((Date.now()-startTime)/1000);
+  var score=Math.max(0,1000-moves);
+  saveHS(score);
+  submitScore(score);
+  playBeep(523,0.15); setTimeout(function(){playBeep(659,0.15);},150); setTimeout(function(){playBeep(784,0.3);},300);
+  document.getElementById('wTime').textContent=elapsed;
+  document.getElementById('wMoves').textContent=moves;
+  document.getElementById('wScore').textContent=score;
+  document.getElementById('wBest').textContent=getHS();
+  document.getElementById('winOverlay').style.display='flex';
+}
+
+function updateHUD(){
+  document.getElementById('hMoves').textContent=moves;
+  var elapsed=timerRunning?Math.floor((Date.now()-startTime)/1000):0;
+  document.getElementById('hTime').textContent=elapsed;
+  var hs=getHS(); document.getElementById('hBest').textContent=hs>0?hs:'--';
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#110000';
+  ctx.fillRect(0,0,W,H);
+  for(var r=0;r<4;r++){
+    for(var c=0;c<4;c++){
+      var x=OFFSET_X+c*CELL, y=OFFSET_Y+r*CELL;
+      var val=tiles[r][c];
+      if(val===0){
+        ctx.fillStyle='#330000';
+        roundRect(ctx,x+3,y+3,CELL-6,CELL-6,8);
+        ctx.fill();
+      } else {
+        var grad=ctx.createLinearGradient(x,y,x+CELL,y+CELL);
+        grad.addColorStop(0,'#880000');
+        grad.addColorStop(1,'#550000');
+        ctx.fillStyle=grad;
+        ctx.strokeStyle='#ff6666';
+        ctx.lineWidth=2;
+        roundRect(ctx,x+3,y+3,CELL-6,CELL-6,8);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle='#ffff00';
+        ctx.font='bold 28px Arial';
+        ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        ctx.fillText(val,x+CELL/2,y+CELL/2);
+      }
+    }
+  }
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function getCell(mx,my){
+  var c=Math.floor((mx-OFFSET_X)/CELL);
+  var r=Math.floor((my-OFFSET_Y)/CELL);
+  if(r>=0&&r<4&&c>=0&&c<4) return {r:r,c:c};
+  return null;
+}
+
+canvas.addEventListener('click',function(e){
+  var rect=canvas.getBoundingClientRect();
+  var scaleX=W/rect.width, scaleY=H/rect.height;
+  var mx=(e.clientX-rect.left)*scaleX, my=(e.clientY-rect.top)*scaleY;
+  var cell=getCell(mx,my);
+  if(cell) trySlide(cell.r,cell.c);
+});
+
+canvas.addEventListener('touchend',function(e){
+  e.preventDefault();
+  var t=e.changedTouches[0];
+  var rect=canvas.getBoundingClientRect();
+  var scaleX=W/rect.width, scaleY=H/rect.height;
+  var mx=(t.clientX-rect.left)*scaleX, my=(t.clientY-rect.top)*scaleY;
+  var cell=getCell(mx,my);
+  if(cell) trySlide(cell.r,cell.c);
+},{passive:false});
+
+function startGame(){
+  document.getElementById('startOverlay').style.display='none';
+  newGame();
+}
+
+function newGame(){
+  document.getElementById('winOverlay').style.display='none';
+  gameActive=true;
+  shuffleBoard();
+}
+
+updateHUD();
+draw();
 </script>
 </body>
 </html>

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>City 3D - Ender's Game World</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden}
+canvas{display:block}
+#ui{position:fixed;top:8px;left:50%;transform:translateX(-50%);color:#ffff88;font-family:Arial,sans-serif;font-size:13px;text-align:center;pointer-events:none;text-shadow:1px 1px 3px #000;z-index:5}
+#home-btn{position:fixed;top:8px;left:10px;color:#ff9999;text-decoration:none;font-size:13px;z-index:99;text-shadow:1px 1px 2px #000}
+#start-screen{position:fixed;inset:0;background:rgba(0,0,0,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:20}
+#start-screen h1{color:#ffffff;font-size:28px;font-family:Arial,sans-serif}
+#start-screen p{color:#ccbbaa;font-size:14px;text-align:center;max-width:340px;font-family:Arial,sans-serif}
+#lock-screen{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:15;cursor:pointer}
+#lock-screen p{color:#ffffff;font-size:18px;font-family:Arial,sans-serif}
+.play-btn{background:#223355;border:2px solid #88aaff;color:#ffffff;padding:12px 32px;font-size:18px;border-radius:8px;cursor:pointer;font-family:Arial,sans-serif}
+.play-btn:hover{filter:brightness(1.2)}
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<div id="ui">
+  <div id="score-display">🪙 Coins: 0/10</div>
+  <div id="zone-display">Town Square</div>
+</div>
+<div id="start-screen">
+  <h1>🏙️ City 3D</h1>
+  <p>WASD to move, mouse to look.<br>Explore the city and collect 10 gold coins!</p>
+  <button class="play-btn" onclick="beginGame()">▶ Explore City!</button>
+</div>
+<div id="lock-screen" onclick="lockPointer()">
+  <p>🖱️ Click to Focus</p>
+  <small style="color:#aaa;font-family:Arial,sans-serif">Move mouse to look around • WASD to walk</small>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var W = window.innerWidth, H = window.innerHeight;
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(W, H);
+renderer.shadowMap.enabled = false;
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x88aacc);
+scene.fog = new THREE.Fog(0x8899bb, 15, 50);
+
+var camera = new THREE.PerspectiveCamera(70, W/H, 0.1, 200);
+camera.position.set(0, 1.6, 0);
+
+window.addEventListener('resize', function(){
+  W=window.innerWidth; H=window.innerHeight;
+  renderer.setSize(W,H); camera.aspect=W/H; camera.updateProjectionMatrix();
+});
+
+function mat(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+function emt(hex,em,ei){ var m=new THREE.MeshLambertMaterial({color:hex}); m.emissive=new THREE.Color(em); m.emissiveIntensity=ei||0.5; return m; }
+function box(w,h,d,m,x,y,z){ var mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); mesh.position.set(x,y,z); scene.add(mesh); return mesh; }
+function sph(r,m,x,y,z){ var mesh=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),m); mesh.position.set(x,y,z); scene.add(mesh); return mesh; }
+function cyl(rt,rb,h,m,x,y,z,segs){ var mesh=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,segs||12),m); mesh.position.set(x,y,z); scene.add(mesh); return mesh; }
+function pl(x,y,z,col,intensity,dist){ var l=new THREE.PointLight(col,intensity,dist); l.position.set(x,y,z); scene.add(l); return l; }
+
+var pickups=[], collected=0;
+function addPickup(x,y,z,color){
+  var m=emt(color,color,0.8);
+  var mesh=sph(0.22,m,x,y,z);
+  pickups.push({mesh:mesh,x:x,z:z,active:true});
+  animObjs.push({obj:mesh,type:'rot',axis:'y',spd:0.04});
+  animObjs.push({obj:mesh,type:'bob',base:y});
+}
+
+function addNPC(x,z,color,name){
+  cyl(0.22,0.22,1.5,mat(color),x,0.75,z);
+  sph(0.22,mat(0xffccaa),x,1.75,z);
+  var c2=document.createElement('canvas'); c2.width=256; c2.height=48;
+  var cx=c2.getContext('2d');
+  cx.fillStyle='rgba(0,0,0,0.75)'; cx.fillRect(0,0,256,48);
+  cx.fillStyle='#ffff88'; cx.font='bold 17px Arial'; cx.fillText(name,6,32);
+  var spr=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c2)}));
+  spr.position.set(x,2.5,z); spr.scale.set(2.0,0.48,1); scene.add(spr);
+}
+
+var animObjs=[];
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xddeeff, 0.9));
+scene.add(new THREE.DirectionalLight(0xffffff, 0.6));
+
+// ---- MATERIALS ----
+var roadMat = mat(0x333333);
+var sidewalkMat = mat(0x999988);
+var grassMat = mat(0x558822);
+var glassMat = emt(0x88bbff, 0xaaddff, 0.3);
+var trunkMat = mat(0x5a3a1a);
+var leafMat = mat(0x336622);
+
+// ---- FLOORS ----
+// Center - Town Square (road + sidewalk)
+box(26,0.2,26, sidewalkMat, 0,-0.1,0);
+// North - Business District
+box(20,0.2,20, roadMat, 0,-0.1,22);
+// South - Residential
+box(20,0.2,20, grassMat, 0,-0.1,-22);
+// East - City Park
+box(20,0.2,20, mat(0x669933), 22,-0.1,0);
+// West - Shopping District
+box(20,0.2,20, sidewalkMat, -22,-0.1,0);
+
+// Corridors
+box(8,0.2,10, roadMat, 0,-0.1,16);
+box(8,0.2,10, roadMat, 0,-0.1,-16);
+box(10,0.2,8, roadMat, 16,-0.1,0);
+box(10,0.2,8, roadMat, -16,-0.1,0);
+
+// Road markings
+for(var i=-3;i<=3;i+=2){
+  box(0.18,0.01,1.8, mat(0xffffff), 0,-0.01,16+i);
+  box(0.18,0.01,1.8, mat(0xffffff), 0,-0.01,-16+i);
+}
+for(var i=-3;i<=3;i+=2){
+  box(1.8,0.01,0.18, mat(0xffffff), 16+i,-0.01,0);
+  box(1.8,0.01,0.18, mat(0xffffff), -16+i,-0.01,0);
+}
+
+// ---- OUTER BOUNDARY WALLS (low kerbs / fences) ----
+var kerbMat = mat(0x888877);
+// Center perimeter (low curb, with doorway gaps)
+box(9,0.3,0.3, kerbMat, -8.5,0.15,12); box(9,0.3,0.3, kerbMat, 8.5,0.15,12);
+box(9,0.3,0.3, kerbMat, -8.5,0.15,-12); box(9,0.3,0.3, kerbMat, 8.5,0.15,-12);
+box(0.3,0.3,9, kerbMat, 12,0.15,-8.5); box(0.3,0.3,9, kerbMat, 12,0.15,8.5);
+box(0.3,0.3,9, kerbMat, -12,0.15,-8.5); box(0.3,0.3,9, kerbMat, -12,0.15,8.5);
+
+// Zone outer walls (buildings act as natural boundary — add invisible boundary walls)
+var wallMat = mat(0x666655);
+box(20,5,0.4, wallMat, 0,2.5,32); box(20,5,0.4, wallMat, 0,2.5,-32);
+box(0.4,5,20, wallMat, 32,2.5,0); box(0.4,5,20, wallMat, -32,2.5,0);
+box(0.4,5,20, wallMat, -10,2.5,22); box(0.4,5,20, wallMat, 10,2.5,22);
+box(0.4,5,20, wallMat, -10,2.5,-22); box(0.4,5,20, wallMat, 10,2.5,-22);
+box(20,5,0.4, wallMat, 22,2.5,-10); box(20,5,0.4, wallMat, 22,2.5,10);
+box(20,5,0.4, wallMat, -22,2.5,-10); box(20,5,0.4, wallMat, -22,2.5,10);
+
+// ---- CENTER: TOWN SQUARE ----
+// Fountain
+cyl(1.2,1.2,0.4, mat(0x7799bb), 0,0.2,0, 16);
+cyl(0.2,0.2,0.8, mat(0x7799bb), 0,0.6,0, 8);
+sph(0.25, emt(0x88bbff,0x88bbff,0.6), 0,1.2,0);
+pl(0,1.5,0, 0x88bbff, 1.0, 8);
+
+// Benches
+function addBench(x,z,rx){
+  var g=new THREE.Group();
+  var seat=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.1,0.4), mat(0x8a6040)); seat.position.set(x,0.5,z);
+  var leg1=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.5,0.1), mat(0x6a4020)); leg1.position.set(x-0.5,0.25,z-0.15);
+  var leg2=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.5,0.1), mat(0x6a4020)); leg2.position.set(x+0.5,0.25,z-0.15);
+  var leg3=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.5,0.1), mat(0x6a4020)); leg3.position.set(x-0.5,0.25,z+0.15);
+  var leg4=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.5,0.1), mat(0x6a4020)); leg4.position.set(x+0.5,0.25,z+0.15);
+  var back=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.4,0.1), mat(0x8a6040)); back.position.set(x,0.75,z+0.2);
+  scene.add(seat); scene.add(leg1); scene.add(leg2); scene.add(leg3); scene.add(leg4); scene.add(back);
+  if(rx) seat.rotation.y=rx;
+}
+addBench(4,4,0); addBench(-4,4,0); addBench(4,-4,0); addBench(-4,-4,0);
+
+// Flower beds
+for(var i=0;i<8;i++){
+  sph(0.15, emt([0xff4488,0xff8800,0xffff00,0xff44aa][i%4],[0xff2266,0xff6600,0xffcc00,0xff2288][i%4],0.6),
+    5+Math.cos(i*0.8)*3, 0.4, 5+Math.sin(i*0.8)*3);
+}
+// Lampposts in center
+function addLamppost(x,z){
+  cyl(0.06,0.06,4, mat(0x888888), x,2,z);
+  cyl(0.15,0.15,0.12, mat(0x888888), x,4.1,z, 6);
+  pl(x,4.2,z, 0xffffcc, 1.2, 12);
+}
+addLamppost(8,8); addLamppost(-8,8); addLamppost(8,-8); addLamppost(-8,-8);
+addLamppost(3,11.5); addLamppost(-3,11.5); addLamppost(3,-11.5); addLamppost(-3,-11.5);
+addLamppost(11.5,3); addLamppost(11.5,-3); addLamppost(-11.5,3); addLamppost(-11.5,-3);
+
+// ---- NORTH: BUSINESS DISTRICT ----
+// Office towers
+var buildingColors = [0x7788aa, 0x99aaaa, 0xaabb99, 0x8899bb, 0x88aabb];
+function addOfficeBuilding(x,z,w,h,d,col){
+  box(w,h,d, mat(col), x,h/2,z);
+  // Window grid
+  for(var row=0;row<Math.floor(h/1.5);row++){
+    for(var col2=0;col2<Math.floor(w/1.2);col2++){
+      box(0.5,0.6,0.05, glassMat, x-w/2+0.8+col2*1.2, 1.5+row*1.5, z+d/2+0.03);
+    }
+  }
+}
+addOfficeBuilding(-5,24,4,12,4,0x7788aa);
+addOfficeBuilding(3,25,3,9,3,0x99aaaa);
+addOfficeBuilding(-2,18,3.5,7,3.5,0x8899bb);
+addOfficeBuilding(6,19,4,10,4,0xaabb99);
+addOfficeBuilding(-6,30,3,8,3,0x88aabb);
+addOfficeBuilding(5,29,3.5,11,3.5,0x7788aa);
+// Sidewalks
+box(20,0.1,0.8, mat(0xaaaaaa), 0,0.05,13);
+box(20,0.1,0.8, mat(0xaaaaaa), 0,0.05,31.2);
+
+// ---- SOUTH: RESIDENTIAL ----
+function addHouse(x,z,col,roofCol){
+  box(4,2.5,4, mat(col), x,1.25,z);
+  // Roof (pyramid-ish with cylinder)
+  cyl(0,2.2,4, mat(roofCol), x,3.6,z, 4);
+  // Door
+  box(0.8,1.5,0.1, mat(0x5a3a1a), x,0.75,z+2.05);
+  // Window
+  box(0.7,0.7,0.1, glassMat, x+1.2,1.8,z+2.05);
+  box(0.7,0.7,0.1, glassMat, x-1.2,1.8,z+2.05);
+  // Garden
+  cyl(0,0.8,1.5, mat(0x558822), x+3,0.75,z, 4);
+  cyl(0,0.7,1.2, mat(0x448811), x-3,0.6,z-1, 4);
+}
+addHouse(-5,-18, 0xccaa88, 0xcc4444);
+addHouse(5,-18, 0xbbcc99, 0x998844);
+addHouse(-5,-27, 0xddbbaa, 0x996633);
+addHouse(5,-27, 0xaabbcc, 0x5566aa);
+addHouse(0,-22, 0xccbbaa, 0xaa5533);
+
+// Garden flowers south
+for(var i=0;i<12;i++){
+  sph(0.12, emt([0xff4488,0xff8800,0xffff00][i%3],[0xff2266,0xff6600,0xffcc00][i%3],0.6),
+    -8+i*1.5, 0.4, -13.5);
+}
+
+// ---- EAST: CITY PARK ----
+function addTree(x,z){
+  cyl(0.15,0.2,1.8, trunkMat, x,0.9,z);
+  sph(0.9, leafMat, x,2.4,z, 8);
+  sph(0.6, mat(0x447722), x+0.5,1.8,z+0.3, 6);
+}
+addTree(18,5); addTree(22,8); addTree(26,3); addTree(20,-5);
+addTree(25,-7); addTree(29,6); addTree(18,-8); addTree(28,-4);
+addTree(23,0); addTree(20,3);
+
+// Pond (east)
+cyl(2.5,2.5,0.15, emt(0x3399cc,0x2277aa,0.4), 25,0.0,-5, 16);
+// Ducks on pond
+sph(0.18, mat(0xffffff), 24.5,0.2,-5);
+sph(0.12, mat(0xffcc00), 24.5,0.25,-4.8);
+sph(0.18, mat(0xffdd88), 25.5,0.2,-5.2);
+
+// Gazebo (east)
+box(3,0.1,3, mat(0x8a6040), 20,0.6,-2);
+for(var i=0;i<4;i++){
+  cyl(0.1,0.1,2, mat(0x8a6040), 19+((i%2)*2), 1.6, -1+((Math.floor(i/2))*2));
+}
+cyl(0,2,3.5, mat(0xcc4444), 20,3.5,-2, 4);
+
+// Park benches
+addBench(18,0,0); addBench(22,-2,0);
+
+// ---- WEST: SHOPPING DISTRICT ----
+function addShop(x,z,w,col,awningCol,name){
+  box(w,3,3, mat(col), x,1.5,z);
+  // Awning
+  box(w+0.4,0.12,1.8, mat(awningCol), x,3.1,z+1.6);
+  box(w+0.4,0.1,0.1, mat(awningCol), x,2.95,z+2.45);
+  // Window
+  box(w-0.6,1.5,0.1, glassMat, x,1.5,z+1.55);
+  // Sign canvas
+  var c2=document.createElement('canvas'); c2.width=256; c2.height=48;
+  var cx=c2.getContext('2d');
+  cx.fillStyle=awningCol||'#ff8844'; cx.fillRect(0,0,256,48);
+  cx.fillStyle='#ffffff'; cx.font='bold 18px Arial'; cx.fillText(name,8,34);
+  var spr=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c2)}));
+  spr.position.set(x,3.6,z+1.5); spr.scale.set(2.5,0.6,1); scene.add(spr);
+}
+addShop(-18,-7, 4, 0xffeecc, 0xff6622, 'Bakery');
+addShop(-26,-5, 4, 0xeeffee, 0x44aa44, 'Florist');
+addShop(-18,5, 4, 0xeeeeff, 0x6644bb, 'Books');
+addShop(-26,3, 4, 0xffeeff, 0xcc4488, 'Toys');
+addShop(-22,-0.5,3, 0xffffee, 0xddaa22, 'Market');
+// Market stall
+box(2,0.1,1.5, mat(0xff8844), -22,2.2,8);
+box(0.05,2.2,0.05, mat(0x8a6040), -21,1.1,8.7);
+box(0.05,2.2,0.05, mat(0x8a6040), -23,1.1,8.7);
+box(0.05,2.2,0.05, mat(0x8a6040), -21,1.1,7.3);
+box(0.05,2.2,0.05, mat(0x8a6040), -23,1.1,7.3);
+// Produce on stall
+for(var i=0;i<5;i++){
+  sph(0.14, emt([0xff4400,0xff8800,0xffee00,0x22cc22,0xcc22cc][i],[0xff4400,0xff8800,0xffee00,0x22cc22,0xcc22cc][i],0.4),
+    -23.5+i*0.5, 2.4, 8);
+}
+
+// Traffic lights at intersections
+function addTrafficLight(x,z){
+  cyl(0.06,0.06,3, mat(0x444444), x,1.5,z);
+  box(0.2,0.6,0.2, mat(0x222222), x,3.2,z);
+  sph(0.1, emt(0xff0000,0xff0000,1.0), x,3.5,z);
+  sph(0.1, emt(0x00ff00,0x00ff00,1.0), x,3.0,z);
+}
+addTrafficLight(12,12); addTrafficLight(-12,12); addTrafficLight(12,-12); addTrafficLight(-12,-12);
+
+// ---- NPCs ----
+addNPC(0, 3, 0x334488, 'Mayor Thompson');
+addNPC(0, 25, 0x556677, 'Exec Sarah');
+addNPC(0, -25, 0x997755, 'Neighbor Jake');
+addNPC(22, 0, 0x336633, 'Ranger Kim');
+addNPC(-22, 0, 0x885533, 'Shopkeeper Lee');
+
+// ---- PICKUPS ----
+addPickup(6, 0.7, 2, 0xffdd00);
+addPickup(-6, 0.7, -3, 0xffdd00);
+addPickup(3, 0.7, 22, 0xffdd00);
+addPickup(-4, 0.7, 28, 0xffdd00);
+addPickup(2, 0.7, -20, 0xffdd00);
+addPickup(-3, 0.7, -27, 0xffdd00);
+addPickup(24, 0.7, 4, 0xffdd00);
+addPickup(28, 0.7, -3, 0xffdd00);
+addPickup(-20, 0.7, 7, 0xffdd00);
+addPickup(-27, 0.7, -2, 0xffdd00);
+
+// ---- CONTROLS ----
+var keys={}, yaw=0, pitch=0, started=false;
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('mousemove',function(e){
+  if(!document.pointerLockElement) return;
+  yaw -= e.movementX*0.002;
+  pitch = Math.max(-1.1,Math.min(1.1,pitch-e.movementY*0.002));
+});
+
+function lockPointer(){ renderer.domElement.requestPointerLock(); }
+document.addEventListener('pointerlockchange',function(){
+  if(document.pointerLockElement===renderer.domElement){
+    document.getElementById('lock-screen').style.display='none';
+  } else if(started){
+    document.getElementById('lock-screen').style.display='flex';
+  }
+});
+
+function beginGame(){
+  document.getElementById('start-screen').style.display='none';
+  started=true;
+  lockPointer();
+  animate();
+}
+
+function updateZone(){
+  var x=camera.position.x, z=camera.position.z;
+  var name='Town Square';
+  if(z>13 && Math.abs(x)<10) name='Business District';
+  else if(z<-13 && Math.abs(x)<10) name='Residential Area';
+  else if(x>13 && Math.abs(z)<10) name='City Park';
+  else if(x<-13 && Math.abs(z)<10) name='Shopping District';
+  document.getElementById('zone-display').textContent=name;
+}
+
+var lastTime=0;
+function animate(ts){
+  requestAnimationFrame(animate);
+  var dt=Math.min((ts-lastTime)/1000,0.05); lastTime=ts||0;
+  if(started && document.pointerLockElement){
+    var spd=5*dt;
+    var dx=Math.sin(yaw), dz=Math.cos(yaw);
+    if(keys['KeyW']||keys['ArrowUp']){camera.position.x+=dx*spd;camera.position.z-=dz*spd;}
+    if(keys['KeyS']||keys['ArrowDown']){camera.position.x-=dx*spd;camera.position.z+=dz*spd;}
+    if(keys['KeyA']||keys['ArrowLeft']){camera.position.x-=dz*spd;camera.position.z-=dx*spd;}
+    if(keys['KeyD']||keys['ArrowRight']){camera.position.x+=dz*spd;camera.position.z+=dx*spd;}
+    camera.position.x=Math.max(-34,Math.min(34,camera.position.x));
+    camera.position.z=Math.max(-34,Math.min(34,camera.position.z));
+    camera.position.y=1.6;
+  }
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var t=Date.now();
+  for(var i=0;i<animObjs.length;i++){
+    var a=animObjs[i];
+    if(a.type==='rot') a.obj.rotation[a.axis||'y']+=a.spd||0.01;
+    if(a.type==='bob') a.obj.position.y=(a.base||0.5)+Math.sin(t*0.003+i)*0.1;
+  }
+
+  for(var i=0;i<pickups.length;i++){
+    var p=pickups[i];
+    if(!p.active) continue;
+    var pdx=camera.position.x-p.x, pdz=camera.position.z-p.z;
+    if(Math.sqrt(pdx*pdx+pdz*pdz)<1.1){
+      p.active=false;
+      scene.remove(p.mesh);
+      collected++;
+      document.getElementById('score-display').textContent='🪙 Coins: '+collected+'/10';
+      if(collected===10) document.getElementById('score-display').textContent='🏆 City fully explored! Well done!';
+    }
+  }
+
+  updateZone();
+  renderer.render(scene,camera);
+}
+</script>
+</body>
+</html>

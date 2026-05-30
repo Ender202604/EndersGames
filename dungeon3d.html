@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dungeon 3D - Ender's Game World</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden}
+canvas{display:block}
+#ui{position:fixed;top:8px;left:50%;transform:translateX(-50%);color:#ffdd88;font-family:Arial,sans-serif;font-size:13px;text-align:center;pointer-events:none;text-shadow:1px 1px 3px #000;z-index:5}
+#home-btn{position:fixed;top:8px;left:10px;color:#ff9999;text-decoration:none;font-size:13px;z-index:99;text-shadow:1px 1px 2px #000}
+#start-screen{position:fixed;inset:0;background:rgba(0,0,0,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:20}
+#start-screen h1{color:#ffdd88;font-size:28px;font-family:Arial,sans-serif}
+#start-screen p{color:#ccbbaa;font-size:14px;text-align:center;max-width:340px;font-family:Arial,sans-serif}
+#lock-screen{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:15;cursor:pointer}
+#lock-screen p{color:#ffdd88;font-size:18px;font-family:Arial,sans-serif}
+.play-btn{background:#330011;border:2px solid #ff4444;color:#ffdd88;padding:12px 32px;font-size:18px;border-radius:8px;cursor:pointer;font-family:Arial,sans-serif}
+.play-btn:hover{filter:brightness(1.2)}
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<div id="ui">
+  <div id="score-display">⚔️ Coins: 0/10</div>
+  <div id="zone-display">Grand Hall</div>
+</div>
+<div id="start-screen">
+  <h1>⚔️ Dungeon 3D</h1>
+  <p>WASD to move, mouse to look.<br>Explore the dungeon and collect 10 golden coins!</p>
+  <button class="play-btn" onclick="beginGame()">▶ Enter Dungeon!</button>
+</div>
+<div id="lock-screen" onclick="lockPointer()">
+  <p>🖱️ Click to Focus</p>
+  <small style="color:#aaa;font-family:Arial,sans-serif">Move mouse to look around • WASD to walk</small>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var W = window.innerWidth, H = window.innerHeight;
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(W, H);
+renderer.shadowMap.enabled = false;
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+scene.fog = new THREE.Fog(0x110008, 8, 40);
+
+var camera = new THREE.PerspectiveCamera(70, W/H, 0.1, 200);
+camera.position.set(0, 1.6, 0);
+
+window.addEventListener('resize', function(){
+  W=window.innerWidth; H=window.innerHeight;
+  renderer.setSize(W,H); camera.aspect=W/H; camera.updateProjectionMatrix();
+});
+
+function mat(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+function emt(hex,em,ei){ var m=new THREE.MeshLambertMaterial({color:hex}); m.emissive=new THREE.Color(em); m.emissiveIntensity=ei||0.5; return m; }
+function box(w,h,d,m,x,y,z){ var mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); mesh.position.set(x,y,z); scene.add(mesh); return mesh; }
+function sph(r,m,x,y,z){ var mesh=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),m); mesh.position.set(x,y,z); scene.add(mesh); return mesh; }
+function cyl(rt,rb,h,m,x,y,z,segs){ var mesh=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,segs||12),m); mesh.position.set(x,y,z); scene.add(mesh); return mesh; }
+function pl(x,y,z,col,intensity,dist){ var l=new THREE.PointLight(col,intensity,dist); l.position.set(x,y,z); scene.add(l); return l; }
+
+var pickups = [], collected = 0;
+function addPickup(x,y,z,color){
+  var m=emt(color,color,0.8);
+  var mesh=sph(0.22,m,x,y,z);
+  pickups.push({mesh:mesh,x:x,z:z,active:true});
+  animObjs.push({obj:mesh,type:'rot',axis:'y',spd:0.04});
+  animObjs.push({obj:mesh,type:'bob',base:y});
+}
+
+function addNPC(x,z,color,name){
+  cyl(0.22,0.22,1.5,mat(color),x,0.75,z);
+  sph(0.22,mat(0xffccaa),x,1.75,z);
+  var c2=document.createElement('canvas'); c2.width=256; c2.height=48;
+  var cx=c2.getContext('2d');
+  cx.fillStyle='rgba(0,0,0,0.75)'; cx.fillRect(0,0,256,48);
+  cx.fillStyle='#ffff88'; cx.font='bold 17px Arial'; cx.fillText(name,6,32);
+  var spr=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c2)}));
+  spr.position.set(x,2.5,z); spr.scale.set(2.0,0.48,1); scene.add(spr);
+}
+
+var animObjs = [];
+
+// Lighting
+scene.add(new THREE.AmbientLight(0x221133, 0.5));
+
+// ---- FLOORS ----
+var stoneFloor = mat(0x445544);
+var dungeonFloor = mat(0x222222);
+var woodMat = mat(0x5a3a1a);
+var wallMat = mat(0x334433);
+var ironMat = mat(0x556677);
+var goldMat = emt(0xffdd00, 0xffaa00, 0.7);
+
+// Center - Grand Hall
+box(26,0.2,26, stoneFloor, 0,-0.1,0);
+// North - Armory
+box(20,0.2,20, mat(0x3a3a3a), 0,-0.1,22);
+// South - Dungeon Cells
+box(20,0.2,20, dungeonFloor, 0,-0.1,-22);
+// East - Treasure Room
+box(20,0.2,20, mat(0x3a3020), 22,-0.1,0);
+// West - Ancient Library
+box(20,0.2,20, mat(0x2a2a3a), -22,-0.1,0);
+
+// Corridor floors
+box(8,0.2,10, stoneFloor, 0,-0.1,16);  // center-north
+box(8,0.2,10, stoneFloor, 0,-0.1,-16); // center-south
+box(10,0.2,8, stoneFloor, 16,-0.1,0);  // center-east
+box(10,0.2,8, stoneFloor, -16,-0.1,0); // center-west
+
+// ---- OUTER WALLS ----
+// Center Hall walls (with doorway gaps)
+// North wall of center (gap at x∈[-4,4])
+box(9,3,0.4, wallMat, -8.5,1.5,12);
+box(9,3,0.4, wallMat, 8.5,1.5,12);
+// South wall of center
+box(9,3,0.4, wallMat, -8.5,1.5,-12);
+box(9,3,0.4, wallMat, 8.5,1.5,-12);
+// East wall
+box(0.4,3,9, wallMat, 12,1.5,-8.5);
+box(0.4,3,9, wallMat, 12,1.5,8.5);
+// West wall
+box(0.4,3,9, wallMat, -12,1.5,-8.5);
+box(0.4,3,9, wallMat, -12,1.5,8.5);
+
+// North Zone walls (Armory)
+box(20,3,0.4, wallMat, 0,1.5,32);
+box(0.4,3,20, wallMat, -10,1.5,22);
+box(0.4,3,20, wallMat, 10,1.5,22);
+// Corridor north
+box(1,3,0.4, wallMat, -4.5,1.5,21);
+box(1,3,0.4, wallMat, 4.5,1.5,21);
+
+// South Zone walls (Dungeon)
+box(20,3,0.4, wallMat, 0,1.5,-32);
+box(0.4,3,20, wallMat, -10,1.5,-22);
+box(0.4,3,20, wallMat, 10,1.5,-22);
+box(1,3,0.4, wallMat, -4.5,1.5,-11);
+box(1,3,0.4, wallMat, 4.5,1.5,-11);
+
+// East Zone walls (Treasure)
+box(0.4,3,20, wallMat, 32,1.5,0);
+box(20,3,0.4, wallMat, 22,1.5,-10);
+box(20,3,0.4, wallMat, 22,1.5,10);
+box(0.4,3,1, wallMat, 11,1.5,-4.5);
+box(0.4,3,1, wallMat, 11,1.5,4.5);
+
+// West Zone walls (Library)
+box(0.4,3,20, wallMat, -32,1.5,0);
+box(20,3,0.4, wallMat, -22,1.5,-10);
+box(20,3,0.4, wallMat, -22,1.5,10);
+box(0.4,3,1, wallMat, -11,1.5,-4.5);
+box(0.4,3,1, wallMat, -11,1.5,4.5);
+
+// ---- GRAND HALL DECOR ----
+// Throne
+box(1.2,2,0.8, woodMat, 0,1,9);
+box(1.6,0.4,1.0, woodMat, 0,0.2,9);      // seat
+box(0.2,2,0.6, woodMat, -0.6,1,9.3);     // left armrest base
+box(0.2,2,0.6, woodMat, 0.6,1,9.3);      // right armrest base
+box(0.15,0.15,0.6, woodMat, -0.65,2.1,9.3);
+box(0.15,0.15,0.6, woodMat, 0.65,2.1,9.3);
+// Throne back gold decoration
+box(0.8,0.3,0.1, goldMat, 0,2.8,8.65);
+
+// Stone pillars in center hall
+var pillarPositions = [[-7,7],[-7,-7],[7,7],[7,-7],[-4,0],[4,0]];
+for(var i=0;i<pillarPositions.length;i++){
+  cyl(0.4,0.5,3, wallMat, pillarPositions[i][0],1.5,pillarPositions[i][1]);
+  box(1,0.3,1, mat(0x223322), pillarPositions[i][0],3.1,pillarPositions[i][1]);
+}
+
+// Skull decorations on pedestals
+box(0.4,1,0.4, wallMat, -9,0.5,-9);
+sph(0.2, mat(0xeeeecc), -9,1.2,-9);
+box(0.4,1,0.4, wallMat, 9,0.5,-9);
+sph(0.2, mat(0xeeeecc), 9,1.2,-9);
+box(0.4,1,0.4, wallMat, -9,0.5,9);
+sph(0.2, mat(0xeeeecc), -9,1.2,9);
+box(0.4,1,0.4, wallMat, 9,0.5,9);
+sph(0.2, mat(0xeeeecc), 9,1.2,9);
+
+// ---- TORCHES ----
+var torchFlame = emt(0xff6600,0xff3300,0.9);
+function addTorch(x,y,z){
+  cyl(0.06,0.08,0.5, woodMat, x,y,z);
+  var flame = sph(0.1, torchFlame, x,y+0.35,z);
+  animObjs.push({obj:flame, type:'bob', base:y+0.35});
+  pl(x,y+0.5,z, 0xff6600, 1.5, 8);
+}
+addTorch(-11,1.8,5); addTorch(-11,1.8,-5);
+addTorch(11,1.8,5); addTorch(11,1.8,-5);
+addTorch(-5,1.8,11.5); addTorch(5,1.8,11.5);
+addTorch(-5,1.8,-11.5); addTorch(5,1.8,-11.5);
+// Armory torches
+addTorch(-9,1.8,32); addTorch(9,1.8,32);
+addTorch(-9,1.8,13); addTorch(9,1.8,13);
+// Dungeon torches
+addTorch(-9,1.8,-13); addTorch(9,1.8,-13);
+addTorch(0,1.8,-30);
+// Treasure torches
+addTorch(13,1.8,-9); addTorch(13,1.8,9);
+addTorch(30,1.8,-9); addTorch(30,1.8,9);
+// Library torches
+addTorch(-13,1.8,-9); addTorch(-13,1.8,9);
+addTorch(-30,1.8,-9); addTorch(-30,1.8,9);
+
+// ---- NORTH ZONE: ARMORY ----
+// Weapon racks on walls
+for(var i=0;i<4;i++){
+  box(0.1,2.2,0.1, ironMat, -8+i*4, 1.1, 31);
+  box(1.5,0.1,0.1, mat(0x8a7a6a), -7+i*4, 2, 31.1);
+}
+// Training dummies
+for(var i=0;i<3;i++){
+  cyl(0.15,0.15,1.8, mat(0x8a6040), -6+i*5, 0.9, 25);
+  sph(0.25, mat(0xddaa88), -6+i*5, 2, 25);
+  box(0.8,0.1,0.1, mat(0x8a6040), -6+i*5, 1.5, 25);
+}
+// Shields on east armory wall
+for(var i=0;i<3;i++){
+  cyl(0.5,0.5,0.1, ironMat, 8, 1.5, 16+i*5, 8);
+}
+// Anvil
+box(0.8,0.4,0.5, ironMat, 3,0.2,27);
+box(1.0,0.15,0.7, ironMat, 3,0.4,27);
+// Forge
+box(1.5,1.5,1.5, mat(0x332222), -3,0.75,27);
+sph(0.3, emt(0xff4400,0xff2200,1.0), -3,1.6,27);
+pl(-3,2,27, 0xff4400, 2.0, 6);
+
+// ---- SOUTH ZONE: DUNGEON CELLS ----
+// Iron bars
+for(var i=0;i<5;i++){
+  cyl(0.08,0.08,3, ironMat, -8+i*2, 1.5, -18);
+  cyl(0.08,0.08,3, ironMat, -8+i*2, 1.5, -26);
+}
+// Horizontal bar connectors
+box(10,0.1,0.1, ironMat, -4,0.5,-18);
+box(10,0.1,0.1, ironMat, -4,2.5,-18);
+box(10,0.1,0.1, ironMat, -4,0.5,-26);
+box(10,0.1,0.1, ironMat, -4,2.5,-26);
+
+// Right side cells
+for(var i=0;i<5;i++){
+  cyl(0.08,0.08,3, ironMat, 2+i*2, 1.5, -18);
+  cyl(0.08,0.08,3, ironMat, 2+i*2, 1.5, -26);
+}
+box(10,0.1,0.1, ironMat, 6,0.5,-18);
+box(10,0.1,0.1, ironMat, 6,2.5,-18);
+
+// Chains (hanging from ceiling appearance)
+for(var i=0;i<4;i++){
+  box(0.05,0.8,0.05, ironMat, -5+i*3, 2.5, -22);
+}
+// Tormented wall stones
+box(6,2,0.3, mat(0x1a1a1a), 0,1,-31);
+// Wooden crates
+box(0.8,0.8,0.8, woodMat, 5,0.4,-25);
+box(0.8,0.8,0.8, woodMat, 6,0.4,-24);
+box(0.6,0.6,0.6, woodMat, 5.5,1.2,-24.5);
+// Skull pile
+sph(0.18, mat(0xeeeecc), -7,0.2,-29);
+sph(0.16, mat(0xeeeecc), -6.5,0.2,-29.5);
+sph(0.17, mat(0xeeeecc), -7.2,0.2,-29.5);
+
+// ---- EAST ZONE: TREASURE ROOM ----
+// Treasure chests
+function addChest(x,z){
+  box(0.8,0.35,0.5, woodMat, x,0.175,z);
+  box(0.85,0.2,0.55, mat(0x7a5a2a), x,0.47,z);
+  box(0.82,0.08,0.08, goldMat, x,0.35,z-0.24);
+}
+addChest(20,-8); addChest(24,-8); addChest(28,-6);
+addChest(20,8); addChest(24,6); addChest(26,-2);
+
+// Gold piles
+for(var i=0;i<8;i++){
+  sph(0.12+(i%3)*0.06, goldMat, 18+Math.cos(i*1.2)*4, 0.1, i*1.5-5);
+}
+// Gold coins scattered
+for(var i=0;i<12;i++){
+  cyl(0.15,0.15,0.04, goldMat, 15+Math.cos(i*0.7)*6, 0.02, Math.sin(i*0.7)*6, 8);
+}
+// Gem pedestals
+for(var i=0;i<3;i++){
+  box(0.3,0.8,0.3, wallMat, 29, 0.4, -4+i*4);
+  sph(0.18, emt([0xff2244,0x44ff22,0x2244ff][i],[0xff2244,0x44ff22,0x2244ff][i],1.0), 29,1.1,-4+i*4);
+  pl(29,1.5,-4+i*4, [0xff2244,0x44ff22,0x2244ff][i], 1.0, 5);
+}
+
+// ---- WEST ZONE: ANCIENT LIBRARY ----
+// Bookshelves
+for(var i=0;i<4;i++){
+  box(0.4,2.5,2.5, woodMat, -14-i*2.5, 1.25, -8+i*4);
+  // Book spines
+  for(var j=0;j<5;j++){
+    box(0.05,0.35,0.2, mat([0x882222,0x228822,0x222288,0x882288,0xaa8822][j%5]), -13.8-i*2.5, 0.5+j*0.4, -9+i*4+j*0.3);
+  }
+}
+// More bookshelves on opposite wall
+for(var i=0;i<4;i++){
+  box(0.4,2.5,2.5, woodMat, -28+i*1.5, 1.25, -7+i*3);
+}
+// Reading table
+box(2,0.1,1, woodMat, -22, 0.8, 0);
+box(0.1,0.8,0.1, woodMat, -21.1,0.4,0.4);
+box(0.1,0.8,0.1, woodMat, -22.9,0.4,0.4);
+box(0.1,0.8,0.1, woodMat, -21.1,0.4,-0.4);
+box(0.1,0.8,0.1, woodMat, -22.9,0.4,-0.4);
+// Open books on table
+box(0.6,0.05,0.5, mat(0xeeeecc), -21.5,0.86,0);
+box(0.6,0.05,0.5, mat(0xeeeecc), -22.5,0.86,0);
+// Scrolls
+for(var i=0;i<5;i++){
+  cyl(0.06,0.06,0.5, mat(0xddcc99), -20+i*0.4,1.0,6, 8);
+}
+// Magic orb
+sph(0.3, emt(0x8844ff,0x6622cc,1.0), -22, 1.6, -7);
+pl(-22,2,-7, 0x6622cc, 1.5, 8);
+// Candles
+for(var i=0;i<4;i++){
+  cyl(0.05,0.05,0.3, mat(0xffeecc), -15+i*5, 0.15, -9);
+  sph(0.06, emt(0xffcc44,0xff8800,1.0), -15+i*5, 0.35, -9);
+  pl(-15+i*5, 0.5, -9, 0xffcc44, 0.8, 4);
+}
+
+// ---- NPCs ----
+addNPC(0, 5, 0x334455, 'Guard Captain');
+addNPC(0, 27, 0x667744, 'Blacksmith Erik');
+addNPC(0, -27, 0xaa7766, 'Prisoner Mira');
+addNPC(22, 0, 0x776600, 'Treasurer Gold');
+addNPC(-22, 0, 0x553388, 'Wizard Aldric');
+
+// ---- PICKUPS (Golden Coins) ----
+// 2 per zone + some in corridors
+addPickup(5, 0.7, 5, 0xffdd00);
+addPickup(-5, 0.7, -5, 0xffdd00);
+addPickup(0, 0.7, 25, 0xffdd00);
+addPickup(-5, 0.7, 28, 0xffdd00);
+addPickup(3, 0.7, -25, 0xffdd00);
+addPickup(-4, 0.7, -28, 0xffdd00);
+addPickup(24, 0.7, -5, 0xffdd00);
+addPickup(27, 0.7, 3, 0xffdd00);
+addPickup(-20, 0.7, 5, 0xffdd00);
+addPickup(-25, 0.7, -5, 0xffdd00);
+
+// ---- CONTROLS & GAME LOGIC ----
+var keys={}, yaw=0, pitch=0, started=false;
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('mousemove',function(e){
+  if(!document.pointerLockElement) return;
+  yaw -= e.movementX*0.002;
+  pitch = Math.max(-1.1,Math.min(1.1,pitch-e.movementY*0.002));
+});
+
+function lockPointer(){ renderer.domElement.requestPointerLock(); }
+document.addEventListener('pointerlockchange',function(){
+  if(document.pointerLockElement===renderer.domElement){
+    document.getElementById('lock-screen').style.display='none';
+  } else if(started){
+    document.getElementById('lock-screen').style.display='flex';
+  }
+});
+
+function beginGame(){
+  document.getElementById('start-screen').style.display='none';
+  started=true;
+  lockPointer();
+  animate();
+}
+
+function updateZone(){
+  var x=camera.position.x, z=camera.position.z;
+  var name='Grand Hall';
+  if(z>13 && Math.abs(x)<10) name='Armory';
+  else if(z<-13 && Math.abs(x)<10) name='Dungeon Cells';
+  else if(x>13 && Math.abs(z)<10) name='Treasure Room';
+  else if(x<-13 && Math.abs(z)<10) name='Ancient Library';
+  document.getElementById('zone-display').textContent=name;
+}
+
+var lastTime=0;
+function animate(ts){
+  requestAnimationFrame(animate);
+  var dt=Math.min((ts-lastTime)/1000,0.05); lastTime=ts||0;
+  if(started && document.pointerLockElement){
+    var spd=5*dt;
+    var dx=Math.sin(yaw), dz=Math.cos(yaw);
+    if(keys['KeyW']||keys['ArrowUp']){camera.position.x+=dx*spd;camera.position.z-=dz*spd;}
+    if(keys['KeyS']||keys['ArrowDown']){camera.position.x-=dx*spd;camera.position.z+=dz*spd;}
+    if(keys['KeyA']||keys['ArrowLeft']){camera.position.x-=dz*spd;camera.position.z-=dx*spd;}
+    if(keys['KeyD']||keys['ArrowRight']){camera.position.x+=dz*spd;camera.position.z+=dx*spd;}
+    camera.position.x=Math.max(-34,Math.min(34,camera.position.x));
+    camera.position.z=Math.max(-34,Math.min(34,camera.position.z));
+    camera.position.y=1.6;
+  }
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var t=Date.now();
+  for(var i=0;i<animObjs.length;i++){
+    var a=animObjs[i];
+    if(a.type==='rot') a.obj.rotation[a.axis||'y']+=a.spd||0.01;
+    if(a.type==='bob') a.obj.position.y=(a.base||0.5)+Math.sin(t*0.003+i)*0.1;
+  }
+
+  for(var i=0;i<pickups.length;i++){
+    var p=pickups[i];
+    if(!p.active) continue;
+    var pdx=camera.position.x-p.x, pdz=camera.position.z-p.z;
+    if(Math.sqrt(pdx*pdx+pdz*pdz)<1.1){
+      p.active=false;
+      scene.remove(p.mesh);
+      collected++;
+      document.getElementById('score-display').textContent='⚔️ Coins: '+collected+'/10';
+      if(collected===10) document.getElementById('score-display').textContent='🏆 All coins found! The dungeon is yours!';
+    }
+  }
+
+  updateZone();
+  renderer.render(scene,camera);
+}
+</script>
+</body>
+</html>

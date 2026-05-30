@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aquarium 3D - Ender's Game World</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden}
+canvas{display:block}
+#ui{position:fixed;top:8px;left:50%;transform:translateX(-50%);color:#88ddff;font-family:Arial,sans-serif;font-size:13px;text-align:center;pointer-events:none;text-shadow:1px 1px 3px #000;z-index:5}
+#home-btn{position:fixed;top:8px;left:10px;color:#ff9999;text-decoration:none;font-size:13px;z-index:99;text-shadow:1px 1px 2px #000}
+#start-screen{position:fixed;inset:0;background:rgba(0,0,0,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:20}
+#start-screen h1{color:#88ddff;font-size:28px;font-family:Arial,sans-serif}
+#start-screen p{color:#ccbbaa;font-size:14px;text-align:center;max-width:340px;font-family:Arial,sans-serif}
+#lock-screen{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:15;cursor:pointer}
+#lock-screen p{color:#88ddff;font-size:18px;font-family:Arial,sans-serif}
+.play-btn{background:#001133;border:2px solid #0088ff;color:#88ddff;padding:12px 32px;font-size:18px;border-radius:8px;cursor:pointer;font-family:Arial,sans-serif}
+.play-btn:hover{filter:brightness(1.2)}
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<div id="ui">
+  <div id="score-display">🔵 Orbs: 0/10</div>
+  <div id="zone-display">Main Tank</div>
+</div>
+<div id="start-screen">
+  <h1>🐠 Aquarium 3D</h1>
+  <p>WASD to move, mouse to look.<br>Explore the giant aquarium and collect 10 glowing orbs!</p>
+  <button class="play-btn" onclick="beginGame()">▶ Dive In!</button>
+</div>
+<div id="lock-screen" onclick="lockPointer()">
+  <p>🖱️ Click to Focus</p>
+  <small style="color:#aaa;font-family:Arial,sans-serif">Move mouse to look around • WASD to walk</small>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var W = window.innerWidth, H = window.innerHeight;
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(W, H);
+renderer.shadowMap.enabled = false;
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x001133);
+scene.fog = new THREE.Fog(0x001133, 8, 40);
+
+var camera = new THREE.PerspectiveCamera(70, W/H, 0.1, 200);
+camera.position.set(0, 1.6, 0);
+
+window.addEventListener('resize', function(){
+  W=window.innerWidth; H=window.innerHeight;
+  renderer.setSize(W,H); camera.aspect=W/H; camera.updateProjectionMatrix();
+});
+
+function mat(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+function emt(hex,em,ei){ var m=new THREE.MeshLambertMaterial({color:hex}); m.emissive=new THREE.Color(em); m.emissiveIntensity=ei||0.5; return m; }
+function box(w,h,d,m,x,y,z){ var mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); mesh.position.set(x,y,z); scene.add(mesh); return mesh; }
+function sph(r,m,x,y,z){ var mesh=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),m); mesh.position.set(x,y,z); scene.add(mesh); return mesh; }
+function cyl(rt,rb,h,m,x,y,z,segs){ var mesh=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,segs||12),m); mesh.position.set(x,y,z); scene.add(mesh); return mesh; }
+function pl(x,y,z,col,intensity,dist){ var l=new THREE.PointLight(col,intensity,dist); l.position.set(x,y,z); scene.add(l); return l; }
+
+var pickups=[], collected=0;
+function addPickup(x,y,z,color){
+  var m=emt(color,color,0.9);
+  var mesh=sph(0.22,m,x,y,z);
+  pickups.push({mesh:mesh,x:x,z:z,active:true});
+  animObjs.push({obj:mesh,type:'rot',axis:'y',spd:0.04});
+  animObjs.push({obj:mesh,type:'bob',base:y});
+}
+
+function addNPC(x,z,color,name){
+  cyl(0.22,0.22,1.5,mat(color),x,0.75,z);
+  sph(0.22,mat(0xffccaa),x,1.75,z);
+  var c2=document.createElement('canvas'); c2.width=256; c2.height=48;
+  var cx=c2.getContext('2d');
+  cx.fillStyle='rgba(0,0,0,0.75)'; cx.fillRect(0,0,256,48);
+  cx.fillStyle='#88ddff'; cx.font='bold 15px Arial'; cx.fillText(name,6,32);
+  var spr=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c2)}));
+  spr.position.set(x,2.5,z); spr.scale.set(2.2,0.52,1); scene.add(spr);
+}
+
+var animObjs=[];
+var fishOrbiters=[];
+
+// Lighting - Underwater
+scene.add(new THREE.AmbientLight(0x002244, 0.6));
+pl(0,3,0, 0x0044ff, 1.5, 20);
+pl(0,3,20, 0x0033cc, 1.2, 18);
+pl(0,3,-20, 0x0033cc, 1.2, 18);
+pl(20,3,0, 0x0022aa, 1.0, 18);
+pl(-20,3,0, 0x003388, 1.0, 18);
+pl(0,3,0, 0x004488, 2.0, 40);
+
+// ---- MATERIALS ----
+var sandMat = mat(0xddcc99);
+var glassMat = emt(0x0055aa, 0x003366, 0.2);
+var deepFloor = mat(0x111122);
+var sharkMat = mat(0x667788);
+
+// ---- FLOORS ----
+// Center - Main Tank
+box(26,0.2,26, sandMat, 0,-0.1,0);
+// North - Shark Zone
+box(20,0.2,20, mat(0x112233), 0,-0.1,22);
+// South - Coral Reef
+box(20,0.2,20, mat(0x223322), 0,-0.1,-22);
+// East - Jellyfish Bay
+box(20,0.2,20, mat(0x221133), 22,-0.1,0);
+// West - Deep Sea
+box(20,0.2,20, deepFloor, -22,-0.1,0);
+
+// Corridors
+box(8,0.2,10, sandMat, 0,-0.1,16);
+box(8,0.2,10, mat(0x221133), 0,-0.1,-16);
+box(10,0.2,8, sandMat, 16,-0.1,0);
+box(10,0.2,8, deepFloor, -16,-0.1,0);
+
+// ---- GLASS WALLS (center tank) ----
+// Slightly transparent-looking glass panels
+box(26,5,0.3, glassMat, 0,2.5,12.8);
+box(26,5,0.3, glassMat, 0,2.5,-12.8);
+box(0.3,5,26, glassMat, 12.8,2.5,0);
+box(0.3,5,26, glassMat, -12.8,2.5,0);
+
+// Zone boundary walls (solid)
+var wallMat2 = mat(0x0a1a2a);
+box(20,5,0.4, wallMat2, 0,2.5,32); box(20,5,0.4, wallMat2, 0,2.5,-32);
+box(0.4,5,20, wallMat2, 32,2.5,0); box(0.4,5,20, wallMat2, -32,2.5,0);
+box(0.4,5,20, wallMat2, -10,2.5,22); box(0.4,5,20, wallMat2, 10,2.5,22);
+box(0.4,5,20, wallMat2, -10,2.5,-22); box(0.4,5,20, wallMat2, 10,2.5,-22);
+box(20,5,0.4, wallMat2, 22,2.5,-10); box(20,5,0.4, wallMat2, 22,2.5,10);
+box(20,5,0.4, wallMat2, -22,2.5,-10); box(20,5,0.4, wallMat2, -22,2.5,10);
+
+// Zone doorways (corridor connectors — just leave gap in walls above)
+// Low threshold panels
+box(8,0.4,0.3, mat(0x334455), 0,0.2,12.7);
+box(8,0.4,0.3, mat(0x334455), 0,0.2,-12.7);
+box(0.3,0.4,8, mat(0x334455), 12.7,0.2,0);
+box(0.3,0.4,8, mat(0x334455), -12.7,0.2,0);
+
+// ---- CENTER: MAIN TANK ----
+// Sand ripples
+for(var i=0;i<6;i++){
+  cyl(1.5+i*0.3,1.8+i*0.3,0.04, mat(0xccbb88), Math.cos(i*1.1)*5,0.0,Math.sin(i*1.1)*5, 12);
+}
+// Large fish orbiting
+function addOrbitalFish(cx,cz,r,h,speed,col){
+  var fishGroup = new THREE.Group();
+  // Body
+  var body=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.45,0.45), mat(col));
+  body.position.set(0,0,0);
+  fishGroup.add(body);
+  // Tail
+  var tail=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.2), mat(col));
+  tail.position.set(-0.8,0,0);
+  fishGroup.add(tail);
+  // Fin
+  var fin=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.1), mat(col));
+  fin.position.set(0,0.3,0);
+  fishGroup.add(fin);
+  // Eye
+  var eye=new THREE.Mesh(new THREE.SphereGeometry(0.07,6,4), mat(0x000011));
+  eye.position.set(0.55,0.1,0.23);
+  fishGroup.add(eye);
+  scene.add(fishGroup);
+  fishGroup.position.set(cx+r,h,cz);
+  fishOrbiters.push({group:fishGroup, cx:cx, cz:cz, r:r, angle:Math.random()*Math.PI*2, speed:speed});
+  return fishGroup;
+}
+addOrbitalFish(0,0,6,1.2,0.008,0xff6622);
+addOrbitalFish(0,0,8,0.9,0.006,0xffcc00);
+addOrbitalFish(0,0,4,1.5,0.010,0x44aaff);
+addOrbitalFish(0,0,7,1.0,-0.007,0xff4488);
+addOrbitalFish(0,0,5,1.3,0.009,0x44ffcc);
+addOrbitalFish(0,0,9,0.8,-0.005,0xffaa22);
+
+// Bubble particles (center)
+for(var i=0;i<20;i++){
+  var bub=sph(0.05+Math.random()*0.05, emt(0xaaddff,0xaaddff,0.9),
+    (Math.random()-0.5)*20, 0.5+Math.random()*2.5, (Math.random()-0.5)*20);
+  animObjs.push({obj:bub, type:'bob', base:0.5+Math.random()*1.5});
+}
+
+// ---- NORTH: SHARK ZONE ----
+// Large shark
+var sharkBody=box(2.8,0.65,0.7, sharkMat, 0,1.2,22);
+var sharkFin=box(0.1,0.8,0.6, sharkMat, 0.3,1.85,22);
+var sharkTail=box(0.5,0.7,0.2, sharkMat, -1.5,1.2,22);
+var sharkHead=sph(0.4, mat(0x556677), 1.5,1.2,22);
+animObjs.push({obj:sharkBody,type:'bob',base:1.2});
+animObjs.push({obj:sharkFin,type:'bob',base:1.85});
+animObjs.push({obj:sharkTail,type:'bob',base:1.2});
+animObjs.push({obj:sharkHead,type:'bob',base:1.2});
+
+// Second smaller shark
+var sh2body=box(2.0,0.5,0.5, sharkMat, -3,1.0,26);
+var sh2fin=box(0.1,0.55,0.4, sharkMat, -2.7,1.4,26);
+animObjs.push({obj:sh2body,type:'bob',base:1.0});
+animObjs.push({obj:sh2fin,type:'bob',base:1.4});
+
+// Dark rock formations
+for(var i=0;i<5;i++){
+  cyl(0.3+i*0.1,0.6+i*0.1,0.8+i*0.3, mat(0x223344), -7+i*3, 0.4+i*0.15, 24+Math.sin(i)*3);
+}
+// Shark zone light
+pl(0,3,22, 0x001133, 1.5, 15);
+pl(0,1,26, 0x112244, 1.0, 10);
+
+// ---- SOUTH: CORAL REEF ----
+function addCoral(x,z,col1,col2,h1,h2){
+  cyl(0.15+Math.random()*0.1, 0.25+Math.random()*0.1, h1, emt(col1,col1,0.8), x,h1/2,z);
+  cyl(0.1, 0.2, h2, emt(col2,col2,0.8), x+0.2,h2/2,z+0.1);
+  cyl(0.25+Math.random()*0.1, 0.1, h1*0.7, emt(col1,col1,0.7), x-0.15,h1*0.35,z-0.15);
+  pl(x,h1+0.5,z, col1, 0.7, 5);
+}
+addCoral(-7,-18,0xff5522,0xff88cc,1.2,0.9);
+addCoral(-4,-20,0xff88cc,0x44ffaa,1.5,1.1);
+addCoral(-1,-17,0x44ffaa,0xffdd22,1.0,0.8);
+addCoral(2,-22,0xffdd22,0xff5522,1.8,1.3);
+addCoral(5,-19,0xff4488,0x44ffcc,1.3,0.7);
+addCoral(7,-25,0x44ffaa,0xff88cc,1.6,1.2);
+addCoral(-6,-27,0xff6644,0xffdd22,1.0,1.4);
+addCoral(1,-29,0xff88cc,0x44ffaa,1.2,0.9);
+
+// Seaweed clusters south
+for(var i=0;i<10;i++){
+  var sw=cyl(0.04,0.04,1.5+Math.random()*0.5, emt(0x226622,0x113311,0.4),
+    -8+i*1.8, 0.8, -24+Math.sin(i)*4);
+  animObjs.push({obj:sw,type:'sway',base:sw.position.x});
+}
+
+// Bright reef fish
+for(var i=0;i<5;i++){
+  var rf=box(0.5,0.25,0.15, mat([0xff6600,0xff2244,0xffcc00,0x44ff88,0xff44cc][i]),
+    -6+i*2.5, 0.8+i*0.3, -22+Math.cos(i)*3);
+  animObjs.push({obj:rf,type:'bob',base:0.8+i*0.3});
+}
+pl(0,2,-22, 0x22ff88, 1.2, 12);
+pl(-5,2,-22, 0xff4488, 0.8, 8);
+
+// ---- EAST: JELLYFISH BAY ----
+function addJellyfish(x,y,z){
+  var bell=sph(0.45, emt(0xff88dd,0xff44bb,0.7), x,y,z);
+  animObjs.push({obj:bell,type:'bob',base:y});
+  // Tentacles
+  for(var i=0;i<5;i++){
+    var tent=cyl(0.02,0.02,0.6, emt(0xff88dd,0xff44bb,0.5),
+      x+Math.cos(i*1.26)*0.25, y-0.55, z+Math.sin(i*1.26)*0.25, 4);
+    animObjs.push({obj:tent,type:'bob',base:y-0.55});
+  }
+  pl(x,y,z, 0xff44bb, 0.8, 4);
+}
+addJellyfish(20,2,2);
+addJellyfish(24,1.5,-3);
+addJellyfish(19,2.2,5);
+addJellyfish(27,1.8,-1);
+addJellyfish(22,2.4,-6);
+addJellyfish(25,1.6,6);
+addJellyfish(18,2.0,-5);
+
+// Purple glow floor east
+for(var i=0;i<8;i++){
+  sph(0.2, emt(0xaa44cc,0x882299,0.6), 18+Math.cos(i*0.8)*5, 0.2, Math.sin(i*0.8)*5);
+}
+pl(22,2,0, 0x8800cc, 1.5, 15);
+pl(22,1,-5, 0xff44bb, 1.0, 8);
+
+// ---- WEST: DEEP SEA ----
+// Very dark, bioluminescent
+for(var i=0;i<25;i++){
+  var biolum=sph(0.08+Math.random()*0.06,
+    emt([0x00ffdd,0x00aaff,0xaaffaa,0xffaa00,0xff44ff][i%5],
+        [0x00ffdd,0x00aaff,0xaaffaa,0xffaa00,0xff44ff][i%5], 1.0),
+    -14+Math.random()*16-3, Math.random()*3.5, -8+Math.random()*16-3);
+  animObjs.push({obj:biolum,type:'bob',base:biolum.position.y});
+  pl(biolum.position.x, biolum.position.y, biolum.position.z,
+    [0x00ffdd,0x00aaff,0xaaffaa,0xffaa00,0xff44ff][i%5], 0.4, 3);
+}
+
+// Anglerfish
+var angBody=box(1.2,0.7,0.6, mat(0x223322), -22,1.2,2);
+var angLure=sph(0.15, emt(0x00ffdd,0x00ffdd,1.0), -21,2.0,2);
+pl(-21,2.2,2, 0x00ffdd, 1.5, 5);
+animObjs.push({obj:angBody,type:'bob',base:1.2});
+animObjs.push({obj:angLure,type:'bob',base:2.0});
+
+// Deep sea tentacles (giant squid-ish)
+for(var i=0;i<6;i++){
+  var tent2=cyl(0.05,0.12,2.0+Math.random()*1.5, mat(0x334433),
+    -19+i*2, 1.0+Math.random()*0.5, -5+Math.random()*4);
+  animObjs.push({obj:tent2,type:'bob',base:tent2.position.y});
+}
+
+// Deep sea rocks / vents
+for(var i=0;i<4;i++){
+  cyl(0.2,0.4,0.8, mat(0x1a1a2a), -28+i*3, 0.4, -2+i*2);
+  // Hydrothermal vent glow
+  pl(-28+i*3, 1, -2+i*2, 0x004422, 0.6, 4);
+}
+
+// ---- NPCs ----
+addNPC(0, 5, 0x334477, 'Dr. Pearl');
+addNPC(0, 25, 0x556655, 'Diver Sam');
+addNPC(0, -25, 0x337755, 'Dr. Reef');
+addNPC(22, 0, 0x774488, 'Aquarist Maya');
+addNPC(-22, 0, 0x334455, 'Dr. Deep');
+
+// ---- PICKUPS (Glowing Teal Orbs) ----
+addPickup(4, 0.7, 4, 0x00ffdd);
+addPickup(-5, 0.7, -4, 0x00ffdd);
+addPickup(3, 0.7, 24, 0x00ffdd);
+addPickup(-4, 0.7, 28, 0x00ffdd);
+addPickup(2, 0.7, -20, 0x00ffdd);
+addPickup(-3, 0.7, -27, 0x00ffdd);
+addPickup(24, 0.7, 5, 0x00ffdd);
+addPickup(27, 0.7, -3, 0x00ffdd);
+addPickup(-20, 0.7, 4, 0x00ffdd);
+addPickup(-27, 0.7, -3, 0x00ffdd);
+
+// ---- CONTROLS ----
+var keys={}, yaw=0, pitch=0, started=false;
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('mousemove',function(e){
+  if(!document.pointerLockElement) return;
+  yaw -= e.movementX*0.002;
+  pitch = Math.max(-1.1,Math.min(1.1,pitch-e.movementY*0.002));
+});
+
+function lockPointer(){ renderer.domElement.requestPointerLock(); }
+document.addEventListener('pointerlockchange',function(){
+  if(document.pointerLockElement===renderer.domElement){
+    document.getElementById('lock-screen').style.display='none';
+  } else if(started){
+    document.getElementById('lock-screen').style.display='flex';
+  }
+});
+
+function beginGame(){
+  document.getElementById('start-screen').style.display='none';
+  started=true;
+  lockPointer();
+  animate();
+}
+
+function updateZone(){
+  var x=camera.position.x, z=camera.position.z;
+  var name='Main Tank';
+  if(z>13 && Math.abs(x)<10) name='Shark Zone';
+  else if(z<-13 && Math.abs(x)<10) name='Coral Reef';
+  else if(x>13 && Math.abs(z)<10) name='Jellyfish Bay';
+  else if(x<-13 && Math.abs(z)<10) name='Deep Sea';
+  document.getElementById('zone-display').textContent=name;
+}
+
+var lastTime=0;
+function animate(ts){
+  requestAnimationFrame(animate);
+  var dt=Math.min((ts-lastTime)/1000,0.05); lastTime=ts||0;
+
+  // Update orbiting fish
+  for(var i=0;i<fishOrbiters.length;i++){
+    var fo=fishOrbiters[i];
+    fo.angle+=fo.speed;
+    fo.group.position.x=fo.cx+Math.cos(fo.angle)*fo.r;
+    fo.group.position.z=fo.cz+Math.sin(fo.angle)*fo.r;
+    fo.group.rotation.y=-(fo.angle + (fo.speed > 0 ? Math.PI/2 : -Math.PI/2));
+  }
+
+  if(started && document.pointerLockElement){
+    var spd=5*dt;
+    var dx=Math.sin(yaw), dz=Math.cos(yaw);
+    if(keys['KeyW']||keys['ArrowUp']){camera.position.x+=dx*spd;camera.position.z-=dz*spd;}
+    if(keys['KeyS']||keys['ArrowDown']){camera.position.x-=dx*spd;camera.position.z+=dz*spd;}
+    if(keys['KeyA']||keys['ArrowLeft']){camera.position.x-=dz*spd;camera.position.z-=dx*spd;}
+    if(keys['KeyD']||keys['ArrowRight']){camera.position.x+=dz*spd;camera.position.z+=dx*spd;}
+    camera.position.x=Math.max(-34,Math.min(34,camera.position.x));
+    camera.position.z=Math.max(-34,Math.min(34,camera.position.z));
+    camera.position.y=1.6;
+  }
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var t=Date.now();
+  for(var i=0;i<animObjs.length;i++){
+    var a=animObjs[i];
+    if(a.type==='rot') a.obj.rotation[a.axis||'y']+=a.spd||0.01;
+    if(a.type==='bob') a.obj.position.y=(a.base||0.5)+Math.sin(t*0.0015+i)*0.18;
+    if(a.type==='sway') a.obj.rotation.z=Math.sin(t*0.002+i)*0.15;
+  }
+
+  for(var i=0;i<pickups.length;i++){
+    var p=pickups[i];
+    if(!p.active) continue;
+    var pdx=camera.position.x-p.x, pdz=camera.position.z-p.z;
+    if(Math.sqrt(pdx*pdx+pdz*pdz)<1.1){
+      p.active=false;
+      scene.remove(p.mesh);
+      collected++;
+      document.getElementById('score-display').textContent='🔵 Orbs: '+collected+'/10';
+      if(collected===10) document.getElementById('score-display').textContent='🏆 All orbs found! Amazing explorer!';
+    }
+  }
+
+  updateZone();
+  renderer.render(scene,camera);
+}
+</script>
+</body>
+</html>
