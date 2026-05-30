@@ -55,6 +55,10 @@ tr:nth-child(3) td{color:#ffccaa}
   <button class="tab-btn" onclick="filterTab('carracer',this)">🏎️ Car Racer</button>
   <button class="tab-btn" onclick="filterTab('balloonpop',this)">🎈 Balloon Pop</button>
   <button class="tab-btn" onclick="filterTab('spaceshooter',this)">👾 Space Shooter</button>
+  <button class="tab-btn" onclick="filterTab('slidingpuzzle',this)">🔢 Sliding Puzzle</button>
+  <button class="tab-btn" onclick="filterTab('pipepuzzle',this)">🔧 Pipe Puzzle</button>
+  <button class="tab-btn" onclick="filterTab('colorflood',this)">🌊 Color Flood</button>
+  <button class="tab-btn" onclick="filterTab('wordladder',this)">📖 Word Ladder</button>
 </div>
 
 <div id="loading">Loading scores...</div>
@@ -79,7 +83,9 @@ var gameLabels = {
   flappybird:'🐦 Flappy Bird', spaceinvaders:'👾 Space Invaders', asteroids:'🚀 Asteroids',
   tetris:'🟦 Tetris', pacman:'🟡 Pac-Man', slotmachine:'🎰 Slot Machine',
   whackamole:'🔨 Whack-a-Mole', carracer:'🏎️ Car Racer',
-  balloonpop:'🎈 Balloon Pop', spaceshooter:'👾 Space Shooter'
+  balloonpop:'🎈 Balloon Pop', spaceshooter:'👾 Space Shooter',
+  slidingpuzzle:'🔢 Sliding Puzzle', pipepuzzle:'🔧 Pipe Puzzle',
+  colorflood:'🌊 Color Flood', wordladder:'📖 Word Ladder'
 };
 
 var firebase_app = firebase.initializeApp(firebaseConfig);
