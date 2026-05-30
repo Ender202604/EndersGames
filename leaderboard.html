@@ -53,6 +53,8 @@ tr:nth-child(3) td{color:#ffccaa}
   <button class="tab-btn" onclick="filterTab('slotmachine',this)">🎰 Slots</button>
   <button class="tab-btn" onclick="filterTab('whackamole',this)">🔨 Whack-a-Mole</button>
   <button class="tab-btn" onclick="filterTab('carracer',this)">🏎️ Car Racer</button>
+  <button class="tab-btn" onclick="filterTab('balloonpop',this)">🎈 Balloon Pop</button>
+  <button class="tab-btn" onclick="filterTab('spaceshooter',this)">👾 Space Shooter</button>
 </div>
 
 <div id="loading">Loading scores...</div>
@@ -76,7 +78,8 @@ var gameLabels = {
   bowling:'🎳 Bowling', minigolf:'⛳ Mini Golf', snake:'🐍 Snake',
   flappybird:'🐦 Flappy Bird', spaceinvaders:'👾 Space Invaders', asteroids:'🚀 Asteroids',
   tetris:'🟦 Tetris', pacman:'🟡 Pac-Man', slotmachine:'🎰 Slot Machine',
-  whackamole:'🔨 Whack-a-Mole', carracer:'🏎️ Car Racer'
+  whackamole:'🔨 Whack-a-Mole', carracer:'🏎️ Car Racer',
+  balloonpop:'🎈 Balloon Pop', spaceshooter:'👾 Space Shooter'
 };
 
 var firebase_app = firebase.initializeApp(firebaseConfig);

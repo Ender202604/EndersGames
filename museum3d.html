@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Museum 3D — Natural History Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,220,150,0.8); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(20,12,4,0.9); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:2px solid rgba(200,160,80,0.3); }
+#loc { color:#FFD070; font-size:13px; min-width:180px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(20,12,4,0.82); padding:8px 20px; border-radius:12px; color:#FFD090; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(20,12,4,0.94); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(200,160,80,0.4); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(10,6,2,0.97); border:2px solid rgba(200,160,80,0.4); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#FFD070; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(80,50,10,0.9); border:1px solid rgba(200,160,80,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(160,100,20,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(20,12,4,0.88); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(200,160,80,0.2); }
+#inv-title { color:#FFD070; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(10,6,2,0.95); color:#FFD700; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,200,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#5a3a0a; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#a06a20; color:#fff; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(10,6,2,0.86); z-index:20; display:none; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(200,160,80,0.3); background:rgba(20,12,4,0.8); color:#FFD090; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(20,12,4,0.7); border:1px solid rgba(200,160,80,0.3); border-radius:8px; color:#FFD090; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(200,160,80,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(80,50,10,0.4); border:2px solid #FFD070; border-radius:50%; color:#FFD070; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">🏛️ Entrance Hall</span>
+  <span id="score-el">🏺 0 collected</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Collection</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Nothing yet</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div id="lock-screen" onclick="lockPointer()">
+  <p>🏛️ Click to Explore</p>
+  <small>WASD · Mouse to look · E to interact</small>
+</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🏛️</div>
+  <div class="st" style="color:#FFD070">NATURAL HISTORY MUSEUM 3D</div>
+  <div class="sb">Welcome to the Grand Museum of Natural History! Explore five spectacular wings: the grand Entrance Hall, Dinosaur Hall, Ocean Hall, Space Gallery, and the Ancient Egypt Wing.<br><br>Meet the museum director, a paleontologist, marine biologist, astronomer, and archaeologist. Collect rare specimens and artifacts!<br><br><span style="color:#FFD090">Knowledge is the greatest adventure. 🦕</span></div>
+  <button class="sbtn" onclick="beginGame()">🏺 ENTER THE MUSEUM</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/collect</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x18100A);
+scene.fog = new THREE.Fog(0x18100A, 14, 56);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+var rotObjs=[];
+
+function lm(hex){ return new THREE.MeshLambertMaterial({color:hex}); }
+var M = {
+  marble:lm(0xF0E8D0), dmarble:lm(0xD4C4A0), cream:lm(0xFFF8EC),
+  gold:lm(0xD4A820), dgold:lm(0x8A6A10), stone:lm(0x9A8870),
+  dstone:lm(0x5A4A38), bone:lm(0xEEE8D0), dbone:lm(0xC8B89A),
+  blue:lm(0x1A44AA), ocean:lm(0x1A5A88), sky:lm(0x1A3A88),
+  sand:lm(0xD4A860), sand2:lm(0xC09050), glass:lm(0x88CCEE),
+  skin:lm(0xFFCBA4), red:lm(0xAA2222), dark:lm(0x1A1210),
+  black:lm(0x080604), wood:lm(0x6A4418), tan:lm(0xC8A870),
+  grey:lm(0x888888), ltgrey:lm(0xBBBBBB), rust:lm(0x884422)
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z,seg){
+  var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||10),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function sph(r,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||20); l.position.set(x,y,z); scene.add(l); return l; }
+function ceil(x,z,col,i){ pl(x,4.5,z,col||0xFFEECC,i||0.9,18); box(0.8,0.06,0.8,lm(0xFFFFEE),x,4.56,z); }
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(10,6,2,0.92)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(200,160,80,0.6)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#FFD070'; ctx.font='bold 18px Georgia';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-12,x2:12, z1:-12,z2:12, name:"Entrance Hall",   col:"#FFD070"},
+  {x1:-10,x2:10, z1:13, z2:32, name:"Dinosaur Hall",   col:"#FF8844"},
+  {x1:-10,x2:10, z1:-32,z2:-13,name:"Ocean Hall",      col:"#44AAFF"},
+  {x1:13, x2:32, z1:-10,z2:10, name:"Space Gallery",   col:"#AAAAFF"},
+  {x1:-32,x2:-13,z1:-10,z2:10, name:"Egypt Wing",      col:"#FFCC44"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var gm=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.04),lm(0xFFD700)); g.add(gm);
+  var lbl=label(icon+' '+name,'#FFD700'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,collected:false});
+  rotObjs.push({obj:gm,axis:'y',spd:0.02});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,bodyHex,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.2,0.28),lm(bodyHex)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.26,8,8),M.skin); head.position.y=0.86; g.add(head);
+  var lbl=label(icon+' '+name,'#FFD070'); lbl.position.set(0,1.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,lines:lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z,mat){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat||M.cream);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x:x,z:z,w:w,d:d});
+}
+
+function roomFloor(cx,cz,w,d,mat){ box(w,0.15,d,mat||M.marble,cx,-0.08,cz); }
+function roomCeil(cx,cz,w,d,mat){ box(w,0.14,d,mat||M.dmarble,cx,4.57,cz); }
+function roomWalls(cx,cz,rw,rd){
+  wallBox(0.4,4.7,rd,cx-rw/2,2.35,cz); wallBox(0.4,4.7,rd,cx+rw/2,2.35,cz);
+  wallBox(rw+0.8,4.7,0.4,cx,2.35,cz-rd/2); wallBox(rw+0.8,4.7,0.4,cx,2.35,cz+rd/2);
+}
+
+function pillar(x,z){ cyl(0.35,0.38,4.6,M.dmarble,x,2.3,z); sph(0.42,M.gold,x,4.6,z); }
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0xFFEECC, 0.7));
+
+  // ── ENTRANCE HALL ──
+  roomFloor(0,0,24,24,M.marble);
+  roomCeil(0,0,24,24,M.dmarble);
+  roomWalls(0,0,24,24);
+  // Grand columns
+  pillar(-9,-9); pillar(9,-9); pillar(-9,9); pillar(9,9);
+  // Central fountain base
+  cyl(1.8,2.0,0.7,M.dmarble,0,0.35,0);
+  cyl(1.4,1.6,0.3,M.marble,0,0.72,0);
+  cyl(0.15,0.15,1.2,M.gold,0,0.9,0);
+  cyl(0.7,0.7,0.12,M.marble,0,1.55,0);
+  pl(0,1.8,0,0x88CCFF,1.5,8);
+  // Entrance signs on walls
+  box(4,1.0,0.1,M.dmarble,0,3.5,-11.8);
+  box(3.8,0.8,0.08,M.gold,0,3.5,-11.7);
+  // Welcome desk
+  box(5,1.1,1.4,M.dwood||M.wood,0,0.55,8); box(5,0.08,1.4,M.gold,0,1.12,8);
+  // Decorative urns on plinths
+  cyl(0.2,0.22,0.6,M.dmarble,-8,0.3,0); sph(0.3,M.rust,-8,0.85,0);
+  cyl(0.2,0.22,0.6,M.dmarble,8,0.3,0); sph(0.3,M.rust,8,0.85,0);
+  // Ceiling lights
+  ceil(0,0); ceil(-7,0); ceil(7,0); ceil(0,-7); ceil(0,7);
+  pl(0,4.5,0,0xFFEECC,1.5,22);
+  addPickup('Museum Badge','🎫',3,0.5,5);
+  addNPC("Dr. Clark","🎩",-4,0.75,5,0x2A4A6A,[
+    "Welcome to the Grand Natural History Museum! I am Dr. Clark, the museum director.",
+    "We have over 500,000 specimens in our collection! But only the most spectacular are on display.",
+    "The Dinosaur Hall to the north is our most popular wing — a 40-foot T-Rex awaits you!",
+    "Our Egypt Wing to the west has genuine artifacts from the tomb of Pharaoh Amenhotep III."
+  ]);
+
+  // ── DINOSAUR HALL (north) ──
+  roomFloor(0,22,20,18,lm(0xD8C8A0));
+  roomCeil(0,22,20,18,lm(0x4A3820));
+  roomWalls(0,22,20,18);
+  // T-Rex skeleton (white bones)
+  // Body
+  box(3.5,1.8,1.2,M.bone,0,2.5,17);
+  // Neck
+  cyl(0.25,0.35,1.5,M.bone,0,3.8,16.5); // neck at angle roughly
+  // Head
+  box(1.5,0.7,0.5,M.dbone,0,4.5,15.8);
+  box(1.6,0.12,0.4,M.dbone,0,4.1,15.8); // lower jaw
+  // Tail
+  cyl(0.2,0.35,2.0,M.bone,0,2.0,19.5);
+  cyl(0.1,0.2,1.5,M.bone,0,1.6,21.0);
+  // Legs
+  cyl(0.2,0.22,1.8,M.bone,-0.8,1.5,17.5); cyl(0.2,0.22,1.8,M.bone,0.8,1.5,17.5);
+  cyl(0.15,0.2,1.4,M.bone,-0.8,0.2,17.0); cyl(0.15,0.2,1.4,M.bone,0.8,0.2,17.0);
+  // Tiny arms
+  cyl(0.1,0.12,0.7,M.bone,-0.6,3.0,16.8); cyl(0.1,0.12,0.7,M.bone,0.6,3.0,16.8);
+  // Rib cage
+  for(var r=0;r<4;r++){
+    var rx=-1.5+r; cyl(0.06,0.06,1.8,M.bone,rx,1.7,17);
+  }
+  // Exhibit plaque
+  box(2,0.6,0.1,M.wood,-6,0.4,13.5); box(1.8,0.5,0.06,lm(0xDDCC88),-6,0.4,13.5);
+  // More fossils in cases
+  box(1.5,1.5,1.5,M.glass,5,0.82,20); box(1.4,1.4,1.4,M.dstone,5,0.8,20);
+  box(1.5,1.5,1.5,M.glass,-5,0.82,24); box(1.4,1.4,1.4,M.dstone,-5,0.8,24);
+  // Pterodactyl (flying shape) near ceiling
+  box(3.0,0.15,0.3,M.dbone,-3,4.0,22); box(0.5,0.6,0.3,M.dbone,-3,3.9,22);
+  // Lighting
+  ceil(0,22,0xFFE0AA,1.0); ceil(-5,18,0xFFE0AA,0.8); ceil(5,26,0xFFE0AA,0.8);
+  pl(0,3.5,17,0xFFCC88,1.8,20);
+  addPickup('Fossil Fragment','🦴',4,0.5,24);
+  addPickup('Dinosaur Tooth','🦷',-4,0.5,15);
+  addNPC("Prof. Rex","🔬",6,0.75,20,0x5A3A18,[
+    "Ah, a visitor! I am Professor Rex, senior paleontologist at this museum.",
+    "The Tyrannosaurus Rex you see here is our prized specimen — 40 feet long and 65 million years old!",
+    "We discovered this skeleton in Montana in 1998. It took three years to excavate and prepare.",
+    "Did you know T-Rex had the most powerful bite force of any land animal ever? 8,000 pounds per square inch!"
+  ]);
+
+  // ── OCEAN HALL (south) ──
+  roomFloor(0,-22,20,18,lm(0x1A4A6A));
+  roomCeil(0,-22,20,18,lm(0x0A2A44));
+  roomWalls(0,-22,20,18);
+  // Whale skeleton (long, suspended look)
+  box(9,0.8,1.0,M.bone,0,3.5,-22);
+  box(1.8,1.2,0.9,M.dbone,-5.5,3.5,-22); // head
+  box(2.0,0.3,0.8,M.bone,5,3.3,-22); // tail fluke
+  box(2.5,0.15,0.4,M.bone,0,3.5,-21); // fin
+  // Ribs
+  for(var wr=0;wr<5;wr++){
+    cyl(0.06,0.06,2.0,M.bone,-2+wr,2.6,-22);
+  }
+  // Coral reef display
+  sph(0.5,lm(0xFF5544),-5,0.7,-16); sph(0.3,lm(0xFF7733),-4,0.5,-16);
+  sph(0.4,lm(0xFF4455),-6,0.45,-16); sph(0.35,lm(0xFF8833),-5.5,0.8,-15.5);
+  sph(0.6,lm(0xFF3344),5,0.75,-27); sph(0.35,lm(0xFFAA22),4.5,0.45,-27.5);
+  // Big fish tank (glass case)
+  box(6,2.4,0.2,M.glass,0,1.3,-14.5); box(6,2.4,0.2,M.glass,0,1.3,-11.8);
+  box(0.2,2.4,2.8,M.glass,-3,1.3,-13); box(0.2,2.4,2.8,M.glass,3,1.3,-13);
+  box(6,0.12,2.8,M.glass,0,0.15,-13); box(6,0.12,2.8,M.glass,0,2.5,-13);
+  box(5.6,2.2,2.4,lm(0x0A3A55),0,1.3,-13);
+  // Fish in tank (small shapes)
+  for(var fi=0;fi<4;fi++){
+    sph(0.12,lm([0xFF6600,0xFFAA00,0x0066FF,0xFF3399][fi]),(-1.5+fi),1.3,-13);
+  }
+  // Lighting (blue-green for ocean feel)
+  ceil(0,-22,0x88CCEE,0.8); ceil(-5,-18,0x88CCEE,0.7); ceil(5,-26,0x88CCEE,0.7);
+  pl(0,3.0,-22,0x1166AA,2.0,22); pl(0,1.5,-13,0x22AACC,1.5,10);
+  addPickup('Coral Sample','🪸',4,0.5,-26);
+  addPickup('Shark Tooth','🦷',-5,0.5,-20);
+  addNPC("Dr. Marina","🌊",-6,0.75,-18,0x1A5A44,[
+    "Hello! I am Dr. Marina, the museum's marine biologist and oceanographer.",
+    "The blue whale skeleton above you is the largest animal specimen in any museum in the world!",
+    "Blue whales can be up to 100 feet long and weigh 200 tons. Their hearts are the size of a car!",
+    "Our ocean hall features specimens from every ocean on Earth. The deep sea is still mostly unexplored!"
+  ]);
+
+  // ── SPACE GALLERY (east) ──
+  roomFloor(22,0,18,20,lm(0x050510));
+  roomCeil(22,0,18,20,lm(0x000005));
+  roomWalls(22,0,18,20);
+  // Star field on ceiling
+  for(var si=0;si<60;si++){
+    var sx=13+Math.random()*18, sy=4.4, sz=-9+Math.random()*18;
+    box(0.06,0.04,0.06,lm(0xFFFFFF),sx,sy,sz);
+  }
+  // Planet models (with rotation)
+  var sun=sph(0.9,lm(0xFFAA00),22,3.5,-5); rotObjs.push({obj:sun,axis:'y',spd:0.005});
+  var earth=sph(0.45,lm(0x2244AA),25,2.8,0);
+  var earthG=sph(0.46,lm(0x22AA44),25,2.8,0);
+  earthG.rotation.x=0.3; rotObjs.push({obj:earth,axis:'y',spd:0.012}); rotObjs.push({obj:earthG,axis:'y',spd:0.012});
+  var mars=sph(0.3,lm(0xCC4422),19,2.6,3); rotObjs.push({obj:mars,axis:'y',spd:0.009});
+  var saturn=sph(0.5,lm(0xDDCC88),22,3.8,6);
+  var satRing=new THREE.Mesh(new THREE.TorusGeometry(0.82,0.12,6,24),lm(0xBBAA66));
+  satRing.position.set(22,3.8,6); satRing.rotation.x=1.1; scene.add(satRing);
+  rotObjs.push({obj:saturn,axis:'y',spd:0.008}); rotObjs.push({obj:satRing,axis:'y',spd:0.008});
+  var jupiter=sph(0.65,lm(0xCC8844),28,3.2,2); rotObjs.push({obj:jupiter,axis:'y',spd:0.007});
+  // Planet labels
+  var earthLbl=label('🌍 Earth','#44AAFF'); earthLbl.position.set(25,4.0,0); scene.add(earthLbl);
+  var satLbl=label('🪐 Saturn','#DDCC88'); satLbl.position.set(22,4.7,6); scene.add(satLbl);
+  // Rocket model
+  cyl(0.4,0.5,3.5,M.ltgrey,16,1.75,7); cyl(0,0.4,1.0,lm(0xCC2200),16,3.5,7);
+  box(0.25,1.0,1.0,M.grey,15.6,0.8,7); box(0.25,1.0,1.0,M.grey,16.4,0.8,7);
+  // Moon rock display
+  box(1.4,1.4,1.4,M.glass,30,0.82,-5); box(1.2,1.2,1.2,M.grey,30,0.8,-5);
+  sph(0.35,lm(0x888877),30,1.6,-5);
+  // Lighting (dark blue space feel)
+  ceil(22,0,0x2233AA,0.6); ceil(16,5,0x1122AA,0.5); ceil(28,-5,0x3344CC,0.5);
+  pl(22,3.5,-5,0xFFAA00,1.5,12); pl(22,2.5,6,0x8888FF,1.2,14);
+  addPickup('Star Model','⭐',28,0.5,-7);
+  addPickup('Moon Rock','🌑',18,0.5,8);
+  addNPC("Dr. Cosmos","🔭",16,0.75,-5,0x0A0A2A,[
+    "Greetings, fellow explorer! I am Dr. Cosmos, the museum's resident astronomer.",
+    "Our solar system model shows the true relative sizes of the planets. Remarkable scale, isn't it?",
+    "The Moon rock in that display case was brought back by Apollo 14 in 1971. Hold it in your mind!",
+    "The James Webb Space Telescope has now photographed galaxies 13 billion light-years away. We are just beginning!"
+  ]);
+
+  // ── EGYPT WING (west) ──
+  roomFloor(-22,0,18,20,M.sand);
+  roomCeil(-22,0,18,20,lm(0x3A2A10));
+  roomWalls(-22,0,18,20);
+  // Sarcophagus
+  box(1.4,0.6,2.8,M.sand2,-22,0.4,0);
+  box(1.45,0.62,2.85,M.gold,-22,0.72,0);
+  box(1.3,0.15,2.6,lm(0x8A6A10),-22,1.05,0);
+  // Hieroglyph on sarcophagus lid
+  box(0.12,1.5,0.08,M.dgold,-22,0.65,-0.8); box(0.12,1.5,0.08,M.dgold,-22,0.65,0.8);
+  // Large obelisk
+  cyl(0.3,0.5,4.0,M.sand2,-14,2.0,7); cyl(0,0.3,0.8,M.gold,-14,4.4,7);
+  // Hieroglyph carvings on walls
+  for(var hi=0;hi<4;hi++){
+    box(0.06,1.2,0.8,M.dgold,-31.5,1.6,-4+hi*2.7);
+  }
+  // Canopic jars display
+  cyl(0.18,0.2,0.5,M.sand2,-28,0.3,-2); sph(0.2,M.sand,-28,0.65,-2);
+  cyl(0.18,0.2,0.5,M.sand2,-28,0.3,0); sph(0.2,M.rust,-28,0.65,0);
+  cyl(0.18,0.2,0.5,M.sand2,-28,0.3,2); sph(0.2,M.sand2,-28,0.65,2);
+  // Pyramid scale model
+  var pyr=new THREE.Mesh(new THREE.ConeGeometry(2.0,2.5,4),M.sand2);
+  pyr.position.set(-24,-0.08,6); pyr.rotation.y=Math.PI/4; scene.add(pyr);
+  // Sphinx head
+  box(1.2,1.4,1.5,M.sand,-16,0.8,-5); box(1.0,0.5,0.3,M.sand,-16,0.55,-6.05);
+  // Display cases with artifacts
+  box(1.5,1.5,1.5,M.glass,-18,0.82,4); box(1.3,1.3,1.3,M.dstone,-18,0.8,4);
+  box(1.5,1.5,1.5,M.glass,-26,0.82,-5); box(1.3,1.3,1.3,M.dstone,-26,0.8,-5);
+  // Columns
+  cyl(0.35,0.38,4.6,M.sand,-14,-2); scene.children[scene.children.length-1].position.set(-14,2.3,-2);
+  cyl(0.35,0.38,4.6,M.sand2,-30,2.3,-2); cyl(0.35,0.38,4.6,M.sand,-30,2.3,2);
+  // Warm sandy lighting
+  ceil(-22,0,0xFFCC88,0.9); ceil(-16,5,0xFFBB66,0.7); ceil(-28,-5,0xFFCC88,0.7);
+  pl(-22,2.0,0,0xFFAA44,1.8,22); pl(-14,2.5,7,0xFFBB55,1.2,14);
+  addPickup('Scarab Amulet','🪲',-26,0.5,6);
+  addPickup('Hieroglyph Tablet','📜',-18,0.5,-4);
+  addPickup('Ancient Coin','🪙',-28,0.5,5);
+  addNPC("Dr. Nile","🏺",-20,0.75,-6,0x884422,[
+    "Salaam! I am Dr. Nile, Egyptologist and curator of the Egypt Wing.",
+    "The sarcophagus you see belongs to a high priest of Amun, dating to 1250 BCE. 3,274 years old!",
+    "The hieroglyphs on our walls tell the story of the afterlife journey — the Book of the Dead.",
+    "We are excavating a new tomb in Luxor right now. Every year Egypt reveals more of its ancient secrets!"
+  ]);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+(function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+})();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true; scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name); score++;
+      document.getElementById('score-el').textContent='🏺 '+score+' collected';
+      updateInv(); showToast('Collected: '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Nothing yet';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+var clock=0;
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+  clock+=0.016;
+
+  // Rotate objects
+  rotObjs.forEach(function(r){
+    if(r.axis==='y') r.obj.rotation.y+=r.spd;
+    else r.obj.rotation.x+=r.spd;
+  });
+
+  var spd=0.07;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.38&&Math.abs(nz-w.z)<w.d/2+0.38){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='🏛️ '+(z?z.name:'Museum Corridor');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.3;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.9;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Collect '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

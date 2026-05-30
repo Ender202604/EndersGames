@@ -124,7 +124,7 @@ function box(w,h,d,mat,x,y,z,ry){
 function cyl(rt,rb,h,mat,x,y,z){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,10),mat); m.position.set(x,y,z); scene.add(m); return m; }
 function sph(r,mat,x,y,z){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,8,8),mat); m.position.set(x,y,z); scene.add(m); return m; }
 function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||20); l.position.set(x,y,z); scene.add(l); return l; }
-function ceil_light(x,z){ pl(x,4.2,z,0xffffff,2.0,18); box(1.2,0.08,0.4,M.white,x,4.32,z); }
+function ceil_light(x,z){ pl(x,4.2,z,0xffffff,1.0,18); box(1.2,0.08,0.4,M.white,x,4.32,z); }
 
 function label(text,color){
   var c=document.createElement('canvas'); c.width=256; c.height=60;
@@ -182,7 +182,7 @@ function wallBox(w,h,d,x,y,z,mat){
 }
 
 function buildWorld(){
-  scene.add(new THREE.AmbientLight(0xddeeff, 2.5));
+  scene.add(new THREE.AmbientLight(0xddeeff, 0.75));
 
   // ── DEPARTURE TERMINAL (center) ──
   box(24,0.15,24,M.floor,0,-0.08,0);
@@ -208,7 +208,7 @@ function buildWorld(){
   // Floor pattern
   box(22,0.01,0.3,lm(0x8899bb),0,0.09,0); box(0.3,0.01,22,lm(0x8899bb),0,0.09,0);
   ceil_light(0,0); ceil_light(-6,0); ceil_light(6,0); ceil_light(0,-6); ceil_light(0,6);
-  pl(0,4,0,0x88aaff,2.5,22);
+  pl(0,4,0,0x88aaff,1.2,22);
   addPickup('Boarding Pass','🎫',4,0.5,-5);
   addPickup('Luggage Tag','🏷️',-4,0.5,6);
   addNPC("Flight Attendant","👩‍✈️",0,0.75,5,0x224488,[

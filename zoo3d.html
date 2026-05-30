@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zoo 3D — Animal Kingdom Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(100,220,100,0.9); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(4,12,4,0.92); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:2px solid rgba(80,200,80,0.3); }
+#loc { color:#66EE66; font-size:13px; min-width:180px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(4,12,4,0.82); padding:8px 20px; border-radius:12px; color:#88EE88; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(4,12,4,0.94); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(80,200,80,0.5); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(2,6,2,0.97); border:2px solid rgba(80,200,80,0.5); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#66EE66; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(20,60,20,0.9); border:1px solid rgba(80,200,80,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(40,130,40,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(4,12,4,0.88); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(80,200,80,0.22); }
+#inv-title { color:#66EE66; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(2,6,2,0.95); color:#FFD700; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,200,0,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#1a5a1a; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#2a9a2a; } .sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(2,6,2,0.88); z-index:20; display:none; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; } #lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(80,200,80,0.3); background:rgba(4,12,4,0.8); color:#88EE88; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(4,12,4,0.7); border:1px solid rgba(80,200,80,0.3); border-radius:8px; color:#88EE88; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(80,200,80,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(20,70,20,0.4); border:2px solid #66EE66; border-radius:50%; color:#66EE66; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">🦁 Main Entrance</span>
+  <span id="score-el">🐾 0 visited</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog"><div id="dlg-name"></div><div id="dlg-text"></div><button id="dlg-close" onclick="closeDialog()">Close [E]</button></div>
+<div id="inv"><div id="inv-title">Zoo Passport</div><div id="inv-items" style="color:#aaa;font-size:11px;">Nothing yet</div></div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow"><button class="mbtn" id="m-left">◀</button><button class="mbtn" id="m-dn">▼</button><button class="mbtn" id="m-right">▶</button></div>
+</div>
+<div id="e-btn">E</div>
+<div id="lock-screen" onclick="lockPointer()"><p>🦁 Click to Explore</p><small>WASD · Mouse · E to interact</small></div>
+<div class="screen show" id="scr-start">
+  <div style="font-size:68px">🦁</div>
+  <div style="font-size:36px;font-weight:bold;color:#66EE66">ANIMAL KINGDOM ZOO 3D</div>
+  <div style="font-size:16px;line-height:1.75;max-width:520px;color:#ddd">Welcome to the world's most amazing zoo! Explore the grand entrance, African Safari, Polar World, Jungle Canopy, and the Reptile House.<br><br>Meet the Head Zookeeper, Safari Guide, Marine Expert, and Reptile Specialist. Collect zoo passport stamps!<br><br><span style="color:#88EE88">Every creature has a story. 🐾</span></div>
+  <button class="sbtn" onclick="beginGame()">🦒 ENTER THE ZOO</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/stamp</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+var scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0A1A0A);
+scene.fog=new THREE.Fog(0x0A1A0A,14,56);
+var camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,200);
+camera.position.set(0,1.7,0);
+
+var yaw=0,pitch=0,locked=false,gameOn=false,dlgOpen=false;
+var score=0,nearNPC=null,nearPickup=null;
+var keys={},inventory=[],animObjs=[];
+
+function lm(hex,em,ei){var m=new THREE.MeshLambertMaterial({color:hex});if(em){m.emissive=new THREE.Color(em);m.emissiveIntensity=ei||0.4;}return m;}
+var M={
+  path:lm(0xC8B888),grass:lm(0x2A6A18),dgrass:lm(0x1A4A0A),
+  fence:lm(0x8B6B3A),dfence:lm(0x5A4020),sand:lm(0xD4A060),
+  stone:lm(0x889988),dstone:lm(0x445544),
+  water:lm(0x1A5A88,0x0A3A55,0.2),ice:lm(0xCCEEFF,0xAADDFF,0.15),
+  snow:lm(0xEEEEFF),bark:lm(0x5A3210),leaf:lm(0x1A6A18),
+  dleaf:lm(0x0A4A08),skin:lm(0xFFCBA4),dark:lm(0x080808),
+  grey:lm(0x888888),white:lm(0xFFFFFF),red:lm(0xCC2222),
+  blue:lm(0x2244AA),yellow:lm(0xFFCC00),orange:lm(0xFF8800),
+  tan:lm(0xC89060),ltbrown:lm(0xAA7744),brown:lm(0x6A3A18),
+  cream:lm(0xEEDDAA)
+};
+
+function box(w,h,d,mat,x,y,z,ry){var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);if(ry)m.rotation.y=ry;scene.add(m);return m;}
+function cyl(rt,rb,h,mat,x,y,z,seg){var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||8),mat);m.position.set(x,y,z);scene.add(m);return m;}
+function sph(r,mat,x,y,z){var m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),mat);m.position.set(x,y,z);scene.add(m);return m;}
+function cone(r,h,mat,x,y,z){var m=new THREE.Mesh(new THREE.ConeGeometry(r,h,6),mat);m.position.set(x,y,z);scene.add(m);return m;}
+function pl(x,y,z,col,i,d){var l=new THREE.PointLight(col,i,d||20);l.position.set(x,y,z);scene.add(l);return l;}
+function tree(x,z,h){h=h||4;cyl(0.18,0.25,h,M.bark,x,h/2,z);sph(1.0,M.leaf,x,h+0.7,z);sph(0.7,M.dleaf,x+0.7,h+0.3,z+0.4);sph(0.7,M.dleaf,x-0.6,h+0.2,z-0.5);}
+function fence(x,z,w,d,ry){var m=new THREE.Mesh(new THREE.BoxGeometry(w,1.2,0.1),M.fence);m.position.set(x,0.6,z);if(ry)m.rotation.y=ry;scene.add(m);}
+
+function label(text,color){
+  var c=document.createElement('canvas');c.width=256;c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(2,6,2,0.92)';ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(80,200,80,0.6)';ctx.lineWidth=2;ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#66EE66';ctx.font='bold 17px Georgia';
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1);return sp;
+}
+
+var zones=[
+  {x1:-12,x2:12,z1:-12,z2:12,name:"Main Entrance",    col:"#66EE66"},
+  {x1:-10,x2:10,z1:13,z2:32, name:"African Safari",   col:"#FFCC44"},
+  {x1:-10,x2:10,z1:-32,z2:-13,name:"Polar World",     col:"#88CCFF"},
+  {x1:13,x2:32,z1:-10,z2:10, name:"Jungle Canopy",    col:"#44FF88"},
+  {x1:-32,x2:-13,z1:-10,z2:10,name:"Reptile House",   col:"#88FF44"},
+];
+function getZone(x,z){for(var i=0;i<zones.length;i++){var a=zones[i];if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15)return a;}return null;}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var gm=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.28,0.04),lm(0x44CC44,0x22AA22,0.5));g.add(gm);
+  var lbl=label(icon+' '+name,'#FFD700');lbl.position.set(0,0.6,0);g.add(lbl);
+  g.position.set(x,y,z);scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,collected:false});
+  animObjs.push({obj:g,type:'bob',base:y,amp:0.08,spd:1.5+Math.random()});
+}
+var npcs=[];
+function addNPC(name,icon,x,y,z,bodyHex,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.2,0.28),lm(bodyHex));g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.26,8,8),M.skin);head.position.y=0.86;g.add(head);
+  var lbl=label(icon+' '+name,'#66EE66');lbl.position.set(0,1.55,0);g.add(lbl);
+  g.position.set(x,y,z);scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,lines:lines,lineIdx:0});
+}
+var walls=[];
+function wallBox(w,h,d,x,y,z,mat){var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat||M.stone);m.position.set(x,y,z);scene.add(m);walls.push({x:x,z:z,w:w,d:d});}
+
+function animal(parts,x,z){
+  // generic animal: body, head, legs
+  var g=new THREE.Group();
+  parts.forEach(function(p){
+    var mesh;
+    if(p.type==='box')mesh=new THREE.Mesh(new THREE.BoxGeometry(p.w||1,p.h||1,p.d||1),lm(p.col));
+    else if(p.type==='sph')mesh=new THREE.Mesh(new THREE.SphereGeometry(p.r||0.5,8,6),lm(p.col));
+    else if(p.type==='cyl')mesh=new THREE.Mesh(new THREE.CylinderGeometry(p.rt||0.1,p.rb||0.1,p.h||1,6),lm(p.col));
+    mesh.position.set(p.x||0,p.y||0,p.z||0);
+    if(p.ry)mesh.rotation.y=p.ry;
+    if(p.rx)mesh.rotation.x=p.rx;
+    g.add(mesh);
+  });
+  g.position.set(x,0,z);scene.add(g);
+  return g;
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0x88CC88,0.7));
+
+  // ── MAIN ENTRANCE ──
+  box(24,0.15,24,M.path,0,-0.08,0);
+  wallBox(0.5,3.5,24,-12,1.75,0); wallBox(0.5,3.5,24,12,1.75,0);
+  wallBox(24,3.5,0.5,0,1.75,-12); wallBox(24,3.5,0.5,0,1.75,12);
+  // Entrance arch
+  box(10,0.5,0.4,M.stone,0,4.0,-11.5); cyl(0.4,0.4,4.0,M.stone,-5,2.0,-11.5); cyl(0.4,0.4,4.0,M.stone,5,2.0,-11.5);
+  // Welcome sign
+  box(6,1.2,0.15,M.dgrass,0,3.4,-11.4); box(5.8,1.0,0.12,lm(0xFFCC00),0,3.4,-11.3);
+  // Ticket booths
+  box(1.8,2.5,1.8,M.grey,-6,1.25,-9); box(1.8,2.5,1.8,M.grey,6,1.25,-9);
+  cone(1.1,1.0,lm(0xFF3333),-6,2.8,-9); cone(1.1,1.0,lm(0xFF3333),6,2.8,-9);
+  // Fountain
+  cyl(2.5,2.7,0.5,M.stone,0,0.27,3); cyl(2.2,2.4,0.2,M.water,0,0.55,3);
+  cyl(0.12,0.12,1.0,M.stone,0,0.8,3); pl(0,2.0,3,0x44AAFF,1.5,8);
+  // Zoo map board
+  box(2.5,1.8,0.1,M.brown,5,1.0,7); box(2.3,1.6,0.06,lm(0xCCDD88),5,1.0,7);
+  // Gift shop
+  box(5,3.0,4,M.grey,-7,1.5,6); box(4.8,2.8,3.8,lm(0xAABBAA),-7,1.5,6);
+  box(5,0.3,4,lm(0x8B4513),-7,3.0,6);
+  // Trees
+  tree(-9,3,3.5); tree(8,7,3.5);
+  // Path lights
+  pl(0,2,0,0xAAFF88,1.2,18); pl(-7,2,6,0x88CC88,0.8,10); pl(7,2,-6,0x88CC88,0.8,10);
+  addPickup('Zoo Map','🗺️',3,0.5,6);
+  addNPC("Sara the Zookeeper","🦁",-4,0.75,4,0x3A6A28,[
+    "Welcome to Animal Kingdom Zoo! I am Sara, head zookeeper. We have 600 animals here!",
+    "Our zoo focuses on conservation — many of our animals are part of endangered species breeding programs.",
+    "We have five amazing zones: Safari, Polar World, Jungle Canopy, and the Reptile House. Explore them all!",
+    "My favorite animal? The African elephant in the Safari zone. Her name is Nala and she has been here 20 years!"
+  ]);
+
+  // ── AFRICAN SAFARI (north) ──
+  box(20,0.15,18,M.sand,0,-0.08,22);
+  wallBox(0.5,3,18,-10,1.5,22,M.fence); wallBox(0.5,3,18,10,1.5,22,M.fence);
+  wallBox(20,3,0.5,0,1.5,13,M.fence); wallBox(20,3,0.5,0,1.5,31,M.fence);
+  // Savanna trees
+  tree(-7,16,6); tree(7,16,6); tree(-6,28,5); tree(6,29,5);
+  // Elephant (big grey blob)
+  animal([
+    {type:'box',w:3.5,h:1.8,d:1.8,col:0x888878,x:0,y:1.3,z:0},
+    {type:'sph',r:0.9,col:0x888878,x:2.1,y:1.7,z:0},
+    {type:'cyl',rt:0.18,rb:0.22,h:0.8,col:0x888878,x:2.6,y:1.1,z:0,rx:0.3},
+    {type:'cyl',rt:0.14,rb:0.14,h:1.5,col:0x777767,x:-1,y:0.4,z:0.7},{type:'cyl',rt:0.14,rb:0.14,h:1.5,col:0x777767,x:0.5,y:0.4,z:0.7},
+    {type:'cyl',rt:0.14,rb:0.14,h:1.5,col:0x777767,x:-1,y:0.4,z:-0.7},{type:'cyl',rt:0.14,rb:0.14,h:1.5,col:0x777767,x:0.5,y:0.4,z:-0.7},
+  ],3,22);
+  // Giraffe (tall with long neck)
+  animal([
+    {type:'box',w:1.2,h:2.0,d:0.8,col:0xCC8822,x:0,y:2.5,z:0},
+    {type:'cyl',rt:0.2,rb:0.25,h:2.5,col:0xCC8822,x:0,y:4.25,z:0},
+    {type:'box',w:0.6,h:0.6,d:0.5,col:0xCC8822,x:0,y:5.7,z:0},
+    {type:'cyl',rt:0.1,rb:0.1,h:1.5,col:0xAA6610,x:-0.4,y:1.0,z:0.3},{type:'cyl',rt:0.1,rb:0.1,h:1.5,col:0xAA6610,x:0.4,y:1.0,z:0.3},
+    {type:'cyl',rt:0.1,rb:0.1,h:1.5,col:0xAA6610,x:-0.4,y:1.0,z:-0.3},{type:'cyl',rt:0.1,rb:0.1,h:1.5,col:0xAA6610,x:0.4,y:1.0,z:-0.3},
+  ],-4,26);
+  // Zebra (white with black box)
+  animal([
+    {type:'box',w:1.8,h:1.0,d:0.8,col:0xEEEEEE,x:0,y:1.0,z:0},
+    {type:'box',w:1.6,h:0.9,d:0.7,col:0x111111,x:0,y:1.0,z:0,ry:0.1},
+    {type:'sph',r:0.4,col:0xDDDDDD,x:1.1,y:1.4,z:0},
+    {type:'cyl',rt:0.1,rb:0.1,h:1.2,col:0xDDDDDD,x:-0.6,y:0.3,z:0.3},{type:'cyl',rt:0.1,rb:0.1,h:1.2,col:0xDDDDDD,x:0.4,y:0.3,z:0.3},
+    {type:'cyl',rt:0.1,rb:0.1,h:1.2,col:0xDDDDDD,x:-0.6,y:0.3,z:-0.3},{type:'cyl',rt:0.1,rb:0.1,h:1.2,col:0xDDDDDD,x:0.4,y:0.3,z:-0.3},
+  ],5,18);
+  // Watering hole
+  cyl(2.5,2.5,0.1,M.water,-5,0.04,25); pl(-5,0.3,25,0x4488AA,1.2,8);
+  // Savanna grass patches
+  for(var sg=0;sg<8;sg++){
+    box(0.1,0.6,0.1,M.grass,-8+sg*2.5,0.3,15+sg%3*2);
+  }
+  pl(0,4,22,0xFFCC44,1.5,22);
+  addPickup('Safari Stamp','🦁',6,0.5,28);
+  addNPC("James the Guide","🎒",6,0.75,18,0x8B4513,[
+    "Hello! I'm James, your safari guide. Nala the elephant is 35 years old — the matriarch of her herd!",
+    "Giraffes are the tallest living animals on Earth — up to 18 feet tall! They sleep only 30 minutes a day.",
+    "Zebra stripes are like human fingerprints — each one is completely unique. No two zebras look alike!",
+    "The lions are in a separate enclosure. We do morning feeding tours at 9 AM if you visit in real life!"
+  ]);
+
+  // ── POLAR WORLD (south) ──
+  box(20,0.15,18,M.snow,0,-0.08,-22);
+  wallBox(0.5,3,18,-10,1.5,-22,M.stone); wallBox(0.5,3,18,10,1.5,-22,M.stone);
+  wallBox(20,3,0.5,0,1.5,-13,M.stone); wallBox(20,3,0.5,0,1.5,-31,M.stone);
+  // Ice floor patches
+  box(8,0.04,6,M.ice,-3,0.01,-22); box(5,0.04,4,M.ice,5,0.01,-26);
+  // Polar bear
+  animal([
+    {type:'box',w:2.0,h:1.2,d:1.0,col:0xEEEEDD,x:0,y:1.0,z:0},
+    {type:'sph',r:0.55,col:0xEEEEDD,x:1.3,y:1.5,z:0},
+    {type:'sph',r:0.2,col:0xDDDDCC,x:1.85,y:1.7,z:0},
+    {type:'cyl',rt:0.15,rb:0.15,h:1.2,col:0xEEEEDD,x:-0.6,y:0.3,z:0.4},{type:'cyl',rt:0.15,rb:0.15,h:1.2,col:0xEEEEDD,x:0.5,y:0.3,z:0.4},
+    {type:'cyl',rt:0.15,rb:0.15,h:1.2,col:0xEEEEDD,x:-0.6,y:0.3,z:-0.4},{type:'cyl',rt:0.15,rb:0.15,h:1.2,col:0xEEEEDD,x:0.5,y:0.3,z:-0.4},
+  ],-5,-22);
+  // Penguin colony
+  for(var pg=0;pg<5;pg++){
+    animal([
+      {type:'cyl',rt:0.2,rb:0.25,h:0.8,col:0x111111,x:0,y:0.65,z:0},
+      {type:'box',w:0.25,h:0.7,d:0.2,col:0xFFFFEE,x:0.05,y:0.65,z:0.09},
+      {type:'sph',r:0.2,col:0x111111,x:0,y:1.15,z:0},
+      {type:'box',w:0.14,h:0.06,d:0.1,col:0xFF8800,x:0,y:1.12,z:0.18},
+    ],4+pg*0.8,-18-pg*0.5);
+  }
+  // Icy water pool
+  box(8,0.06,6,M.water,0,0.0,-27); pl(0,0.5,-27,0x44AACC,1.5,10);
+  // Ice blocks
+  box(1.2,0.8,1.0,M.ice,-8,-25); box(0.8,0.6,0.8,M.ice,7,-24);
+  // Cold blue lighting
+  pl(0,4,-22,0x88CCFF,1.2,22); pl(0,1,-28,0x4488CC,1.0,14);
+  addPickup('Polar Stamp','🐧',6,0.5,-28);
+  addNPC("Dr. Frost","🧊",-6,0.75,-18,0x224488,[
+    "Welcome to Polar World! I'm Dr. Frost, marine biologist and polar researcher.",
+    "Our polar bear, Boris, came from a conservation center in Alaska. He weighs 1,200 pounds!",
+    "Penguins are actually excellent swimmers — they can swim up to 15 mph! But they cannot fly.",
+    "The Arctic is warming twice as fast as the rest of the planet. Zoos like ours help fund conservation research."
+  ]);
+
+  // ── JUNGLE CANOPY (east) ──
+  box(18,0.15,20,M.dgrass,22,-0.08,0);
+  wallBox(0.5,4,20,13,2,0,lm(0x2A4A18)); wallBox(0.5,4,20,31,2,0,lm(0x2A4A18));
+  wallBox(18,4,0.5,22,2,-10,lm(0x2A4A18)); wallBox(18,4,0.5,22,2,10,lm(0x2A4A18));
+  // Dense jungle trees (tall canopy)
+  tree(16,-8,7); tree(28,-8,7); tree(16,8,7); tree(28,8,7);
+  tree(20,-4,6); tree(24,4,6); tree(20,4,5); tree(24,-5,5);
+  // Gorilla family
+  animal([
+    {type:'box',w:1.8,h:2.0,d:1.0,col:0x222218,x:0,y:1.5,z:0},
+    {type:'sph',r:0.5,col:0x222218,x:0,y:2.65,z:0},
+    {type:'box',w:2.0,h:0.5,d:0.4,col:0x222218,x:0,y:2.0,z:0},// shoulders
+    {type:'cyl',rt:0.2,rb:0.22,h:2.0,col:0x222218,x:-1.1,y:1.0,z:0},{type:'cyl',rt:0.2,rb:0.22,h:2.0,col:0x222218,x:1.1,y:1.0,z:0},
+    {type:'cyl',rt:0.2,rb:0.2,h:1.6,col:0x222218,x:-0.5,y:0.3,z:0.3},{type:'cyl',rt:0.2,rb:0.2,h:1.6,col:0x222218,x:0.5,y:0.3,z:0.3},
+  ],18,-4);
+  // Baby gorilla
+  animal([
+    {type:'box',w:0.8,h:0.9,d:0.5,col:0x2A2820,x:0,y:0.65,z:0},
+    {type:'sph',r:0.28,col:0x2A2820,x:0,y:1.25,z:0},
+  ],22,4);
+  // Tropical birds on perches
+  for(var b=0;b<3;b++){
+    sph(0.2,lm([0xFF3333,0xFF8800,0x33AA44][b]),17+b*5,3.5,-7);
+    sph(0.25,lm([0xDD2222,0xDD7700,0x228833][b]),17+b*5,3.5,-7);
+  }
+  // Vines hanging
+  for(var v=0;v<5;v++){ cyl(0.04,0.04,3.5,lm(0x2A6A18),14+v*3.5,2.0,0); }
+  // Waterfall
+  box(2.5,3.5,0.12,lm(0x4488CC),30,2.0,0); cyl(2.5,2.5,0.08,M.water,30,0.08,0);
+  pl(30,2,0,0x44AACC,1.5,12);
+  pl(22,4,0,0x44FF44,1.2,22); pl(22,2,-6,0x22AA22,0.8,12);
+  addPickup('Jungle Stamp','🦍',28,0.5,-6);
+  addNPC("Maya","🌿",16,0.75,5,0x1A5A28,[
+    "Welcome to the Jungle Canopy! I'm Maya, primate specialist. Meet Kondo our silverback gorilla!",
+    "Gorillas are our closest relatives — 98.3% of their DNA is identical to human DNA!",
+    "Kondo arrived here as an orphan 15 years ago. Now he leads a family group of seven.",
+    "In the wild, gorillas eat up to 40 pounds of vegetation every day! Our kitchen team is very busy."
+  ]);
+
+  // ── REPTILE HOUSE (west — dark with spotlights) ──
+  box(18,0.15,20,lm(0x181410),-22,-0.08,0);
+  wallBox(0.5,4.5,20,-13,2.25,0,lm(0x181410)); wallBox(0.5,4.5,20,-31,2.25,0,lm(0x181410));
+  wallBox(18,4.5,0.5,-22,2.25,-10,lm(0x181410)); wallBox(18,4.5,0.5,-22,2.25,10,lm(0x181410));
+  box(18,0.2,20,lm(0x0A0806),-22,4.58,0); // dark ceiling
+  // Terrarium displays (glass cases lit from inside)
+  function terrarium(x,z,repColor,lightCol){
+    box(2.8,2.0,1.8,lm(0x336633),x,1.1,z);
+    box(2.6,1.8,1.6,lm(0x0A1A0A),x,1.1,z);
+    box(2.8,0.12,1.8,lm(0x44AA44),x,2.12,z);
+    sph(0.5,lm(repColor),x,1.5,z);
+    pl(x,1.5,z,lightCol,1.5,5);
+  }
+  terrarium(-16,-6,0x44AA22,0x66FF44);
+  terrarium(-28,-6,0x884422,0xFF8844);
+  terrarium(-16,6,0x222244,0x4444FF);
+  terrarium(-28,6,0x226644,0x44FF88);
+  // Crocodile
+  animal([
+    {type:'box',w:4,h:0.5,d:1.0,col:0x334422,x:0,y:0.35,z:0},
+    {type:'box',w:1.5,h:0.4,d:0.9,col:0x334422,x:3.0,y:0.35,z:0},
+    {type:'box',w:1.5,h:0.1,d:0.85,col:0x446633,x:3.0,y:0.57,z:0},
+    {type:'cyl',rt:0.1,rb:0.1,h:0.7,col:0x334422,x:-1.2,y:0.0,z:0.4},{type:'cyl',rt:0.1,rb:0.1,h:0.7,col:0x334422,x:0.8,y:0.0,z:0.4},
+    {type:'cyl',rt:0.1,rb:0.1,h:0.7,col:0x334422,x:-1.2,y:0.0,z:-0.4},{type:'cyl',rt:0.1,rb:0.1,h:0.7,col:0x334422,x:0.8,y:0.0,z:-0.4},
+  ],-22,-4);
+  // Large tortoise
+  animal([
+    {type:'sph',r:0.7,col:0x556633,x:0,y:0.7,z:0},
+    {type:'box',w:1.2,h:0.35,d:1.0,col:0x445522,x:0,y:0.35,z:0},
+    {type:'sph',r:0.2,col:0x667744,x:0.75,y:0.5,z:0},
+    {type:'cyl',rt:0.1,rb:0.12,h:0.5,col:0x556633,x:-0.4,y:0.1,z:0.35},{type:'cyl',rt:0.1,rb:0.12,h:0.5,col:0x556633,x:0.3,y:0.1,z:0.35},
+    {type:'cyl',rt:0.1,rb:0.12,h:0.5,col:0x556633,x:-0.4,y:0.1,z:-0.35},{type:'cyl',rt:0.1,rb:0.12,h:0.5,col:0x556633,x:0.3,y:0.1,z:-0.35},
+  ],-22,6);
+  // Spotlights on displays
+  pl(-22,3,0,0x44FF44,0.5,22);
+  addPickup('Reptile Stamp','🐊',-28,0.5,4);
+  addNPC("Dr. Scale","🐍",-18,0.75,-6,0x334422,[
+    "Welcome to the Reptile House! I'm Dr. Scale, herpetologist. Don't let the darkness scare you!",
+    "Our Nile crocodile, Rex, is 80 years old! Crocodiles are essentially unchanged from the dinosaur era.",
+    "The giant tortoise behind me can live up to 200 years. She was already alive during World War I!",
+    "Reptiles are cold-blooded — they need warmth from their environment. That's why we keep it so cozy in here!"
+  ]);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){if(!gameOn)return;renderer.domElement.requestPointerLock();}
+document.addEventListener('pointerlockchange',function(){locked=document.pointerLockElement===renderer.domElement;lockScreen.style.display=locked?'none':'flex';});
+document.addEventListener('mousemove',function(e){if(!locked||dlgOpen)return;yaw-=e.movementX*0.002;pitch-=e.movementY*0.002;pitch=Math.max(-1.2,Math.min(1.2,pitch));});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){if(e.code==='KeyE')tryInteract();if(e.code==='Escape'&&dlgOpen)closeDialog();});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+(function(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){document.getElementById('mobile-pad').style.display='block';document.getElementById('e-btn').style.display='flex';}
+  function bind(id,prop){var el=document.getElementById(id);el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});}
+  bind('m-up','up');bind('m-dn','dn');bind('m-left','left');bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+})();
+
+var toastTimer=null;
+function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.style.display='block';if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.style.display='none';},3200);}
+function closeDialog(){document.getElementById('dialog').style.display='none';dlgOpen=false;if(!locked&&gameOn)lockPointer();}
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){var p=nearPickup;if(!p.collected){p.collected=true;scene.remove(p.g);inventory.push(p.icon+' '+p.name);score++;document.getElementById('score-el').textContent='🐾 '+score+' visited';updateInv();showToast('Stamped: '+p.icon+' '+p.name+'!');}return;}
+  if(nearNPC){var n=nearNPC;document.getElementById('dlg-name').textContent=n.icon+' '+n.name;document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];n.lineIdx++;document.getElementById('dialog').style.display='block';dlgOpen=true;if(document.pointerLockElement)document.exitPointerLock();}
+}
+function updateInv(){var el=document.getElementById('inv-items');if(inventory.length===0){el.textContent='Nothing yet';return;}var counts={};inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');}
+
+var clock=0;
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn)return;
+  clock+=0.016;
+  animObjs.forEach(function(a){if(a.type==='bob')a.obj.position.y=a.base+Math.sin(clock*a.spd)*a.amp;});
+  var spd=0.068,dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+  var nx=camera.position.x+dx,nz=camera.position.z+dz,blocked=false;
+  for(var i=0;i<walls.length;i++){var w=walls[i];if(Math.abs(nx-w.x)<w.w/2+0.38&&Math.abs(nz-w.z)<w.d/2+0.38){blocked=true;break;}}
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+  camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='🦁 '+(z?z.name:'Zoo Path');
+  var cp=camera.position;nearNPC=null;nearPickup=null;
+  var bestD=2.3;npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){var bd=1.9;pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});}
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] '+nearPickup.icon+' Collect Stamp';hint.style.display='block';}
+  else hint.style.display='none';
+  renderer.render(scene,camera);
+}
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';gameOn=true;animate();lockPointer();
+}
+lockScreen.addEventListener('click',lockPointer);
+window.addEventListener('resize',function(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+</script>
+</body>
+</html>

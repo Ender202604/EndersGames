@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Shooter - Ender's Game World</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:white;font-family:Arial,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:6px;overflow:hidden}
+h1{color:#44ccff;font-size:20px;margin-bottom:2px}
+#home-btn{position:fixed;top:8px;left:10px;color:#ff9999;text-decoration:none;font-size:13px;z-index:99}
+#hud-bar{font-size:14px;color:#88ddff;margin:3px 0;display:flex;gap:16px;align-items:center}
+#hs-row{font-size:12px;color:#aaffaa;margin:2px 0}
+canvas{border:2px solid rgba(0,180,255,0.3);border-radius:8px;cursor:crosshair;display:block}
+.btn{background:#001a44;color:white;border:2px solid #4488ff;padding:6px 18px;border-radius:8px;cursor:pointer;font-size:13px;margin:3px}
+.btn:hover{background:#002288}
+#msg{font-size:13px;color:#ffff88;min-height:18px;text-align:center;margin:2px 0}
+#mode-row{display:flex;gap:6px;align-items:center;margin:2px 0}
+.diff-btn{background:#000d22;color:#66aaff;border:2px solid #4488ff;padding:3px 12px;border-radius:6px;font-size:12px;cursor:pointer}
+.diff-btn.active{background:#002288;color:white}
+#mobile-ctrl{display:none;gap:6px;margin-top:4px;flex-wrap:wrap;justify-content:center}
+.mc{background:rgba(0,40,100,0.6);border:2px solid rgba(0,150,255,0.5);border-radius:8px;color:#88ddff;width:52px;height:52px;font-size:22px;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;cursor:pointer}
+.mc:active{background:rgba(0,100,200,0.4)}
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">🏠 Home</a>
+<h1>👾 Space Shooter</h1>
+<div id="hud-bar">
+  <span>Score: <b id="score-el">0</b></span>
+  <span>Wave: <b id="wave-el">1</b></span>
+  <span>Lives: <b id="lives-el">❤️❤️❤️</b></span>
+  <span>Combo: <b id="combo-el">x1</b></span>
+</div>
+<div id="hs-row">Best: <span id="hs-val">0</span></div>
+<div id="mode-row">
+  <button class="diff-btn active" id="btn-easy" onclick="setDiff('easy')">Easy</button>
+  <button class="diff-btn" id="btn-hard" onclick="setDiff('hard')">Hard</button>
+</div>
+<div id="msg">← → / A D to move · Auto-fires! Survive the waves!</div>
+<canvas id="c" width="360" height="420"></canvas>
+<div id="mobile-ctrl">
+  <div class="mc" id="mc-l">◀</div>
+  <div class="mc" id="mc-r">▶</div>
+</div>
+<button class="btn" onclick="startGame()">▶ Start</button>
+<script>
+var AC=window.AudioContext||window.webkitAudioContext;
+var ac=AC?new AC():null;
+function snd(freq,dur,type,vol,sweep){
+  if(!ac)return;
+  var o=ac.createOscillator(),g=ac.createGain();
+  o.connect(g);g.connect(ac.destination);
+  o.type=type||'square';o.frequency.value=freq;
+  if(sweep)o.frequency.exponentialRampToValueAtTime(sweep,ac.currentTime+dur);
+  g.gain.setValueAtTime(vol||0.12,ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+dur);
+  o.start();o.stop(ac.currentTime+dur);
+}
+function sndShoot(){snd(800,0.06,'square',0.08,400);}
+function sndExplode(big){if(big){snd(180,0.3,'sawtooth',0.18,50);}else{snd(300,0.15,'square',0.12,80);}}
+function sndHit(){snd(220,0.15,'sawtooth',0.15,60);}
+function sndWave(){[440,550,660].forEach(function(f,i){setTimeout(function(){snd(f,0.18,'sine',0.15);},i*100);});}
+function sndDead(){[300,200,150,100].forEach(function(f,i){setTimeout(function(){snd(f,0.2,'square',0.15);},i*120);});}
+
+var HS_KEY='hs_spaceshooter';
+function getHS(){return parseInt(localStorage.getItem(HS_KEY)||'0');}
+function saveHS(v){if(v>getHS()){localStorage.setItem(HS_KEY,v);if(window.submitLeaderboard)submitLeaderboard('spaceshooter',v);}}
+document.getElementById('hs-val').textContent=getHS();
+
+var difficulty='easy';
+function setDiff(d){difficulty=d;document.getElementById('btn-easy').classList.toggle('active',d==='easy');document.getElementById('btn-hard').classList.toggle('active',d==='hard');}
+
+var c=document.getElementById('c'),ctx=c.getContext('2d');
+var W=360,H=420;
+
+var player,bullets=[],enemies=[],particles=[],powerups=[],stars=[];
+var score=0,lives=3,wave=1,combo=1,comboTimer=0;
+var gameOn=false,keys={},lastTime=0,shootTimer=0,waveTimer=0;
+var SHOOT_RATE=0.18;
+
+// Stars
+for(var i=0;i<80;i++){stars.push({x:Math.random()*W,y:Math.random()*H,spd:0.4+Math.random()*1.2,r:0.5+Math.random()*1.5});}
+
+function initPlayer(){
+  player={x:W/2,y:H-55,w:28,h:28,spd:3.8,invincible:0,shield:0,color:'#44aaff'};
+}
+
+function spawnWave(){
+  sndWave();
+  var cols=Math.min(4+wave,8);
+  var rows=Math.min(1+Math.floor(wave/3),3);
+  var hard=difficulty==='hard';
+  for(var r=0;r<rows;r++){
+    for(var col=0;col<cols;col++){
+      enemies.push({
+        x:30+col*(W-60)/Math.max(cols-1,1), y:30+r*48,
+        w:22,h:18,hp:wave>5?2:1,maxHp:wave>5?2:1,
+        spd:(0.4+wave*0.08+(hard?0.3:0)),
+        phase:Math.random()*Math.PI*2,
+        shoot:wave>2,shootTimer:1+Math.random()*3,
+        type:r===0&&wave>4?'heavy':'normal',
+        col:['#ff4444','#ff8800','#ffcc00','#cc44ff','#44ffcc'][r%5]
+      });
+    }
+  }
+}
+
+function spawnParticles(x,y,col,n,big){
+  for(var i=0;i<n;i++){
+    var a=Math.random()*Math.PI*2,s=(big?3:1.5)+Math.random()*2.5;
+    particles.push({x:x,y:y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,col:col,life:1,r:big?3:2});
+  }
+}
+
+function drawShip(x,y,col,inv){
+  if(inv&&Math.floor(inv*10)%2)return;
+  ctx.save();ctx.translate(x,y);
+  ctx.fillStyle=col;
+  ctx.beginPath();ctx.moveTo(0,-14);ctx.lineTo(-10,10);ctx.lineTo(-4,6);ctx.lineTo(4,6);ctx.lineTo(10,10);ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo(-4,4);ctx.lineTo(4,4);ctx.closePath();ctx.fill();
+  // Engine glow
+  ctx.fillStyle='rgba(255,160,0,0.6)';
+  ctx.beginPath();ctx.ellipse(0,10,4,5,0,0,Math.PI*2);ctx.fill();
+  if(player&&player.shield>0){
+    ctx.beginPath();ctx.arc(0,0,20,0,Math.PI*2);
+    ctx.strokeStyle='rgba(0,200,255,0.5)';ctx.lineWidth=2.5;ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawEnemy(e){
+  ctx.save();ctx.translate(e.x,e.y);
+  ctx.fillStyle=e.col;
+  if(e.type==='heavy'){
+    ctx.beginPath();ctx.moveTo(0,10);ctx.lineTo(-12,-10);ctx.lineTo(0,-6);ctx.lineTo(12,-10);ctx.closePath();ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.3)';
+    ctx.beginPath();ctx.arc(0,0,5,0,Math.PI*2);ctx.fill();
+  }else{
+    ctx.beginPath();ctx.moveTo(0,10);ctx.lineTo(-10,-8);ctx.lineTo(0,-4);ctx.lineTo(10,-8);ctx.closePath();ctx.fill();
+  }
+  if(e.maxHp>1){
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(-10,7,20,3);
+    ctx.fillStyle='#44ff44';ctx.fillRect(-10,7,20*e.hp/e.maxHp,3);
+  }
+  ctx.restore();
+}
+
+function update(dt){
+  comboTimer-=dt;
+  if(comboTimer<=0){combo=1;updateHUD();}
+  // Stars
+  stars.forEach(function(s){s.y+=s.spd;if(s.y>H)s.y=0;});
+  // Move player
+  if(!player)return;
+  if(player.invincible>0)player.invincible-=dt;
+  if(player.shield>0)player.shield-=dt;
+  var mov=player.spd*(difficulty==='hard'?1:1);
+  if(keys['ArrowLeft']||keys['KeyA']||mobileLeft)player.x=Math.max(16,player.x-mov);
+  if(keys['ArrowRight']||keys['KeyD']||mobileRight)player.x=Math.min(W-16,player.x+mov);
+  // Auto-shoot
+  shootTimer+=dt;
+  var sr=SHOOT_RATE*(difficulty==='hard'?0.85:1);
+  if(shootTimer>sr){
+    shootTimer=0;
+    bullets.push({x:player.x,y:player.y-14,vx:0,vy:-9,friendly:true,w:3,h:8});
+    sndShoot();
+  }
+  // Bullets
+  for(var i=bullets.length-1;i>=0;i--){
+    var b=bullets[i];
+    b.x+=b.vx;b.y+=b.vy;
+    if(b.y<-20||b.y>H+20||b.x<-10||b.x>W+10){bullets.splice(i,1);continue;}
+    if(b.friendly){
+      var hit=false;
+      for(var j=enemies.length-1;j>=0;j--){
+        var e=enemies[j];
+        if(Math.abs(b.x-e.x)<e.w/2+3&&Math.abs(b.y-e.y)<e.h/2+4){
+          e.hp--;
+          spawnParticles(e.x,e.y,e.col,3,false);
+          bullets.splice(i,1);hit=true;
+          if(e.hp<=0){
+            var pts=(e.type==='heavy'?200:100)*combo;
+            score+=pts;combo=Math.min(combo+1,8);comboTimer=3;
+            spawnParticles(e.x,e.y,e.col,e.type==='heavy'?14:8,e.type==='heavy');
+            sndExplode(e.type==='heavy');
+            enemies.splice(j,1);
+            if(Math.random()<0.15)powerups.push({x:e.x,y:e.y,type:'shield',vy:0.8});
+          }else{sndHit();}
+          updateHUD();break;
+        }
+      }
+      if(hit)continue;
+    } else {
+      if(player.invincible<=0&&Math.abs(b.x-player.x)<14&&Math.abs(b.y-player.y)<14){
+        bullets.splice(i,1);
+        if(player.shield>0){player.shield=0;}
+        else{takeDamage();}
+        continue;
+      }
+    }
+  }
+  // Enemies
+  var hard=difficulty==='hard';
+  enemies.forEach(function(e){
+    e.y+=e.spd*(hard?1.15:1);
+    e.x+=Math.sin(e.phase)*0.6; e.phase+=0.02;
+    if(e.shoot){
+      e.shootTimer-=dt;
+      if(e.shootTimer<=0){
+        e.shootTimer=2.5+Math.random()*3;
+        bullets.push({x:e.x,y:e.y+10,vx:(player.x-e.x)*0.01,vy:2.5+(hard?0.8:0),friendly:false,w:4,h:6,col:'#ff4444'});
+      }
+    }
+    if(e.y>H+30){enemies.splice(enemies.indexOf(e),1);}
+    if(player.invincible<=0&&Math.abs(e.x-player.x)<20&&Math.abs(e.y-player.y)<20){
+      if(player.shield>0)player.shield=0;
+      else takeDamage();
+    }
+  });
+  // Power-ups
+  for(var pi=powerups.length-1;pi>=0;pi--){
+    var p=powerups[pi];
+    p.y+=p.vy;
+    if(p.y>H){powerups.splice(pi,1);continue;}
+    if(Math.abs(p.x-player.x)<22&&Math.abs(p.y-player.y)<22){
+      player.shield=8;
+      sndWave();
+      powerups.splice(pi,1);
+    }
+  }
+  // Particles
+  for(var k=particles.length-1;k>=0;k--){
+    var pt=particles[k];
+    pt.x+=pt.vx;pt.y+=pt.vy;pt.vy+=0.05;pt.life-=dt*2;
+    if(pt.life<=0)particles.splice(k,1);
+  }
+  // Wave clear
+  if(enemies.length===0&&gameOn){
+    waveTimer+=dt;
+    if(waveTimer>1.5){waveTimer=0;wave++;updateHUD();spawnWave();}
+  }
+}
+
+function takeDamage(){
+  lives--;
+  player.invincible=2.5;
+  spawnParticles(player.x,player.y,'#ff4444',12,true);
+  updateHUD();
+  sndDead();
+  if(lives<=0){endGame();}
+}
+
+function updateHUD(){
+  document.getElementById('score-el').textContent=score;
+  document.getElementById('wave-el').textContent=wave;
+  document.getElementById('combo-el').textContent='x'+combo;
+  document.getElementById('lives-el').textContent='❤️'.repeat(Math.max(0,lives));
+}
+
+function draw(){
+  ctx.fillStyle='#000008';ctx.fillRect(0,0,W,H);
+  // Stars
+  ctx.fillStyle='rgba(255,255,255,0.7)';
+  stars.forEach(function(s){ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();});
+  // Particles
+  particles.forEach(function(p){
+    ctx.save();ctx.globalAlpha=p.life;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=p.col;ctx.fill();ctx.restore();
+  });
+  // Power-ups
+  powerups.forEach(function(p){
+    ctx.save();ctx.fillStyle='#00ffff';ctx.font='18px Arial';ctx.textAlign='center';
+    ctx.fillText('🛡️',p.x,p.y);ctx.restore();
+  });
+  // Bullets
+  bullets.forEach(function(b){
+    var grad=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);
+    if(b.friendly){grad.addColorStop(0,'#ffffff');grad.addColorStop(1,'#00ccff');}
+    else{grad.addColorStop(0,'#ffaa00');grad.addColorStop(1,'#ff4400');}
+    ctx.fillStyle=grad;
+    ctx.beginPath();ctx.ellipse(b.x,b.y,b.w/2,b.h/2,0,0,Math.PI*2);ctx.fill();
+  });
+  // Enemies
+  enemies.forEach(drawEnemy);
+  // Player
+  if(player)drawShip(player.x,player.y,player.color,player.invincible);
+  // HUD overlay
+  if(!gameOn&&score===0){
+    ctx.fillStyle='rgba(0,0,30,0.6)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#44aaff';ctx.font='bold 28px Arial';ctx.textAlign='center';
+    ctx.fillText('SPACE SHOOTER',W/2,H/2-30);
+    ctx.font='16px Arial';ctx.fillStyle='#aaddff';
+    ctx.fillText('Press Start to play!',W/2,H/2+10);
+  }
+}
+
+var mobileLeft=false,mobileRight=false;
+(function(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){document.getElementById('mobile-ctrl').style.display='flex';}
+  var ml=document.getElementById('mc-l'),mr=document.getElementById('mc-r');
+  ml.addEventListener('touchstart',function(e){e.preventDefault();mobileLeft=true;},{passive:false});
+  ml.addEventListener('touchend',function(e){e.preventDefault();mobileLeft=false;},{passive:false});
+  mr.addEventListener('touchstart',function(e){e.preventDefault();mobileRight=true;},{passive:false});
+  mr.addEventListener('touchend',function(e){e.preventDefault();mobileRight=false;},{passive:false});
+})();
+
+document.addEventListener('keydown',function(e){keys[e.code]=true;e.preventDefault&&e.key==='ArrowDown'?e.preventDefault():0;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+
+var rafId=null;
+function loop(ts){
+  if(!gameOn)return;
+  var dt=Math.min((ts-lastTime)/1000,0.05);lastTime=ts;
+  update(dt);draw();
+  rafId=requestAnimationFrame(loop);
+}
+
+function startGame(){
+  if(rafId)cancelAnimationFrame(rafId);
+  bullets=[];enemies=[];particles=[];powerups=[];
+  score=0;lives=3;wave=1;combo=1;comboTimer=0;shootTimer=0;waveTimer=0;
+  initPlayer();updateHUD();spawnWave();
+  document.getElementById('msg').textContent='← → / A D to move! Survive the waves! 🛡️=shield';
+  gameOn=true;lastTime=performance.now();
+  rafId=requestAnimationFrame(loop);
+}
+
+function endGame(){
+  gameOn=false;if(rafId)cancelAnimationFrame(rafId);
+  saveHS(score);
+  document.getElementById('hs-val').textContent=getHS();
+  document.getElementById('msg').textContent='GAME OVER! Score: '+score+(score>=getHS()?' — NEW BEST! 🏆':'');
+  // Draw game over screen
+  draw();
+  ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#ff4444';ctx.font='bold 32px Arial';ctx.textAlign='center';
+  ctx.fillText('GAME OVER',W/2,H/2-20);
+  ctx.fillStyle='#FFD700';ctx.font='20px Arial';
+  ctx.fillText('Score: '+score,W/2,H/2+18);
+  ctx.fillStyle='#aaffaa';ctx.font='14px Arial';
+  ctx.fillText('Wave '+wave+' reached',W/2,H/2+44);
+}
+</script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script>
+(function(){
+  try{
+    var lbApp=firebase.initializeApp({apiKey:"AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",databaseURL:"https://enders-games-default-rtdb.firebaseio.com"},'lb_spaceshooter');
+    var lbDb=lbApp.database();
+    window.submitLeaderboard=function(game,score){
+      if(score<=0)return;
+      var n=localStorage.getItem('visitorName')||'Anonymous';
+      lbDb.ref('leaderboard/'+game).push({name:n,score:score,date:new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}),timestamp:Date.now()});
+    };
+  }catch(e){window.submitLeaderboard=function(){};}
+})();
+</script>
+</body>
+</html>

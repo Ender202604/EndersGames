@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Volcano 3D — Volcanic Island Explorer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:Georgia,serif; }
+canvas { display:block; }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:rgba(255,120,40,0.9); font-size:20px; pointer-events:none; z-index:5; text-shadow:0 0 4px #000; }
+#topbar { position:fixed; top:0; left:0; right:0; background:rgba(10,4,2,0.92); padding:7px 14px; display:flex; align-items:center; gap:14px; z-index:5; pointer-events:none; border-bottom:2px solid rgba(255,80,20,0.3); }
+#loc { color:#FF8844; font-size:13px; min-width:180px; }
+#score-el { color:#FFD700; font-size:14px; font-weight:bold; margin-left:auto; }
+#hud { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(10,4,2,0.82); padding:8px 20px; border-radius:12px; color:#FF9966; font-size:14px; text-align:center; pointer-events:none; z-index:5; }
+#interact { position:fixed; top:57%; left:50%; transform:translateX(-50%); background:rgba(10,4,2,0.94); padding:8px 20px; border-radius:12px; color:yellow; font-size:16px; pointer-events:none; z-index:5; display:none; border:1px solid rgba(255,100,20,0.5); }
+#dialog { display:none; position:fixed; bottom:78px; left:50%; transform:translateX(-50%); width:min(640px,94vw); background:rgba(5,2,1,0.97); border:2px solid rgba(255,80,20,0.5); border-radius:18px; padding:18px 22px; z-index:25; }
+#dlg-name { font-size:17px; color:#FF8844; margin-bottom:5px; font-weight:bold; }
+#dlg-text { font-size:15px; color:#eee; line-height:1.65; margin-bottom:12px; }
+#dlg-close { font-size:14px; padding:9px 20px; background:rgba(80,20,5,0.9); border:1px solid rgba(255,80,20,0.3); border-radius:9px; color:white; cursor:pointer; }
+#dlg-close:hover { background:rgba(180,50,10,0.9); }
+#inv { position:fixed; top:38px; right:10px; background:rgba(10,4,2,0.88); padding:8px 11px; border-radius:9px; color:#eee; font-size:12px; z-index:5; pointer-events:none; min-width:115px; border:1px solid rgba(255,80,20,0.25); }
+#inv-title { color:#FF8844; font-size:10px; font-weight:bold; margin-bottom:4px; letter-spacing:1px; text-transform:uppercase; }
+#toast { position:fixed; top:48px; left:50%; transform:translateX(-50%); background:rgba(5,2,1,0.95); color:#FF8844; font-size:13px; padding:7px 18px; border-radius:18px; border:1px solid rgba(255,120,20,0.5); display:none; z-index:20; text-align:center; pointer-events:none; max-width:min(500px,90vw); }
+.screen { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.97); z-index:30; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px; text-align:center; color:white; overflow-y:auto; }
+.screen.show { display:flex; }
+.se { font-size:68px; }
+.st { font-size:36px; font-weight:bold; }
+.sb { font-size:16px; line-height:1.75; max-width:520px; color:#ddd; }
+.sbtn { font-size:21px; padding:12px 32px; border-radius:13px; border:none; background:#7a1a00; color:white; font-weight:bold; cursor:pointer; margin-top:6px; text-decoration:none; display:inline-block; transition:background 0.18s; }
+.sbtn:hover { background:#cc3300; color:#fff; }
+.sbtn.sec { background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.3); font-size:17px; }
+#lock-screen { position:fixed; inset:0; background:rgba(5,2,1,0.88); z-index:20; display:none; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:white; cursor:pointer; }
+#lock-screen p { font-size:24px; }
+#lock-screen small { font-size:14px; color:#999; }
+#home-btn { position:fixed; bottom:16px; right:16px; font-size:13px; padding:6px 13px; border-radius:9px; border:1px solid rgba(255,80,20,0.3); background:rgba(10,4,2,0.8); color:#FF9966; cursor:pointer; z-index:10; text-decoration:none; display:none; }
+#mobile-pad { display:none; position:fixed; bottom:66px; left:10px; z-index:10; }
+.mrow { display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.mbtn { width:46px; height:46px; background:rgba(10,4,2,0.7); border:1px solid rgba(255,80,20,0.3); border-radius:8px; color:#FF9966; font-size:17px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.mbtn:active { background:rgba(255,80,20,0.25); }
+#e-btn { position:fixed; bottom:66px; right:76px; width:52px; height:52px; background:rgba(80,20,5,0.4); border:2px solid #FF8844; border-radius:50%; color:#FF8844; font-size:19px; font-weight:bold; display:none; align-items:center; justify-content:center; z-index:10; cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<div id="topbar">
+  <span id="loc">🌋 Base Camp</span>
+  <span id="score-el">🔥 0 found</span>
+</div>
+<div id="hud">W A S D to move &nbsp;·&nbsp; Mouse to look &nbsp;·&nbsp; E to interact</div>
+<div id="interact"></div>
+<div id="dialog">
+  <div id="dlg-name"></div>
+  <div id="dlg-text"></div>
+  <button id="dlg-close" onclick="closeDialog()">Close [E]</button>
+</div>
+<div id="inv">
+  <div id="inv-title">Collected</div>
+  <div id="inv-items" style="color:#aaa;font-size:11px;">Nothing yet</div>
+</div>
+<div id="toast"></div>
+<a id="home-btn" href="index.html">🏠 Home</a>
+<div id="mobile-pad">
+  <div class="mrow"><button class="mbtn" id="m-up">▲</button></div>
+  <div class="mrow">
+    <button class="mbtn" id="m-left">◀</button>
+    <button class="mbtn" id="m-dn">▼</button>
+    <button class="mbtn" id="m-right">▶</button>
+  </div>
+</div>
+<div id="e-btn">E</div>
+
+<div id="lock-screen" onclick="lockPointer()">
+  <p>🌋 Click to Explore</p>
+  <small>WASD · Mouse to look · E to interact</small>
+</div>
+
+<div class="screen show" id="scr-start">
+  <div class="se">🌋</div>
+  <div class="st" style="color:#FF8844">VOLCANO ISLAND 3D</div>
+  <div class="sb">You have arrived on Ignis Island, home to the world's most active volcano! Explore the base camp, active lava fields, ancient temple ruins, glowing lava tubes, and the volcanic summit.<br><br>Meet the volcanologist, the tribal elder, an ancient spirit, and a daring explorer. Collect rare volcanic specimens!<br><br><span style="color:#FF6622">The volcano is alive. Are you? 🔥</span></div>
+  <button class="sbtn" onclick="beginGame()">🌋 ENTER THE ISLAND</button>
+  <a class="sbtn sec" href="index.html">← Back to Games</a>
+  <small style="color:#777;font-size:12px;margin-top:4px;">WASD · Mouse to look · E to talk/collect</small>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x080200);
+scene.fog = new THREE.Fog(0x0A0300, 12, 55);
+
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+var yaw=0, pitch=0, locked=false, gameOn=false, dlgOpen=false;
+var score=0, nearNPC=null, nearPickup=null;
+var keys={};
+var inventory=[];
+var animObjs=[];
+
+function lm(hex,em,ei){ var m=new THREE.MeshLambertMaterial({color:hex}); if(em){m.emissive=new THREE.Color(em);m.emissiveIntensity=ei||0.6;} return m; }
+var M = {
+  rock:lm(0x1A1208), drock:lm(0x0A0804), lrock:lm(0x2A1E10),
+  lava:lm(0xFF4400,0xCC2200,0.8), coollava:lm(0x882200,0x441100,0.3),
+  mlava:lm(0xFF6600,0xAA3300,0.6), sand:lm(0xC09050),
+  jungle:lm(0x1A5A10), djungle:lm(0x0A3A08),
+  ash:lm(0x6A6258), dark:lm(0x080604),
+  stone:lm(0x4A3A28), dstone:lm(0x2A1E10),
+  gold:lm(0xD4A820,0x885500,0.3), rust:lm(0x884422),
+  sky:lm(0xFF3300,0xAA1100,0.4), skin:lm(0xFFCBA4),
+  orange:lm(0xFF6600,0xCC3300,0.5), tent:lm(0x886622)
+};
+
+function box(w,h,d,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function cyl(rt,rb,h,mat,x,y,z,seg){
+  var m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||8),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function sph(r,mat,x,y,z){
+  var m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),mat);
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+function cone(r,h,mat,x,y,z,ry){
+  var m=new THREE.Mesh(new THREE.ConeGeometry(r,h,8),mat);
+  m.position.set(x,y,z); if(ry) m.rotation.y=ry;
+  scene.add(m); return m;
+}
+function pl(x,y,z,col,i,d){ var l=new THREE.PointLight(col,i,d||20); l.position.set(x,y,z); scene.add(l); return l; }
+
+function label(text,color){
+  var c=document.createElement('canvas'); c.width=256; c.height=60;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='rgba(5,2,1,0.92)'; ctx.fillRect(0,0,256,60);
+  ctx.strokeStyle='rgba(255,80,20,0.6)'; ctx.lineWidth=2; ctx.strokeRect(1,1,254,58);
+  ctx.fillStyle=color||'#FF8844'; ctx.font='bold 18px Georgia';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,30);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+  sp.scale.set(1.0,0.25,1); return sp;
+}
+
+var zones=[
+  {x1:-12,x2:12, z1:-12,z2:12,  name:"Base Camp",       col:"#FF9966"},
+  {x1:-10,x2:10, z1:13, z2:32,  name:"Lava Fields",     col:"#FF4400"},
+  {x1:13, x2:32, z1:-10,z2:10,  name:"Temple Ruins",    col:"#FFCC44"},
+  {x1:-10,x2:10, z1:-32,z2:-13, name:"Lava Tubes",      col:"#FF6622"},
+  {x1:-32,x2:-13,z1:-10,z2:10,  name:"Summit Approach", col:"#FFaa66"},
+];
+function getZone(x,z){
+  for(var i=0;i<zones.length;i++){
+    var a=zones[i];
+    if(x>a.x1+0.15&&x<a.x2-0.15&&z>a.z1+0.15&&z<a.z2-0.15) return a;
+  }
+  return null;
+}
+
+var pickups=[];
+function addPickup(name,icon,x,y,z){
+  var g=new THREE.Group();
+  var gm=new THREE.Mesh(new THREE.SphereGeometry(0.15,8,6),lm(0xFF6600,0xFF2200,0.7)); g.add(gm);
+  var lbl=label(icon+' '+name,'#FFD700'); lbl.position.set(0,0.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  pickups.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,collected:false});
+  animObjs.push({obj:gm,axis:'y',spd:0.03,type:'rot'});
+  animObjs.push({obj:g,axis:'y',spd:0.01,type:'bob',base:y,amp:0.1});
+}
+
+var npcs=[];
+function addNPC(name,icon,x,y,z,bodyHex,lines){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.2,0.28),lm(bodyHex)); g.add(body);
+  var head=new THREE.Mesh(new THREE.SphereGeometry(0.26,8,8),M.skin); head.position.y=0.86; g.add(head);
+  var lbl=label(icon+' '+name,'#FF8844'); lbl.position.set(0,1.55,0); g.add(lbl);
+  g.position.set(x,y,z); scene.add(g);
+  npcs.push({g:g,pos:new THREE.Vector3(x,y,z),name:name,icon:icon,lines:lines,lineIdx:0});
+}
+
+var walls=[];
+function wallBox(w,h,d,x,y,z,mat){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat||M.rock);
+  m.position.set(x,y,z); scene.add(m);
+  walls.push({x:x,z:z,w:w,d:d});
+}
+
+function tree(x,z){ cyl(0.18,0.25,3.5,M.drock,x,1.75,z); sph(0.9,M.jungle,x,3.8,z); sph(0.6,M.djungle,x+0.6,3.3,z+0.4); }
+function rock(x,z,s){ sph(s||0.5,M.lrock,x,s||0.5,z); }
+
+function lavaPool(cx,cz,rw,rd){
+  box(rw,0.12,rd,M.lava,cx,-0.06,cz);
+  pl(cx,0.5,cz,0xFF4400,2.5,Math.max(rw,rd)+6);
+}
+
+function buildWorld(){
+  scene.add(new THREE.AmbientLight(0x221108, 0.9));
+
+  // ── BASE CAMP (center) ──
+  box(24,0.15,24,M.sand,0,-0.08,0);
+  wallBox(0.5,3.5,24,-12,1.75,0); wallBox(0.5,3.5,24,12,1.75,0);
+  wallBox(24,3.5,0.5,0,1.75,-12); wallBox(24,3.5,0.5,0,1.75,12);
+  // Tents
+  cone(2.2,3.0,M.tent,-6,1.5,3,0.4); box(2,0.1,2,M.sand,-6,-0.05,3);
+  cone(2.2,3.0,M.tent,5,1.5,-4,0.8); box(2,0.1,2,M.sand,5,-0.05,-4);
+  // Campfire
+  box(0.7,0.15,0.7,M.stone,0,0.07,0);
+  cone(0.25,0.8,M.lava,0,0.55,0); pl(0,1.5,0,0xFF6600,2.5,10);
+  // Equipment: barrels, crates
+  box(0.6,0.7,0.6,M.rust,7,0.37,-2); box(0.6,0.7,0.6,M.rust,7,0.37,0);
+  box(0.7,0.7,0.7,M.dstone,-7,0.37,5);
+  // Trees
+  tree(-9,7); tree(8,-9); tree(-8,-8); tree(9,8);
+  // Rocks
+  rock(-5,-8,0.6); rock(6,7,0.5); rock(-9,0,0.4);
+  // Volcano peak visible through entrance (decorative)
+  pl(5,6,10,0xFF4400,1.5,30);
+  addPickup('Lava Rock','🪨',5,0.5,-8);
+  addNPC("Dr. Ember","🌋",-3,0.75,6,0x334422,[
+    "Welcome to Ignis Island! I am Dr. Ember, volcanologist. Be careful out there!",
+    "Mount Ignis last erupted in 2019. We measure ground tremors 24 hours a day from this camp.",
+    "The lava fields to the north are still active! Stay on the marked paths — the crust can be thin.",
+    "We have found ancient ruins to the east, buried in ash. The people here worshipped the volcano as a god."
+  ]);
+
+  // ── LAVA FIELDS (north) ──
+  box(20,0.15,18,M.drock,0,-0.08,22);
+  wallBox(0.5,4,18,-10,2,22,M.drock); wallBox(0.5,4,18,10,2,22,M.drock);
+  wallBox(20,4,0.5,0,2,13,M.drock); wallBox(20,4,0.5,0,2,31,M.drock);
+  // Lava rivers
+  lavaPool(0,22,16,3); lavaPool(-4,19,3,4); lavaPool(5,26,4,3);
+  // Cooling lava patches
+  box(4,0.08,3,M.coollava,-5,0,16); box(3,0.08,4,M.coollava,5,0,28);
+  // Lava vents / craters
+  cyl(1.5,2.0,1.0,M.drock,-6,0.5,25); sph(1.4,M.mlava,-6,1.5,25); pl(-6,2,25,0xFF4400,3,12);
+  cyl(1.2,1.5,0.8,M.drock,5,0.4,20); sph(1.1,M.mlava,5,1.2,20); pl(5,1.5,20,0xFF5500,2.5,10);
+  // Volcanic rocks / boulders
+  rock(-3,15,0.8); rock(4,17,0.7); rock(-7,20,1.0); rock(3,29,0.8);
+  // Steam vents (white cylinders)
+  for(var sv=0;sv<5;sv++){
+    cyl(0.08,0.08,1.5,lm(0xDDDDCC),-8+sv*4,0.75,18);
+  }
+  // Dramatic overhead orange glow
+  pl(0,6,22,0xFF4400,3,28); pl(-5,3,25,0xFF3300,2,14);
+  addPickup('Obsidian Shard','💎',4,0.5,28);
+  addPickup('Volcanic Crystal','🔮',-5,0.5,16);
+  addNPC("Koa the Elder","🗿",6,0.75,17,0x663322,[
+    "This island was home to my ancestors for 2000 years. The volcano gives and takes life.",
+    "We call the spirit of the volcano 'Pele'. When she is angry, the ground shakes and fire flows.",
+    "The old temple to the east was built to honor Pele. My grandfather's grandfather built it.",
+    "There are crystals in the lava tubes to the south. They glow in the dark! Very beautiful, very sacred."
+  ]);
+
+  // ── TEMPLE RUINS (east) ──
+  box(18,0.15,20,M.ash,22,-0.08,0);
+  wallBox(0.5,4,20,13,2,0,M.ash); wallBox(0.5,4,20,31,2,0,M.ash);
+  wallBox(18,4,0.5,22,2,-10,M.ash); wallBox(18,4,0.5,22,2,10,M.ash);
+  // Temple main structure (partially buried)
+  box(8,3.5,8,M.stone,22,1.6,0);
+  box(7.8,3.3,7.8,M.dstone,22,1.6,0);
+  // Temple entrance
+  box(2,3,0.4,M.stone,22,1.5,-4.2); // gap in wall
+  wallBox(0.4,3,0.4,20,1.5,-4.2,M.stone); wallBox(0.4,3,0.4,24,1.5,-4.2,M.stone);
+  box(4,0.5,0.4,M.stone,22,3.3,-4.2);
+  // Broken pillars
+  cyl(0.45,0.5,2.5,M.stone,15,1.25,-7); cyl(0.45,0.5,1.5,M.stone,29,0.75,6);
+  cyl(0.45,0.5,3.5,M.dstone,15,1.75,6); cyl(0.45,0.5,2.0,M.stone,29,1.0,-7);
+  // Idol / statue
+  cyl(0.5,0.6,0.6,M.stone,22,0.3,0); box(0.5,1.5,0.3,M.dstone,22,1.2,0); sph(0.35,M.stone,22,2.1,0);
+  box(0.8,0.3,0.4,M.gold,22,0.65,0);
+  // Ash-covered artifacts
+  box(0.8,0.3,0.5,M.ash,26,0.2,-5); box(0.6,0.25,0.4,M.ash,19,0.2,7);
+  // Glowing offering bowls
+  cyl(0.4,0.3,0.2,M.dstone,17,0.2,-3); pl(17,0.5,-3,0xFF6600,1.5,6);
+  cyl(0.4,0.3,0.2,M.dstone,27,0.2,3); pl(27,0.5,3,0xFF6600,1.5,6);
+  // Warm reddish glow
+  pl(22,4,0,0xFF5522,1.5,22); pl(22,1.5,0,0xFF8844,1.2,14);
+  addPickup('Ancient Idol','🗿',26,0.5,5);
+  addPickup('Temple Coin','🪙',18,0.5,-7);
+  addNPC("Spirit Akoni","👻",19,0.75,4,0x554433,[
+    "You can feel me but not see me... I am the spirit of the first high priest.",
+    "This temple was built 1,800 years ago. We carved every stone by hand to honor the goddess.",
+    "When the great eruption came, we thought it was punishment. Now I understand: it was rebirth.",
+    "Take the offerings from our temple carefully. The goddess watches all who enter here."
+  ]);
+
+  // ── LAVA TUBES (south) ──
+  box(20,0.15,18,M.drock,0,-0.08,-22);
+  wallBox(0.5,4,18,-10,2,-22,M.drock); wallBox(0.5,4,18,10,2,-22,M.drock);
+  wallBox(20,4,0.5,0,2,-13,M.drock); wallBox(20,4,0.5,0,2,-31,M.drock);
+  // Cave ceiling (low)
+  box(20,0.3,18,M.drock,0,3.8,-22);
+  // Lava tube tunnels
+  cyl(2.0,2.2,8,M.drock,0,2,-18); // tube opening
+  box(4,3.5,16,M.drock,0,2,-26); // inner tunnel
+  // Lava flow at bottom of tubes
+  lavaPool(0,-22,10,4); lavaPool(-4,-26,3,6); lavaPool(5,-18,4,3);
+  // Glowing crystals embedded in walls
+  for(var gc=0;gc<8;gc++){
+    var gx=-8+gc*2.3, gz=-14-gc*0.5;
+    sph(0.12,lm(0xFF88FF,0xAA00AA,0.9),gx,0.5+gc*0.15,gz);
+    pl(gx,0.8,gz,0xAA44FF,1.0,4);
+  }
+  // More crystals on tube walls
+  sph(0.25,lm(0xFF44AA,0xAA0066,0.8),-9,2,20); pl(-9,2,-20,0xFF44AA,1.5,6);
+  sph(0.2,lm(0x44AAFF,0x0066CC,0.8),9,1.5,-25); pl(9,1.5,-25,0x4488FF,1.5,6);
+  // Stalactites
+  for(var st=0;st<6;st++){
+    cyl(0.05,0.15,0.6,M.lrock,-7+st*2.8,3.6,-22);
+  }
+  pl(0,2,-22,0xFF4400,2,22); pl(0,1,-26,0xFF3300,2.5,15);
+  addPickup('Lava Crystal','🔮',6,0.5,-25);
+  addPickup('Cave Fossil','🦕',-6,0.5,-18);
+  addNPC("Leilani","🕯️",-4,0.75,-15,0x331A0A,[
+    "The lava tubes go all the way to the volcano's heart! But not today — too dangerous.",
+    "These crystals grow where lava cools slowly. Some are hundreds of years old!",
+    "Legend says the volcano goddess rests in the deepest tube. I believe it.",
+    "Explore carefully. The floor above lava rivers can crack without warning. Solid ground is always darker."
+  ]);
+
+  // ── SUMMIT APPROACH (west) ──
+  box(18,0.15,20,M.ash,-22,-0.08,0);
+  wallBox(0.5,4,20,-13,2,0,M.ash); wallBox(0.5,4,20,-31,2,0,M.ash);
+  wallBox(18,4,0.5,-22,2,-10,M.ash); wallBox(18,4,0.5,-22,2,10,M.ash);
+  // Rocky path up (tiered steps of increasing height)
+  for(var step=0;step<5;step++){
+    box(4,0.4,2,M.drock,-22,step*0.3,-5+step*2);
+  }
+  // Giant volcano cone (the mountain itself)
+  cone(6,18,M.drock,-22,9,9); // big cone
+  cone(5.8,18,M.rock,-22,9,9);
+  // Lava at crater top
+  sph(2.5,M.lava,-22,18.5,9); pl(-22,20,9,0xFF4400,4,25);
+  // Summit flag
+  cyl(0.05,0.05,1.5,lm(0x886633),-22,0.75,-7);
+  box(0.6,0.3,0.04,lm(0xFF4400),-21.7,1.35,-7);
+  // More rocks / boulders on path
+  rock(-18,-6,0.7); rock(-25,4,0.9); rock(-19,8,0.6); rock(-27,-4,0.8);
+  // Distant orange sky glow from crater
+  pl(-22,5,9,0xFF6600,3,30); pl(-22,12,9,0xFF3300,4,35);
+  addPickup('Summit Stone','⛰️',-18,0.5,-6);
+  addPickup('Crater Sample','🌋',-25,0.5,6);
+  addNPC("Marco","🧗",-19,0.75,5,0x8B4513,[
+    "Almost at the summit! I am Marco, extreme adventure guide. I have climbed 40 volcanoes!",
+    "Mount Ignis rises 3,400 meters. The crater at the top has a lava lake 300 meters wide!",
+    "Last month I dropped a GoPro into the crater on a rope. The footage was incredible — and terrifying!",
+    "If you make it to the actual summit, the glow from the lava lake lights up the night sky for miles."
+  ]);
+}
+
+buildWorld();
+
+var lockScreen=document.getElementById('lock-screen');
+function lockPointer(){
+  if(!gameOn) return;
+  renderer.domElement.requestPointerLock();
+}
+document.addEventListener('pointerlockchange',function(){
+  locked=document.pointerLockElement===renderer.domElement;
+  lockScreen.style.display=locked?'none':'flex';
+});
+document.addEventListener('mousemove',function(e){
+  if(!locked||dlgOpen) return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.2,Math.min(1.2,pitch));
+});
+document.addEventListener('keydown',function(e){keys[e.code]=true;});
+document.addEventListener('keyup',function(e){keys[e.code]=false;});
+document.addEventListener('keydown',function(e){
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='Escape'&&dlgOpen) closeDialog();
+});
+
+var mobileKeys={up:false,dn:false,left:false,right:false};
+(function setupMobile(){
+  var isMobile=/Mobi|Android|Touch/i.test(navigator.userAgent)||('ontouchstart' in window);
+  if(isMobile){
+    document.getElementById('mobile-pad').style.display='block';
+    document.getElementById('e-btn').style.display='flex';
+  }
+  function bind(id,prop){
+    var el=document.getElementById(id);
+    el.addEventListener('touchstart',function(e){e.preventDefault();mobileKeys[prop]=true;},{passive:false});
+    el.addEventListener('touchend',function(e){e.preventDefault();mobileKeys[prop]=false;},{passive:false});
+  }
+  bind('m-up','up'); bind('m-dn','dn'); bind('m-left','left'); bind('m-right','right');
+  document.getElementById('e-btn').addEventListener('touchstart',function(e){e.preventDefault();tryInteract();},{passive:false});
+})();
+
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none';},3200);
+}
+
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dlgOpen=false;
+  if(!locked&&gameOn) lockPointer();
+}
+
+function tryInteract(){
+  if(dlgOpen){closeDialog();return;}
+  if(nearPickup){
+    var p=nearPickup;
+    if(!p.collected){
+      p.collected=true; scene.remove(p.g);
+      inventory.push(p.icon+' '+p.name); score++;
+      document.getElementById('score-el').textContent='🔥 '+score+' found';
+      updateInv(); showToast('Found: '+p.icon+' '+p.name+'!');
+    }
+    return;
+  }
+  if(nearNPC){
+    var n=nearNPC;
+    document.getElementById('dlg-name').textContent=n.icon+' '+n.name;
+    document.getElementById('dlg-text').textContent=n.lines[n.lineIdx%n.lines.length];
+    n.lineIdx++;
+    document.getElementById('dialog').style.display='block';
+    dlgOpen=true;
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+function updateInv(){
+  var el=document.getElementById('inv-items');
+  if(inventory.length===0){el.textContent='Nothing yet';return;}
+  var counts={};
+  inventory.forEach(function(x){counts[x]=(counts[x]||0)+1;});
+  el.innerHTML=Object.keys(counts).map(function(k){return k+(counts[k]>1?' x'+counts[k]:'');}).join('<br>');
+}
+
+var clock=0;
+function animate(){
+  requestAnimationFrame(animate);
+  if(!gameOn) return;
+  clock+=0.016;
+
+  animObjs.forEach(function(a){
+    if(a.type==='rot'){
+      if(a.axis==='y') a.obj.rotation.y+=a.spd;
+    } else if(a.type==='bob'){
+      a.obj.position.y=a.base+Math.sin(clock*2)*a.amp;
+    }
+  });
+
+  var spd=0.068;
+  var dx=0,dz=0;
+  if(keys['KeyW']||mobileKeys.up){dx+=Math.sin(yaw)*spd;dz+=Math.cos(yaw)*spd;}
+  if(keys['KeyS']||mobileKeys.dn){dx-=Math.sin(yaw)*spd;dz-=Math.cos(yaw)*spd;}
+  if(keys['KeyA']||mobileKeys.left){dx+=Math.sin(yaw-Math.PI/2)*spd;dz+=Math.cos(yaw-Math.PI/2)*spd;}
+  if(keys['KeyD']||mobileKeys.right){dx+=Math.sin(yaw+Math.PI/2)*spd;dz+=Math.cos(yaw+Math.PI/2)*spd;}
+
+  var nx=camera.position.x+dx, nz=camera.position.z+dz;
+  var blocked=false;
+  for(var i=0;i<walls.length;i++){
+    var w=walls[i];
+    if(Math.abs(nx-w.x)<w.w/2+0.38&&Math.abs(nz-w.z)<w.d/2+0.38){blocked=true;break;}
+  }
+  if(!blocked){camera.position.x=nx;camera.position.z=nz;}
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  var z=getZone(camera.position.x,camera.position.z);
+  document.getElementById('loc').textContent='🌋 '+(z?z.name:'Volcanic Path');
+
+  var cp=camera.position;
+  nearNPC=null; nearPickup=null;
+  var bestD=2.3;
+  npcs.forEach(function(n){var d=cp.distanceTo(n.pos);if(d<bestD){bestD=d;nearNPC=n;}});
+  if(!nearNPC){
+    var bd=1.9;
+    pickups.forEach(function(p){if(p.collected)return;var d=cp.distanceTo(p.pos);if(d<bd){bd=d;nearPickup=p;}});
+  }
+  var hint=document.getElementById('interact');
+  if(nearNPC){hint.textContent='[E] Talk to '+nearNPC.name;hint.style.display='block';}
+  else if(nearPickup){hint.textContent='[E] Collect '+nearPickup.icon+' '+nearPickup.name;hint.style.display='block';}
+  else hint.style.display='none';
+
+  renderer.render(scene,camera);
+}
+
+function beginGame(){
+  document.getElementById('scr-start').classList.remove('show');
+  document.getElementById('home-btn').style.display='block';
+  lockScreen.style.display='flex';
+  gameOn=true;
+  animate();
+  lockPointer();
+}
+
+lockScreen.addEventListener('click',lockPointer);
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
