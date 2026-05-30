@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Word Ladder - Ender's Game World</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a0000; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 12px; }
+#gameCard { background: #2a0000; border: 2px solid #ff6666; border-radius: 12px; padding: 18px; max-width: 360px; width: 100%; }
+h1 { color: #ffff00; text-align: center; font-size: 22px; margin-bottom: 10px; }
+.wordDisplay { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; }
+.wordBox { background: #440000; border: 2px solid #ff6666; border-radius: 8px; padding: 10px 18px; font-size: 26px; font-weight: bold; letter-spacing: 6px; }
+.startWord { color: #44ff88; }
+.targetWord { color: #ff4444; }
+.arrow { color: #ffcccc; font-size: 20px; }
+#chain { margin: 10px 0; min-height: 40px; }
+.chainWord { display: flex; align-items: center; gap: 8px; margin: 3px 0; animation: fadeIn 0.3s; }
+.chainWord .cw { background: #330000; border: 1px solid #ff6666; border-radius: 6px; padding: 6px 14px; font-size: 18px; font-weight: bold; letter-spacing: 4px; color: #ffff00; }
+.chainWord .cw.start-cw { color: #44ff88; border-color: #44ff88; }
+.chainWord .cw.target-cw { color: #ff4444; border-color: #ff4444; }
+.chainArrow { color: #ff9999; font-size: 14px; }
+.diffHighlight { background: #553300; border-color: #ff9900; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);} }
+#inputRow { display: flex; gap: 8px; margin-top: 10px; }
+#wordInput { background: #330000; border: 2px solid #ff6666; border-radius: 6px; color: #ffff00; font-size: 20px; padding: 8px 12px; flex: 1; text-transform: uppercase; letter-spacing: 4px; font-family: Arial, sans-serif; }
+#wordInput:focus { outline: none; border-color: #ffff00; }
+#errMsg { color: #ff4444; font-size: 13px; min-height: 18px; margin-top: 4px; text-align: center; }
+#hud { color: #ffcccc; font-size: 13px; text-align: center; margin-top: 6px; }
+#hud span { color: #ffff00; font-weight: bold; }
+button { background: darkred; border: 2px solid #ff6666; color: #ffff00; border-radius: 6px; cursor: pointer; padding: 8px 14px; font-size: 14px; font-weight: bold; }
+button:hover { background: #aa0000; }
+#btnsRow { display: flex; gap: 8px; margin-top: 10px; justify-content: center; flex-wrap: wrap; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 10; padding: 20px; }
+.overlay h2 { color: #ffff00; font-size: 26px; text-align: center; }
+.overlay p { color: #ffcccc; font-size: 15px; text-align: center; max-width: 320px; }
+#home-btn { position: fixed; top: 8px; left: 10px; color: #ff9999; text-decoration: none; font-size: 13px; z-index: 99; }
+#hintBox { background: #220000; border: 1px solid #ff6666; border-radius: 6px; padding: 8px; margin-top: 8px; color: #ffcccc; font-size: 13px; display: none; }
+</style>
+</head>
+<body>
+<a href="index.html" id="home-btn">&#127968; Home</a>
+
+<div id="gameCard">
+  <h1>&#128217; Word Ladder</h1>
+  <div id="puzzleInfo" style="text-align:center;color:#ffcccc;font-size:13px;margin-bottom:6px;">Puzzle <span id="pNum" style="color:#ffff00;font-weight:bold">1</span> of 15</div>
+  <div class="wordDisplay">
+    <div>
+      <div style="color:#aaffaa;font-size:11px;text-align:center;margin-bottom:3px;">START</div>
+      <div class="wordBox startWord" id="startWord">COLD</div>
+    </div>
+    <div class="arrow">&#8594;</div>
+    <div>
+      <div style="color:#ffaaaa;font-size:11px;text-align:center;margin-bottom:3px;">TARGET</div>
+      <div class="wordBox targetWord" id="targetWord">WARM</div>
+    </div>
+  </div>
+
+  <div id="chain"></div>
+  <div id="inputRow">
+    <input id="wordInput" type="text" maxlength="4" placeholder="TYPE..." autocomplete="off" autocorrect="off" spellcheck="false">
+    <button onclick="submitWord()">Go</button>
+  </div>
+  <div id="errMsg"></div>
+  <div id="hud">Steps: <span id="hSteps">0</span> &nbsp;|&nbsp; Score: <span id="hScore">500</span> &nbsp;|&nbsp; Best: <span id="hBest">--</span></div>
+  <div id="hintBox" id="hintBox"></div>
+  <div id="btnsRow">
+    <button onclick="newPuzzle()">New Puzzle</button>
+    <button onclick="giveUp()">Give Up</button>
+    <button onclick="showHint()">Hint</button>
+  </div>
+</div>
+
+<div id="startOverlay" class="overlay">
+  <h2>&#128217; Word Ladder</h2>
+  <p>Change one letter at a time to get from the START word to the TARGET word!</p>
+  <p style="color:#ff9999;font-size:13px;">Each word must be a valid 4-letter word.</p>
+  <button onclick="startGame()">&#9654; Play</button>
+</div>
+
+<div id="winOverlay" class="overlay" style="display:none;">
+  <h2 id="wTitle">&#127881; You Did It!</h2>
+  <p id="wMsg"></p>
+  <p>Best Score: <span id="wBest" style="color:#ffff00;font-weight:bold"></span></p>
+  <button onclick="newPuzzle()">Next Puzzle</button>
+  <button onclick="startGame()">Play Again</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script>
+var FB_CFG = {apiKey:"AIzaSyCF9IHEEWXxX24ouRVpkZuFR958N6_ceIc",authDomain:"enders-games.firebaseapp.com",databaseURL:"https://enders-games-default-rtdb.firebaseio.com",projectId:"enders-games",storageBucket:"enders-games.firebasestorage.app",messagingSenderId:"87049074470",appId:"1:87049074470:web:bc38b35669b43aedceb3e7"};
+var HS_KEY = 'hs_wordladder';
+function getHS(){return parseInt(localStorage.getItem(HS_KEY))||0;}
+function saveHS(s){if(s>getHS())localStorage.setItem(HS_KEY,s);}
+function submitScore(score){
+  var name=localStorage.getItem('visitorName')||'Player';
+  try{var app=firebase.initializeApp(FB_CFG,'lb_wordladder');var db=app.database();db.ref('leaderboard/wordladder').push({name:name,score:score,date:new Date().toLocaleDateString()});}catch(e){}
+}
+
+var audio=null;
+function getAudio(){if(!audio){try{audio=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}return audio;}
+function playBeep(freq,dur,type){
+  var ctx2=getAudio();if(!ctx2)return;
+  var o=ctx2.createOscillator();var g=ctx2.createGain();
+  o.connect(g);g.connect(ctx2.destination);
+  o.type=type||'sine';o.frequency.value=freq;
+  g.gain.setValueAtTime(0.18,ctx2.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,ctx2.currentTime+dur);
+  o.start();o.stop(ctx2.currentTime+dur);
+}
+
+var WORDS = [
+'WORD','CORD','CORE','CARE','DARE','DARK','BARK','BARE','BARN','BORN','CORN','WORN','WARM','WORM','FORM','FORD','LORD',
+'LORE','LOVE','LIVE','LIME','LINE','LANE','CANE','CAME','GAME','GATE','LATE','LAKE','MAKE','CAKE','CAGE','CAVE','GAVE',
+'SAVE','SAFE','CAFE','CASE','BASE','BASS','BASK','MASK','MAST','LAST','LASH','CASH','GASH','DASH','DISH','FISH','FIST',
+'LIST','MIST','MOST','LOST','LOFT','LEFT','LEST','BEST','VEST','VAST','FAST','CAST','PAST','POST','COST','COAT','BOAT',
+'GOAT','GOAD','ROAD','LOAD','LAUD','LAND','BAND','SAND','SANE','SAME','SOME','HOME','HOLE','MOLE','ROLE','ROSE','ROPE',
+'ROBE','LOBE','LODE','CODE','COKE','JOKE','POKE','POLE','PILE','FILE','FINE','WINE','VINE','MINE','MIRE','HIRE','HIKE',
+'BIKE','BITE','KITE','CITE','SITE','SIDE','RIDE','RICE','RACE','LACE','FACE','FATE','RATE','RAKE','LIKE','LIFE','WIFE',
+'WILE','MILD','WILD','WILL','FILL','FALL','TALL','TALE','TAME','FAME','FARE','FIRE','FIVE','HIVE','HAVE','GIVE','PINE',
+'PANE','PAVE','WAVE','WADE','MADE','MALE','SALE','SOLE','POLL','PULL','BULL','FULL','DULL','DELL','BELL','BELT','MELT',
+'FELT','FELL','TELL','YELL','CELL','WELL','WELD','WEED','FEED','FEET','FEEL','REEL','REED','READ','BEAD','DEAD','HEAD',
+'HEAT','HEAP','REAP','REAM','SEAM','SEAL','TEAL','TEAR','FEAR','FEAT','BEAT','BEAN','LEAN','LEAD','REAL','DEAL','DEAR',
+'DEER','BEER','BEEN','SEEN','SEED','SEND','BEND','BOND','FOND','FIND','BIND','MIND','MEND','FEND','LEND','TEND','TENT',
+'RENT','RANT','RANK','BANK','BANE','BONE','TONE','TUNE','DUNE','DONE','DOME','DOTE','NOTE','NOSE','DOSE','ROSE','LOSE',
+'LORE','MORE','MARE','BARE','BALE','TALE','PALE','PALL','BALL','CALL','HALL','HALE','VALE','VANE','BANE','SANE','LANE',
+'HATE','HAVE','GAVE','CAVE','CAPE','TAPE','TARE','HARE','HARD','HERD','HERO','HERE','HIRE','WIRE','WISE','RISE','RINSE',
+'WAND','WANT','RANT','RAND','BAND','HAND','HANG','RANG','RING','RINK','PINK','PINE','MINE','MILE','BILE','TILE','TIME',
+'LIME','LAME','DAME','DATE','LATE','MATE','MACE','RACE','PACE','PAGE','CAGE','SAGE','SAKE','BAKE','BARE','BARD','BIRD',
+'GIRD','GIRL','GILL','SILL','SILK','MILK','MILL','BILL','FILL','HILL','KILL','TILL','TILE','BILE','BALE','TALE','SALE',
+'GOLD','BOLD','BALD','BALL','CALL','TALL','TOLL','TOLD','COLD','COLA','COLE','MOLE','ROLE','SOLE','SALE','TALE','MALE',
+'MALT','SALT','HALT','HALF','CALF','CALL','BALL','TALL','TALE','TILE','TIME','DIME','DIVE','LIVE','LIME','LINE','LION',
+'LOIN','COIN','COIL','FOIL','TOIL','SOIL','SAIL','HAIL','MAIL','NAIL','TAIL','TALL','TELL','BELL','BELT','BOLT','BOOT',
+'BOOK','COOK','LOOK','LOON','BOON','BOOR','DOOR','POOR','POOL','FOOL','FOOT','SOOT','SHOT','SHOP','STOP','STEP','STEM',
+'THEM','THEN','WHEN','WENT','BENT','BEST','NEST','NEXT','TEXT','TEST','REST','RUST','RUSE','FUSE','MUSE','MUTE','CUTE',
+'CUBE','TUBE','TUNE','DUNE','DUSK','DUST','GUST','GUSH','RUSH','RUSE','ROSE','ROPE','COPE','COME','CONE','BONE','BORE',
+'MORE','MARE','DARE','DATE','LATE','LAKE','TAKE','TALE','MALE','MOLE','POLE','PALE','TALE','SALE','HOLE','HOME','DOME'
+];
+
+// Deduplicate
+var wordSet = {};
+for(var i=0;i<WORDS.length;i++) wordSet[WORDS[i]]=true;
+var WORD_LIST = Object.keys(wordSet);
+
+var PUZZLES = [
+  {start:'COLD',target:'GOLD',hint:['COLD','GOLD']},
+  {start:'DARK',target:'BARK',hint:['DARK','BARK']},
+  {start:'LOVE',target:'LIVE',hint:['LOVE','LIVE']},
+  {start:'FISH',target:'FIST',hint:['FISH','FIST']},
+  {start:'MILD',target:'WILD',hint:['MILD','WILD']},
+  {start:'HATE',target:'LATE',hint:['HATE','LATE']},
+  {start:'BAND',target:'WAND',hint:['BAND','WAND']},
+  {start:'WORD',target:'WARD',hint:['WORD','CORD','CARD','WARD']},
+  {start:'COLD',target:'CORD',hint:['COLD','BOLD','BALD','BALL','TALL','TALE']},
+  {start:'FISH',target:'DISH',hint:['FISH','DISH']},
+  {start:'BACK',target:'HACK',hint:['BACK','HACK']},
+  {start:'BONE',target:'CONE',hint:['BONE','CONE']},
+  {start:'COLD',target:'WARM',hint:['COLD','CORD','CORE','CARE','DARE','DARE','MARE','MORE','WORE','WARM']},
+  {start:'FISH',target:'BIRD',hint:['FISH','FIST','LIST','LUST','LUST','BUST','BURT','BIRD']},
+  {start:'LOVE',target:'HATE',hint:['LOVE','LIVE','LIME','TIME','TIDE','HIDE','HIRE','HARE','HAVE','GAVE','GATE','LATE','LATE','HATE']},
+  {start:'DARK',target:'LIME',hint:['DARK','DARE','CARE','CAME','GAME','GATE','LATE','LAKE','LIKE','LIME']},
+  {start:'ROAD',target:'FISH',hint:['ROAD','LOAD','LODE','LORE','BORE','BORE','MORE','MARE','HARE','HIRE','FIRE','FINE','FINE','WINE','VINE','MINE','MINE','MILE','BILE','BILE','BITE','SITE','SITE','SIRE']},
+  {start:'BALL',target:'TELL',hint:['BALL','TALL','TELL']},
+  {start:'SEND',target:'BEND',hint:['SEND','BEND']},
+  {start:'RING',target:'KING',hint:['RING','KING']}
+];
+
+var currentPuzzleIdx=0, chain=[], steps=0, gameActive=false, hintShown=false;
+
+function diffCount(a,b){var d=0;for(var i=0;i<4;i++)if(a[i]!==b[i])d++;return d;}
+function isValidWord(w){return wordSet[w]===true;}
+
+function loadPuzzle(idx){
+  currentPuzzleIdx=idx%PUZZLES.length;
+  var p=PUZZLES[currentPuzzleIdx];
+  chain=[p.start];
+  steps=0; hintShown=false;
+  document.getElementById('startWord').textContent=p.start;
+  document.getElementById('targetWord').textContent=p.target;
+  document.getElementById('pNum').textContent=(currentPuzzleIdx+1);
+  document.getElementById('errMsg').textContent='';
+  document.getElementById('hintBox').style.display='none';
+  document.getElementById('wordInput').value='';
+  document.getElementById('winOverlay').style.display='none';
+  gameActive=true;
+  renderChain();
+  updateHUD();
+}
+
+function renderChain(){
+  var div=document.getElementById('chain');
+  div.innerHTML='';
+  var p=PUZZLES[currentPuzzleIdx];
+  for(var i=0;i<chain.length;i++){
+    var row=document.createElement('div');
+    row.className='chainWord';
+    var cw=document.createElement('div');
+    cw.className='cw';
+    if(i===0) cw.classList.add('start-cw');
+    if(chain[i]===p.target) cw.classList.add('target-cw');
+    cw.textContent=chain[i];
+    // Highlight changed letter vs previous
+    if(i>0){
+      var prev=chain[i-1], cur=chain[i];
+      var html='';
+      for(var k=0;k<4;k++){
+        if(cur[k]!==prev[k]) html+='<span style="color:#ff8800;text-shadow:0 0 8px #ff8800">'+cur[k]+'</span>';
+        else html+=cur[k];
+      }
+      cw.innerHTML=html;
+    }
+    row.appendChild(cw);
+    if(i<chain.length-1){
+      var arr=document.createElement('div');
+      arr.className='chainArrow';
+      arr.textContent='\u2193';
+      div.appendChild(row);
+      div.appendChild(arr);
+      continue;
+    }
+    div.appendChild(row);
+  }
+  // Scroll to bottom
+  div.scrollTop=div.scrollHeight;
+}
+
+function submitWord(){
+  if(!gameActive) return;
+  var input=document.getElementById('wordInput');
+  var w=input.value.toUpperCase().trim();
+  input.value='';
+  input.focus();
+  var p=PUZZLES[currentPuzzleIdx];
+  var prev=chain[chain.length-1];
+
+  if(w.length!==4){setErr('Word must be exactly 4 letters!');return;}
+  if(!isValidWord(w)){setErr('"'+w+'" is not in the word list!');playBeep(200,0.2,'sawtooth');return;}
+  if(w===prev){setErr('Same as current word!');return;}
+  var diff=diffCount(w,prev);
+  if(diff!==1){setErr('Must change exactly 1 letter! (changed '+diff+')');playBeep(200,0.2,'sawtooth');return;}
+
+  chain.push(w);
+  steps++;
+  setErr('');
+  playBeep(440,0.08,'sine');
+  renderChain();
+  updateHUD();
+
+  if(w===p.target){
+    onWin();
+  }
+}
+
+function onWin(){
+  gameActive=false;
+  var score=Math.max(0,500-steps*60);
+  saveHS(score);
+  submitScore(score);
+  playBeep(523,0.15);setTimeout(function(){playBeep(659,0.15);},150);setTimeout(function(){playBeep(784,0.3);},300);
+  document.getElementById('wTitle').textContent='You did it in '+steps+' steps!';
+  document.getElementById('wMsg').textContent='Score: '+score+' points';
+  document.getElementById('wBest').textContent=getHS();
+  document.getElementById('winOverlay').style.display='flex';
+}
+
+function setErr(msg){document.getElementById('errMsg').textContent=msg;}
+
+function updateHUD(){
+  document.getElementById('hSteps').textContent=steps;
+  var score=Math.max(0,500-steps*60);
+  document.getElementById('hScore').textContent=score;
+  var hs=getHS(); document.getElementById('hBest').textContent=hs>0?hs:'--';
+}
+
+function showHint(){
+  var p=PUZZLES[currentPuzzleIdx];
+  var hintBox=document.getElementById('hintBox');
+  hintBox.style.display='block';
+  hintBox.textContent='Hint: '+p.hint.join(' \u2192 ');
+}
+
+function giveUp(){
+  if(!gameActive) return;
+  gameActive=false;
+  var p=PUZZLES[currentPuzzleIdx];
+  var hintBox=document.getElementById('hintBox');
+  hintBox.style.display='block';
+  hintBox.textContent='Solution: '+p.hint.join(' \u2192 ');
+  setErr('Better luck next time!');
+}
+
+function newPuzzle(){
+  document.getElementById('winOverlay').style.display='none';
+  loadPuzzle(currentPuzzleIdx+1);
+}
+
+document.getElementById('wordInput').addEventListener('keydown',function(e){
+  if(e.key==='Enter') submitWord();
+});
+
+function startGame(){
+  document.getElementById('startOverlay').style.display='none';
+  document.getElementById('winOverlay').style.display='none';
+  loadPuzzle(0);
+}
+
+updateHUD();
+</script>
+</body>
+</html>
